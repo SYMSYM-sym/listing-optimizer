@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildAudit } from '@/lib/audit/buildAudit';
 import { toMarkdown } from '@/lib/export/markdown';
 import { optimize } from '@/lib/engine/optimize';
 import { runGate } from '@/lib/gate/runGate';
@@ -31,7 +32,7 @@ describe('golden-ASIN E2E (recorded fixtures, deterministic)', () => {
     expect(listing.aplusContent.comparison.rows.length).toBeGreaterThan(0);
     expect(listing.aplusContent.faq.length).toBeGreaterThan(0);
     expect(listing.bullets).toHaveLength(5);
-    expect(listing.qa.length).toBeGreaterThanOrEqual(10);
+    expect(listing.qa.length).toBeGreaterThanOrEqual(15);
     expect(listing.imagePlan.length).toBeGreaterThanOrEqual(7);
   });
 
@@ -54,9 +55,11 @@ describe('golden-ASIN E2E (recorded fixtures, deterministic)', () => {
     expect(gate.failures).toEqual([]);
   });
 
-  it('full pipeline: verified listing + audit with ≥3 gaps', async () => {
+  it('full pipeline: verified listing + audit with ≥3 gaps + gateResult', async () => {
     const result = await runPipeline(snapshot, mockLlm, 3);
     expect(result.audit.verified).toBe(true);
+    expect(result.audit.verified).toBe(result.audit.gateResult.pass);
+    expect(result.audit.scorecard.total).toBeGreaterThan(0);
     expect(result.audit.gaps.length).toBeGreaterThanOrEqual(3);
     for (const g of result.audit.gaps) {
       expect(['P0', 'P1', 'P2']).toContain(g.severity);
@@ -73,7 +76,7 @@ describe('golden-ASIN E2E (recorded fixtures, deterministic)', () => {
     expect(md.length).toBeGreaterThan(500);
   });
 
-  it('negative fixture: exact expected gate failures including PACK fail-closed', async () => {
+  it('negative fixture: expected gate failures, audit.verified false, export blocked', async () => {
     const clean = await optimize(snapshot, pack, mockLlm);
     const bad: OptimizedListing = JSON.parse(JSON.stringify(clean));
     bad.bullets.push('extra sixth bullet');
@@ -81,7 +84,6 @@ describe('golden-ASIN E2E (recorded fixtures, deterministic)', () => {
     bad.description = bad.description.replace(bad.fdaDisclaimer, '');
     bad.fdaDisclaimer = 'Wrong disclaimer text.';
     bad.backendSearchTerms = 'ä'.repeat(140);
-    // Empty subcategory → PACK fail-closed (no disease-noun list)
     const emptyCtx = { subcategories: [] as string[], snapshotText: snapshot.title };
     const gate = runGate(bad, pack, emptyCtx);
     expect(gate.pass).toBe(false);
@@ -91,7 +93,11 @@ describe('golden-ASIN E2E (recorded fixtures, deterministic)', () => {
     expect(ids).toContain('C5');
     expect(ids).toContain('C6');
     expect(ids).toContain('PACK');
-    // verified:false blocks export-final semantics
-    expect(gate.pass).toBe(false);
+    const audit = buildAudit(snapshot, bad, pack, emptyCtx);
+    expect(audit.verified).toBe(false);
+    expect(audit.verified).toBe(audit.gateResult.pass);
+    const md = toMarkdown(bad, audit);
+    expect(md).toContain('NOT VERIFIED');
+    expect(md).toContain('Blocking gate failures');
   });
 });

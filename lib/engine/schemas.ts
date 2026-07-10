@@ -16,11 +16,15 @@ export const titleGroupSchema = z.object({
 export const bulletsGroupSchema = z.object({
   bullets: z
     .array(
-      z.object({
-        text: z.string().min(20),
-        useCaseAnchor: z.string().min(2),
-        claimBearing: z.boolean(),
-      }),
+      z
+        .object({
+          text: z.string().min(20),
+          useCaseAnchor: z.string().min(2),
+          claimBearing: z.boolean(),
+        })
+        .refine((b) => !b.claimBearing || b.text.trimEnd().endsWith('*'), {
+          message: 'claim-bearing bullets must end with *',
+        }),
     )
     .length(5),
 });
@@ -37,41 +41,48 @@ export const attributesGroupSchema = z.object({
   attributes: z.record(z.string(), z.string()),
 });
 
-export const aplusGroupSchema = z.object({
-  modules: z
-    .array(
-      z.object({
-        id: z.string(),
-        headline: z.string().min(3),
-        body: z.string().min(30),
-        subcopy: z.string().optional(),
-        claimBearing: z.boolean(),
-      }),
-    )
-    .min(3)
-    .max(7),
-  comparison: z.object({
-    rows: z
+export const aplusGroupSchema = z
+  .object({
+    modules: z
       .array(
         z.object({
-          label: z.string().min(1),
-          ours: z.string().min(1),
-          typical: z.string().min(1),
+          id: z.string(),
+          headline: z.string().min(3),
+          body: z.string().min(30),
+          subcopy: z.string().optional(),
+          claimBearing: z.boolean(),
         }),
       )
-      .min(3),
-  }),
-  faq: z
-    .array(
-      z.object({
-        q: z.string().min(5),
-        a: z.string().min(10),
-        claimBearing: z.boolean(),
-      }),
-    )
-    .min(5)
-    .max(10),
-});
+      .min(5)
+      .max(7),
+    comparison: z.object({
+      rows: z
+        .array(
+          z.object({
+            label: z.string().min(1),
+            ours: z.string().min(1),
+            typical: z.string().min(1),
+          }),
+        )
+        .min(3),
+    }),
+    faq: z
+      .array(
+        z.object({
+          q: z.string().min(5),
+          a: z.string().min(10),
+          claimBearing: z.boolean(),
+        }),
+      )
+      .min(5)
+      .max(10),
+  })
+  .refine((v) => v.modules.some((m) => m.id === 'brand-story'), {
+    message: 'A+ must include brand-story module',
+  })
+  .refine((v) => v.modules.some((m) => m.id === 'hero'), {
+    message: 'A+ must include hero module',
+  });
 
 export const imagesGroupSchema = z.object({
   imagePlan: z
@@ -95,7 +106,7 @@ export const qaGroupSchema = z.object({
         claimBearing: z.boolean(),
       }),
     )
-    .min(12)
+    .min(15)
     .max(18),
 });
 

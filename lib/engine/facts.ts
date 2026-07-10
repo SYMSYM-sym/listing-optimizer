@@ -36,6 +36,15 @@ export function extractPotency(
   return undefined;
 }
 
+/** Parse "10 strains" / "10-in-1" style blend counts from label copy. */
+export function extractFormulaCount(text: string): number | undefined {
+  const strain = text.match(/(\d+)\s*-?\s*strains?\b/i);
+  if (strain?.[1]) return Number.parseInt(strain[1], 10);
+  const inOne = text.match(/\b(\d+)\s*in\s*1\b/i);
+  if (inOne?.[1]) return Number.parseInt(inOne[1], 10);
+  return undefined;
+}
+
 /** Parse "take 1 capsule daily" style directions → units consumed per day. */
 export function parsePerDay(directions: string | undefined): number | undefined {
   if (!directions) return undefined;
@@ -70,8 +79,15 @@ export function buildFacts(snapshot: ListingSnapshot, factUnits: string[]): Fact
     extractPotency(a.maximum_dosage ?? '', factUnits) ??
     extractPotency(snapshot.title, factUnits);
 
+  const formulaCount =
+    extractFormulaCount(a.active_ingredients ?? '') ??
+    extractFormulaCount(a.maximum_dosage ?? '') ??
+    extractFormulaCount(snapshot.title) ??
+    extractFormulaCount(snapshot.description);
+
   const facts: Facts = {};
   if (potency) facts.potency = potency;
+  if (formulaCount) facts.formulaCount = formulaCount;
   if (unitCount) facts.unitCount = unitCount;
   if (servings) facts.servings = servings;
   if (servingSize) facts.servingSize = servingSize;

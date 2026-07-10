@@ -2,6 +2,11 @@
  * Gate utilities — pure, dependency-free, unit-tested.
  */
 
+import { utf8Bytes as sharedUtf8Bytes } from '@/lib/shared/utf8Bytes';
+
+/** Re-export shared implementation so gate C3 and the dashboard counter always agree. */
+export { sharedUtf8Bytes as utf8Bytes };
+
 const ENTITIES: Record<string, string> = {
   '&amp;': '&',
   '&lt;': '<',
@@ -22,13 +27,9 @@ export function normalize(text: string): string {
     .replace(/[‘’‚′]/g, "'")
     .replace(/[“”„″]/g, '"')
     .replace(/[–—―−]/g, '-')
-    .replace(/ /g, ' ')
+    .replace(/\u00a0/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-export function utf8Bytes(s: string): number {
-  return Buffer.byteLength(s, 'utf8');
 }
 
 // Per brain/04: "never", "banned", "do not", "there is no", "avoid", "not"

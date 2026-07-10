@@ -1,10 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { utf8Bytes } from '@/lib/shared/utf8Bytes';
 
-export function utf8Bytes(s: string): number {
-  return new TextEncoder().encode(s).length;
-}
+export { utf8Bytes };
 
 export function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
@@ -50,20 +49,27 @@ export function Field({
   limit,
   unit = 'chars',
   mono = false,
+  gateFailed = false,
 }: {
   label: string;
   text: string;
   limit?: number;
   unit?: 'chars' | 'bytes';
   mono?: boolean;
+  /** True when the verify gate flagged this field — highlights beyond the raw counter. */
+  gateFailed?: boolean;
 }) {
   const count = unit === 'bytes' ? utf8Bytes(text) : text.length;
+  const over = limit !== undefined && count > limit;
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+    <div className={`rounded-lg border bg-zinc-900 p-4 ${gateFailed || over ? 'border-red-800' : 'border-zinc-800'}`}>
       <div className="flex items-center justify-between gap-3 mb-2">
         <div className="flex items-baseline gap-3">
           <h3 className="text-sm font-medium text-zinc-200">{label}</h3>
           {limit !== undefined && <Counter value={count} limit={limit} unit={unit} />}
+          {gateFailed && !over && (
+            <span className="text-xs text-red-400 font-medium">gate failure</span>
+          )}
         </div>
         <CopyButton text={text} />
       </div>

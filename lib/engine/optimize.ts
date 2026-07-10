@@ -7,7 +7,7 @@ import type {
 } from '@/lib/types';
 import { buildFacts } from './facts';
 import { generateGroup, type LlmClient } from './llm';
-import { buildSystemPrompt, groupPrompts } from './prompts';
+import { buildGroupPrompts, buildSystemPrompt } from './prompts';
 import {
   aplusGroupSchema,
   attributesGroupSchema,
@@ -66,6 +66,7 @@ export async function optimize(
 ): Promise<OptimizedListing> {
   const facts = buildFacts(snapshot, pack.compliancePack?.factUnits ?? []);
   const system = buildSystemPrompt(pack, facts);
+  const groupPrompts = buildGroupPrompts(pack);
   const disclaimer = pack.compliancePack?.disclaimer ?? '';
   const groups = opts.groups ?? ALL_GROUPS;
   const run = <T>(g: GroupName, fn: () => Promise<T>, fallback: T | undefined): Promise<T> => {
@@ -115,6 +116,8 @@ export async function optimize(
   const finalAttributes = { ...attributes.attributes };
   if (disclaimer) {
     finalAttributes.legal_disclaimer_description = disclaimer; // replaces [SYSTEM_DISCLAIMER]
+  } else {
+    delete finalAttributes.legal_disclaimer_description;
   }
 
   const aplusContent: AplusContent = {

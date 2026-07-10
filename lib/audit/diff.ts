@@ -139,5 +139,33 @@ export function diff(
     gaps.push({ field: 'aplusContent', current: 'n/a', proposed: 'Add a who-it\'s-for module/FAQ', why: 'Quality lint: comparison + who-it\'s-for is a major AI query class.', severity: 'P2' });
   }
 
+  // --- explicit current-vs-proposed copy deltas (visible fields) ---
+  if (normalize(current.title) !== normalize(proposed.title)) {
+    gaps.push({
+      field: 'title',
+      current: clip(current.title, 120),
+      proposed: clip(proposed.title, 120),
+      why: 'Title restructured for product-name lead, keyword front-loading, and limit-safe length under the new 75-char policy.',
+      severity: 'P2',
+    });
+  }
+  if (
+    current.bullets.length === pack.rules.bulletCount &&
+    proposed.bullets.length === pack.rules.bulletCount
+  ) {
+    const changed = current.bullets.filter(
+      (b, i) => normalize(b) !== normalize(proposed.bullets[i] ?? ''),
+    ).length;
+    if (changed >= 3) {
+      gaps.push({
+        field: 'bullets',
+        current: clip(current.bullets[0] ?? '', 100),
+        proposed: clip(proposed.bullets[0] ?? '', 100),
+        why: `${changed}/5 bullets rewritten with distinct situational anchors and compliant structure/function framing.`,
+        severity: 'P2',
+      });
+    }
+  }
+
   return gaps;
 }

@@ -18,18 +18,24 @@ import { optimize, type GroupName } from './optimize';
  * persistent failure is returned to the caller and surfaced in the UI.
  */
 
+/**
+ * Explicit ownership table: gate failure field → prompt group that owns repair.
+ * PACK failures are intentionally absent — they are not repairable by regeneration.
+ */
+export const FIELD_TO_GROUP: ReadonlyArray<{ match: (field: string, checkId: string) => boolean; group: GroupName }> = [
+  { match: (f) => f === 'title' || f === 'title75' || f === 'itemHighlights' || f === 'fdaDisclaimer', group: 'title' },
+  { match: (f) => f.startsWith('bullets'), group: 'bullets' },
+  { match: (f) => f === 'description', group: 'description' },
+  { match: (f) => f === 'backendSearchTerms', group: 'backend' },
+  { match: (f) => f.startsWith('attributes.') || f === 'compliance', group: 'attributes' },
+  { match: (f) => f.startsWith('aplus'), group: 'aplus' },
+  { match: (f) => f.startsWith('qa'), group: 'qa' },
+];
+
 export function fieldToGroup(failure: Failure): GroupName | null {
-  const f = failure.field;
-  if (failure.checkId === 'PACK') return null; // unrepairable by regeneration
-  if (f === 'title' || f === 'title75' || f === 'itemHighlights' || f === 'fdaDisclaimer') return 'title';
-  if (f.startsWith('bullets')) return 'bullets';
-  if (f === 'description') return 'description';
-  if (f === 'backendSearchTerms') return 'backend';
-  if (f.startsWith('attributes.') || f === 'compliance') return 'attributes';
-  if (f.startsWith('aplus')) return 'aplus';
-  if (f.startsWith('qa')) return 'qa';
-  // C12 conflicts: the failing SURFACE owns the repair, never facts.
-  return null;
+  if (failure.checkId === 'PACK') return null;
+  const row = FIELD_TO_GROUP.find((r) => r.match(failure.field, failure.checkId));
+  return row?.group ?? null;
 }
 
 export interface RepairOutcome {

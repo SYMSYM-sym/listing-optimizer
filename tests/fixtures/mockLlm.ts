@@ -117,6 +117,8 @@ const responses: Record<string, unknown> = {
       { q: 'Where is it made?', a: 'It is manufactured in a cGMP facility in the USA and third-party tested.', claimBearing: false },
       { q: 'How long does one bottle last?', a: 'At one capsule daily, the 60-count bottle lasts two months.', claimBearing: false },
       { q: 'Can I take it with other supplements?', a: 'If you take medication or other supplements, consult your physician first.', claimBearing: false },
+      { q: 'What strains are included?', a: 'The blend combines 10 probiotic strains at 50 Billion CFU total.', claimBearing: false },
+      { q: 'Is there a prebiotic included?', a: 'Yes, prebiotic fiber is included to help feed the probiotic strains.', claimBearing: false },
     ],
   },
 };

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import rules from '@/knowledge/rules.json';
-import type { Audit, IngestError, ListingSnapshot, OptimizedListing } from '@/lib/types';
+import type { Audit, Failure, IngestError, ListingSnapshot, OptimizedListing } from '@/lib/types';
 import { toMarkdown } from '@/lib/export/markdown';
 import { CopyButton, Field, SeverityBadge, Steps, type StepState } from './ui';
 
@@ -14,6 +14,13 @@ interface RunResult {
   audit: Audit;
   detection: { packId: string; subcategories: string[] };
   iterations: number;
+}
+
+/** True when the verify gate flagged this listing field (exact or indexed, e.g. bullets[2]). */
+function gateFailedOn(failures: Failure[], field: string): boolean {
+  return failures.some(
+    (f) => f.field === field || f.field.startsWith(`${field}[`) || f.field.startsWith(`${field}.`),
+  );
 }
 
 export default function Home() {
@@ -106,6 +113,7 @@ export default function Home() {
   }
 
   const verified = result?.audit.verified ?? false;
+  const gateFailures = result?.audit.gateResult.failures ?? [];
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-24">
@@ -212,7 +220,7 @@ export default function Home() {
                 )}
               </div>
               <div className="flex gap-2">
-                <CopyButton text={JSON.stringify({ optimized: result.optimized, audit: result.audit }, null, 2)} label="copy all JSON" />
+                <CopyButton text={JSON.stringify({ optimized: result.optimized, audit: result.audit }, null, 2)} label="copy all as JSON" />
                 <button onClick={downloadMarkdown} className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700">↓ download Markdown</button>
                 <button
                   disabled={!verified}
@@ -248,14 +256,14 @@ export default function Home() {
 
             {tab === 'listing' && (
               <section className="space-y-4">
-                <Field label="Title 75 — primary (policy eff. Jul 27 2026)" text={result.optimized.title75} limit={rules.title75Max} />
-                <Field label="Item Highlights (searchable; enter when your template supports it)" text={result.optimized.itemHighlights} limit={rules.itemHighlightsMax} />
-                <Field label="Title — legacy" text={result.optimized.title} limit={rules.titleMaxLegacy} />
+                <Field label="Title — legacy" text={result.optimized.title} limit={rules.titleMaxLegacy} gateFailed={gateFailedOn(gateFailures, 'title')} />
+                <Field label="Title 75 — primary (policy eff. Jul 27 2026)" text={result.optimized.title75} limit={rules.title75Max} gateFailed={gateFailedOn(gateFailures, 'title75')} />
+                <Field label="Item Highlights (searchable; enter when your template supports it)" text={result.optimized.itemHighlights} limit={rules.itemHighlightsMax} gateFailed={gateFailedOn(gateFailures, 'itemHighlights')} />
                 {result.optimized.bullets.map((b, i) => (
-                  <Field key={i} label={`Bullet ${i + 1}${result.optimized.bulletAnchors?.[i] ? ` — ${result.optimized.bulletAnchors[i]}` : ''}`} text={b} limit={rules.bulletMax} />
+                  <Field key={i} label={`Bullet ${i + 1}${result.optimized.bulletAnchors?.[i] ? ` — ${result.optimized.bulletAnchors[i]}` : ''}`} text={b} limit={rules.bulletMax} gateFailed={gateFailedOn(gateFailures, `bullets[${i}]`)} />
                 ))}
-                <Field label="Description" text={result.optimized.description} limit={rules.descriptionMax} />
-                <Field label="Backend search terms" text={result.optimized.backendSearchTerms} limit={rules.backendMaxBytes} unit="bytes" mono />
+                <Field label="Description" text={result.optimized.description} limit={rules.descriptionMax} gateFailed={gateFailedOn(gateFailures, 'description')} />
+                <Field label="Backend search terms" text={result.optimized.backendSearchTerms} limit={rules.backendMaxBytes} unit="bytes" mono gateFailed={gateFailedOn(gateFailures, 'backendSearchTerms')} />
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-medium text-zinc-200">Attributes ({Object.keys(result.optimized.attributes).length})</h3>

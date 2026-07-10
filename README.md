@@ -39,15 +39,20 @@ real LLM/provider credits).
 npm test              # unit + golden E2E (deterministic, no keys needed)
 npm run build
 npm run check:secrets # grep client bundle for leaked API keys (run after build)
+npm run verify        # build + check:secrets + all tests (CI uses this)
 ```
+
+GitHub Actions runs `npm run verify` on every push/PR (see `.github/workflows/verify.yml`).
 
 ## Deploy (Vercel)
 
-1. Push this folder to GitHub.
-2. Import the repo in [Vercel](https://vercel.com) (root directory = `listing-optimizer` if the repo contains the builder kit).
+**Live app:** https://listing-optimizer-livid.vercel.app
+
+1. Push this folder to GitHub (`listing-optimizer` is the app root).
+2. Import the repo in [Vercel](https://vercel.com). Set **Root Directory** to `listing-optimizer` if the repo includes the builder kit parent folder.
 3. Set environment variables from `.env.example` in the Vercel project settings (all server-side).
 4. Set `APP_ACCESS_TOKEN` on production to prevent anonymous spend.
-5. Deploy — API routes run as serverless functions automatically.
+5. Deploy — API routes (`/api/ingest`, `/api/optimize`, `/api/audit`) run as serverless functions (`maxDuration: 300` in `vercel.json`).
 
 ## Adding a new category pack
 
@@ -57,4 +62,10 @@ The engine and verify gate are **category-agnostic**. Category-specific data liv
 2. Extend `lib/knowledge/loadPack.ts` to assemble a new `KnowledgePack` id.
 3. Extend `lib/knowledge/detectCategory.ts` to route snapshots to the new pack id.
 
-No changes to `lib/engine/` or `lib/gate/` are required — they read limits, compliance terms, and schema from the active pack. The `generic` fallback pack demonstrates the seam: rules + principles only, no supplement compliance.
+No changes to `lib/engine/` or `lib/gate/` are required — they read limits, compliance terms, and schema from the active pack.
+
+### Manual live smoke (after deploy)
+
+1. Open the live URL, paste a supplement ASIN (or use **paste** mode with page HTML).
+2. Confirm steps complete and all result tabs populate.
+3. A `verified:false` outcome is acceptable — it must show blocking failures and lock export-final, not hide them.

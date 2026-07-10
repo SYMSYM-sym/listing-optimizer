@@ -209,6 +209,16 @@ describe('A-series fail fixtures', () => {
     const f = runGate(l, pack, ctx).failures.find((y) => y.checkId === 'A7');
     expect(f?.field).toContain('ingredients');
   });
+  it('A6 fiction phrase in A+ module when pack populated', () => {
+    const l = mut((x) => {
+      x.aplusContent.modules[2]!.body = 'Featuring the moon-harvested enzyme for balance.';
+    });
+    expect(idsOf(l).filter((id) => id === 'A6')).toEqual([]);
+    const packWithFiction: KnowledgePack = JSON.parse(JSON.stringify(pack));
+    packWithFiction.compliancePack!.fictionPhrases = ['moon-harvested enzyme'];
+    const f = runGate(l, packWithFiction, ctx).failures.find((y) => y.checkId === 'A6');
+    expect(f?.field).toContain('aplus.modules');
+  });
   it('A8 prohibited marketing (price, buy now, stars, guarantee)', () => {
     const l = mut((x) => {
       x.aplusContent.faq[0]!.a = 'Only $9.99 — buy now! Rated 5 stars in 2,000 reviews. Money-back guarantee. Hurry, today only.';
@@ -255,8 +265,58 @@ describe('PACK fail-closed', () => {
   });
 });
 
+describe('composite negative fixture', () => {
+  it('accumulates disease term + missing disclaimer + 6 bullets + over-byte backend + empty disease-noun list', () => {
+    const emptyPack: KnowledgePack = JSON.parse(JSON.stringify(pack));
+    emptyPack.compliancePack!.diseaseNounsBySubcategory = { probiotic: [] };
+    const l = mut((x) => {
+      x.bullets.push('SIXTH BULLET: helps with diabetes relief*');
+      x.bullets[0] = 'GREAT FOR DIABETES: helps your diabetes feel better*';
+      x.description = x.description.replace(x.fdaDisclaimer, '');
+      x.backendSearchTerms = 'ä'.repeat(130);
+    });
+    const ids = runGate(l, emptyPack, { subcategories: ['probiotic'] }).failures.map((f) => f.checkId);
+    expect(ids).toContain('PACK');
+    expect(ids).toContain('C2');
+    expect(ids).toContain('C3');
+    expect(ids).toContain('C5');
+    expect(ids).toContain('C6');
+  });
+});
+
+describe('per-check pass on compliant fixture', () => {
+  it('each C/A check returns zero failures on the clean listing', () => {
+    const checks = [
+      () => import('@/lib/gate/checks').then((m) => m.c1TitleLength(clean, pack)),
+      () => import('@/lib/gate/checks').then((m) => m.c2Bullets(clean, pack)),
+      () => import('@/lib/gate/checks').then((m) => m.c3BackendBytes(clean, pack)),
+      () => import('@/lib/gate/checks').then((m) => m.c4DescriptionLength(clean, pack)),
+      () => import('@/lib/gate/checks').then((m) => m.c5Disclaimer(clean, pack)),
+      () => import('@/lib/gate/checks').then((m) => m.c6BannedTerms(clean, pack, ctx)),
+      () => import('@/lib/gate/checks').then((m) => m.c7BrandLeakage(clean)),
+      () => import('@/lib/gate/checks').then((m) => m.c8ProductNameLead(clean)),
+      () => import('@/lib/gate/checks').then((m) => m.c9Allergen(clean, pack)),
+      () => import('@/lib/gate/checks').then((m) => m.c10PotencyPhrasing(clean)),
+      () => import('@/lib/gate/checks').then((m) => m.c11FictionPhrases(clean, pack)),
+      () => import('@/lib/gate/checks').then((m) => m.c12FactConsistency(clean)),
+      () => import('@/lib/gate/checks').then((m) => m.c15NewTitlePolicy(clean, pack)),
+      () => import('@/lib/gate/checks').then((m) => m.a1AplusDisclaimer(clean, pack)),
+      () => import('@/lib/gate/checks').then((m) => m.a2AplusBannedTerms(clean, pack, ctx)),
+      () => import('@/lib/gate/checks').then((m) => m.a3AplusBrandLeakage(clean)),
+      () => import('@/lib/gate/checks').then((m) => m.a4AplusProductName(clean)),
+      () => import('@/lib/gate/checks').then((m) => m.a5AplusPotencyPhrasing(clean)),
+      () => import('@/lib/gate/checks').then((m) => m.a6AplusFictionPhrases(clean, pack)),
+      () => import('@/lib/gate/checks').then((m) => m.a7AplusAllergen(clean, pack)),
+      () => import('@/lib/gate/checks').then((m) => m.a8AplusProhibitedMarketing(clean)),
+    ];
+    return Promise.all(checks.map((fn) => fn().then((f) => expect(f).toEqual([]))));
+  });
+});
+
 describe('repair loop', () => {
-  it('fieldToGroup maps ownership correctly; PACK unrepairable', () => {
+  it('FIELD_TO_GROUP maps ownership correctly; PACK unrepairable', async () => {
+    const { FIELD_TO_GROUP, fieldToGroup } = await import('@/lib/engine/repair');
+    expect(FIELD_TO_GROUP.length).toBeGreaterThanOrEqual(7);
     expect(fieldToGroup({ checkId: 'C1', field: 'title', context: '', fix: '' })).toBe('title');
     expect(fieldToGroup({ checkId: 'C2', field: 'bullets[3]', context: '', fix: '' })).toBe('bullets');
     expect(fieldToGroup({ checkId: 'C3', field: 'backendSearchTerms', context: '', fix: '' })).toBe('backend');
