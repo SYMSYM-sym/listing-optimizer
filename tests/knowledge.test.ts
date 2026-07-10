@@ -21,6 +21,33 @@ describe('knowledge pack limits (must exactly match brain/)', () => {
     expect(pack.rules.bulletMax).toBe(255);
     expect(pack.rules.descriptionMax).toBe(2000);
   });
+  it('image and A+ caps match brain/01', () => {
+    expect(pack.rules.imageGalleryMax).toBe(9);
+    expect(pack.rules.aplusModuleMaxBasic).toBe(5);
+    expect(pack.rules.aplusModuleMaxPremium).toBe(7);
+    expect(pack.rules.imageMainMinLongSidePx).toBe(1000);
+    expect(pack.rules.imageMainProductFillPct).toBe(85);
+    expect(pack.rules.imageMainWhiteRgb).toEqual([255, 255, 255]);
+  });
+  it('timeSensitive flags on ⏳ rules', () => {
+    const ids = pack.rules.rules.filter((r) => r.timeSensitive).map((r) => r.id);
+    expect(ids).toEqual(expect.arrayContaining(['title75', 'item-highlights-125', 'title-legacy-200']));
+  });
+});
+
+describe('supplements pack population', () => {
+  const pack = loadPack('supplements');
+  it('wires all compiled JSON artifacts', () => {
+    expect(pack.compliancePack).not.toBeNull();
+    expect(pack.attributeSchema.length).toBe(35);
+    expect(pack.principles.length).toBe(16);
+  });
+  it('diseaseNounsBySubcategory keys match subcategoryKeywords keys', () => {
+    const cp = pack.compliancePack!;
+    const nounKeys = Object.keys(cp.diseaseNounsBySubcategory).sort();
+    const kwKeys = Object.keys(cp.subcategoryKeywords).sort();
+    expect(nounKeys).toEqual(kwKeys);
+  });
 });
 
 describe('supplements compliance pack', () => {
@@ -94,7 +121,7 @@ describe('detectCategory', () => {
     const d = detectCategory(multi);
     expect(d.subcategories).toEqual(expect.arrayContaining(['sleep', 'immunity']));
   });
-  it('routes a non-supplement to generic', () => {
+  it('routes a non-supplement to generic with empty subcategories', () => {
     const generic: ListingSnapshot = {
       asin: 'B0GENERIC1',
       url: 'https://www.amazon.com/dp/B0GENERIC1',
@@ -107,6 +134,26 @@ describe('detectCategory', () => {
       subcategory: [],
       raw: {},
     };
-    expect(detectCategory(generic).packId).toBe('generic');
+    const d = detectCategory(generic);
+    expect(d.packId).toBe('generic');
+    expect(d.subcategories).toEqual([]);
+  });
+
+  it('falls back to general subcategory when supplement has no keyword hits', () => {
+    const vague: ListingSnapshot = {
+      asin: 'B0VAGUE01',
+      url: 'https://www.amazon.com/dp/B0VAGUE01',
+      title: 'Premium Daily Wellness Capsules 60 Count',
+      bullets: [],
+      description: 'A daily wellness formula.',
+      images: [],
+      attributes: {},
+      category: 'Health & Household > Vitamins & Dietary Supplements',
+      subcategory: [],
+      raw: {},
+    };
+    const d = detectCategory(vague);
+    expect(d.packId).toBe('supplements');
+    expect(d.subcategories).toEqual(['general']);
   });
 });

@@ -1,4 +1,5 @@
 import type { ListingSnapshot } from '@/lib/types';
+import routingJson from '@/knowledge/routing.supplements.json';
 import { loadPack, type PackId } from './loadPack';
 
 export interface CategoryDetection {
@@ -7,33 +8,16 @@ export interface CategoryDetection {
   subcategories: string[];
 }
 
-const SUPPLEMENT_CATEGORY_MARKERS = [
-  'vitamins & dietary supplements',
-  'dietary supplements',
-  'vitamins',
-  'supplements',
-  'herbal supplements',
-  'minerals',
-  'sports nutrition',
-];
-
-const SUPPLEMENT_TITLE_MARKERS = [
-  'supplement',
-  'vitamin',
-  'probiotic',
-  'capsule',
-  'capsules',
-  'gummies',
-  'softgel',
-  'softgels',
-  'multivitamin',
-  'cfu',
-];
+const routing = routingJson as {
+  categoryMarkers: string[];
+  titleMarkers: string[];
+  fallbackSubcategory: string;
+};
 
 /**
  * Map a snapshot to a pack id AND the SET of matching subcategories.
- * Detection reads pack data (subcategoryKeywords) — nothing category-specific
- * is hard-coded beyond the supplements-pack routing markers.
+ * Detection reads pack data (subcategoryKeywords) — routing markers live in
+ * knowledge/routing.supplements.json, not hard-coded here.
  */
 export function detectCategory(snapshot: ListingSnapshot): CategoryDetection {
   const category = snapshot.category.toLowerCase();
@@ -41,8 +25,8 @@ export function detectCategory(snapshot: ListingSnapshot): CategoryDetection {
   const attrText = Object.values(snapshot.attributes).join(' ').toLowerCase();
 
   const isSupplement =
-    SUPPLEMENT_CATEGORY_MARKERS.some((m) => category.includes(m)) ||
-    SUPPLEMENT_TITLE_MARKERS.some((m) => title.includes(m)) ||
+    routing.categoryMarkers.some((m) => category.includes(m)) ||
+    routing.titleMarkers.some((m) => title.includes(m)) ||
     attrText.includes('supplement');
 
   if (!isSupplement) {
@@ -51,10 +35,17 @@ export function detectCategory(snapshot: ListingSnapshot): CategoryDetection {
 
   const pack = loadPack('supplements');
   const keywords = pack.compliancePack?.subcategoryKeywords ?? {};
-  const haystack = `${title} ${category} ${attrText}`;
+  // Title + attributes only — category breadcrumbs contain "supplements" and
+  // cause false substring hits (e.g. "men" inside "supplements").
+  const haystack = `${title} ${attrText}`;
   const subcategories = Object.entries(keywords)
-    .filter(([, terms]) => terms.some((t) => haystack.includes(t.toLowerCase())))
+    .filter(([sub, terms]) => sub !== routing.fallbackSubcategory && terms.some((t) => haystack.includes(t.toLowerCase())))
     .map(([sub]) => sub);
+
+  // Fallback so a routed supplement never hits PACK with zero subcategories.
+  if (subcategories.length === 0) {
+    return { packId: 'supplements', subcategories: [routing.fallbackSubcategory] };
+  }
 
   return { packId: 'supplements', subcategories };
 }

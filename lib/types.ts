@@ -57,6 +57,10 @@ export interface RuleSet {
   aplusModuleMaxBasic: number; // 5
   aplusModuleMaxPremium: number; // 7
   imageGalleryMax: number; // 9
+  /** Main image: pure white RGB 255/255/255, product ≥85% fill, longest side ≥1000px. */
+  imageMainMinLongSidePx: number;
+  imageMainWhiteRgb: [number, number, number];
+  imageMainProductFillPct: number;
   rules: Rule[];
 }
 

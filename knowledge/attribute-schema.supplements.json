@@ -32,5 +32,6 @@
   { "field": "item_weight", "label": "Item Weight", "filterFacet": false, "required": false, "valueType": "string", "example": "[N] Ounces" },
   { "field": "country_of_origin", "label": "Country of Origin", "filterFacet": true, "required": true, "valueType": "string", "example": "[COUNTRY]" },
   { "field": "standard_price", "label": "Price", "filterFacet": false, "required": false, "valueType": "string", "example": "[PRICE]" },
-  { "field": "fulfillment_channel", "label": "Fulfillment Channel", "filterFacet": true, "required": false, "valueType": "enum", "example": "FBA" }
+  { "field": "fulfillment_channel", "label": "Fulfillment Channel", "filterFacet": true, "required": false, "valueType": "enum", "example": "FBA" },
+  { "field": "subject_keyword", "label": "Subject Keyword (legacy platinum)", "filterFacet": false, "required": false, "valueType": "string", "example": "Low weight today — fill only if template still exposes it" }
 ]

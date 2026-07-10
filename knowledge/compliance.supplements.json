@@ -37,9 +37,11 @@
     "thyroid": ["hypothyroidism", "hyperthyroidism", "hashimoto's", "hashimotos", "goiter", "graves' disease", "graves disease"],
     "protein-fitness": ["sarcopenia", "muscle wasting disease", "rhabdomyolysis"],
     "kids-prenatal": ["birth defects", "neural tube defects", "colic disorder", "developmental delay"],
-    "detox": ["heavy metal poisoning", "liver disease", "cirrhosis", "hepatitis"]
+    "detox": ["heavy metal poisoning", "liver disease", "cirrhosis", "hepatitis"],
+    "general": ["anemia", "fatigue", "malnutrition", "vitamin deficiency disease", "chronic fatigue syndrome", "inflammation", "chronic pain", "wellness disorder", "nutrient deficiency"]
   },
   "subcategoryKeywords": {
+    "general": ["daily", "wellness", "health support", "dietary", "nutritional", "formula", "blend"],
     "probiotic": ["probiotic", "prebiotic", "cfu", "lactobacillus", "bifidobacterium", "gut flora"],
     "digestive": ["digestive", "digestion", "gut health", "enzyme", "fiber supplement", "bloating"],
     "joint": ["joint", "glucosamine", "chondroitin", "msm", "turmeric", "curcumin", "collagen"],

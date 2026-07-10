@@ -11,6 +11,7 @@ import rulesJson from '@/knowledge/rules.json';
 import complianceJson from '@/knowledge/compliance.supplements.json';
 import attributeSchemaJson from '@/knowledge/attribute-schema.supplements.json';
 import principlesJson from '@/knowledge/principles.json';
+import suspicionGenericJson from '@/knowledge/suspicion.generic.json';
 
 /**
  * Assembles KnowledgePacks from compiled knowledge/*.json (brain/ is the
@@ -20,35 +21,9 @@ import principlesJson from '@/knowledge/principles.json';
 
 export type PackId = 'supplements' | 'generic';
 
-const rules: RuleSet = rulesJson as RuleSet;
+const rules: RuleSet = rulesJson as unknown as RuleSet;
 const principles: Principle[] = principlesJson as Principle[];
-
-/**
- * Supplement-smell terms for the generic pack: if a pack has NO compliance
- * module but the snapshot matches this lexicon, the gate fails closed (PACK).
- * Shipped as data so the gate stays category-agnostic.
- */
-const GENERIC_SUSPICION_LEXICON = [
-  'supplement',
-  'supplements',
-  'dietary supplement',
-  'vitamin',
-  'vitamins',
-  'capsule',
-  'capsules',
-  'gummy',
-  'gummies',
-  'softgel',
-  'softgels',
-  'probiotic',
-  'cfu',
-  'mg ',
-  'mcg',
-  'supplement facts',
-  'serving size',
-  'servings per container',
-  'proprietary blend',
-];
+const genericSuspicionLexicon: string[] = suspicionGenericJson.suspicionLexicon;
 
 export function loadPack(id: PackId): KnowledgePack {
   if (id === 'supplements') {
@@ -68,6 +43,6 @@ export function loadPack(id: PackId): KnowledgePack {
     compliancePack: null,
     attributeSchema: [],
     principles,
-    suspicionLexicon: GENERIC_SUSPICION_LEXICON,
+    suspicionLexicon: genericSuspicionLexicon,
   };
 }

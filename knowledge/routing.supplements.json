@@ -1,0 +1,24 @@
+{
+  "categoryMarkers": [
+    "vitamins & dietary supplements",
+    "dietary supplements",
+    "vitamins",
+    "supplements",
+    "herbal supplements",
+    "minerals",
+    "sports nutrition"
+  ],
+  "titleMarkers": [
+    "supplement",
+    "vitamin",
+    "probiotic",
+    "capsule",
+    "capsules",
+    "gummies",
+    "softgel",
+    "softgels",
+    "multivitamin",
+    "cfu"
+  ],
+  "fallbackSubcategory": "general"
+}
