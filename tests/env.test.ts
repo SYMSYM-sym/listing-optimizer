@@ -6,6 +6,11 @@ describe('lib/env runtime validation', () => {
     vi.unstubAllEnvs();
   });
 
+  it('module import does not throw when keys are missing (lazy validation)', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    await expect(import('@/lib/env')).resolves.toBeDefined();
+  });
+
   it('throws at use time when ANTHROPIC_API_KEY is missing', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', '');
     const { env } = await import('@/lib/env');

@@ -1,3 +1,5 @@
+import 'server-only';
+
 import type { ListingSnapshot, OptimizeResult } from '@/lib/types';
 import type { LlmClient } from '@/lib/engine/llm';
 import { runRepairLoop } from '@/lib/engine/repair';

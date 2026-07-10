@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "check:secrets": "node scripts/check-no-secrets-in-client.mjs"
+    "check:secrets": "node scripts/check-no-secrets-in-client.mjs",
+    "verify": "npm run build && npm run check:secrets && npm test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

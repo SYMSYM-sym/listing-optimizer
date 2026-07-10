@@ -1,3 +1,5 @@
+import 'server-only';
+
 import type { GateResult, KnowledgePack, OptimizedListing } from '@/lib/types';
 import {
   a1AplusDisclaimer,
