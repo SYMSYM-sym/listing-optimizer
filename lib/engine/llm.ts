@@ -2,6 +2,7 @@ import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 import type { z } from 'zod';
 import { env } from '@/lib/env';
+import { logServer } from '@/lib/server/log';
 
 /**
  * LLM boundary. The client is injectable (tests use a recorded-fixture mock).
@@ -13,6 +14,8 @@ export interface LlmRequest {
   system: string;
   user: string;
   maxTokens: number;
+  /** Optional group label for structured latency logs. */
+  groupName?: string;
 }
 
 export type LlmClient = (req: LlmRequest) => Promise<string>;
@@ -20,11 +23,16 @@ export type LlmClient = (req: LlmRequest) => Promise<string>;
 let _anthropic: Anthropic | null = null;
 
 export function anthropicClient(): LlmClient {
-  return async ({ system, user, maxTokens }) => {
+  return async ({ system, user, maxTokens, groupName }) => {
     _anthropic ??= new Anthropic({ apiKey: env.anthropicApiKey(), timeout: 90_000 });
+    const started = Date.now();
+    // Claude Sonnet 5 enables adaptive thinking by default; with modest
+    // max_tokens that can consume the whole budget and return zero text.
+    // Structured JSON copy does not need thinking — disable it explicitly.
     const msg = await _anthropic.messages.create({
       model: env.anthropicModel(),
       max_tokens: maxTokens,
+      thinking: { type: 'disabled' },
       system: [
         {
           type: 'text',
@@ -37,8 +45,20 @@ export function anthropicClient(): LlmClient {
       messages: [{ role: 'user', content: user }],
     });
     const block = msg.content.find((b) => b.type === 'text');
-    if (!block || block.type !== 'text') {
-      throw new Error('LLM returned no text content');
+    const textBlocks = msg.content.filter((b) => b.type === 'text').length;
+    logServer('llm.group', {
+      group: groupName ?? 'unknown',
+      ms: Date.now() - started,
+      stopReason: msg.stop_reason,
+      contentTypes: msg.content.map((b) => b.type),
+      textBlocks,
+      inputTokens: msg.usage?.input_tokens,
+      outputTokens: msg.usage?.output_tokens,
+    });
+    if (!block || block.type !== 'text' || !block.text.trim()) {
+      throw new Error(
+        `LLM returned no text content (stop_reason=${msg.stop_reason}; blocks=${msg.content.map((b) => b.type).join(',') || 'none'})`,
+      );
     }
     return block.text;
   };
@@ -73,6 +93,7 @@ export async function generateGroup<S extends z.ZodType>(
       system,
       user: extra ? `${user}\n\nIMPORTANT — your previous output was invalid: ${extra}\nReturn corrected JSON only.` : user,
       maxTokens,
+      groupName,
     });
     const parsed: unknown = JSON.parse(extractJson(text));
     return schema.parse(parsed);
@@ -81,6 +102,7 @@ export async function generateGroup<S extends z.ZodType>(
     return await attempt();
   } catch (e) {
     const detail = e instanceof Error ? e.message.slice(0, 600) : String(e);
+    logServer('llm.reparse', { group: groupName, detail: detail.slice(0, 200) });
     try {
       return await attempt(detail);
     } catch (e2) {

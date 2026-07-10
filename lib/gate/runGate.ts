@@ -10,6 +10,7 @@ import {
   a6AplusFictionPhrases,
   a7AplusAllergen,
   a8AplusProhibitedMarketing,
+  a9AplusComparisonAndAudience,
   c1TitleLength,
   c2Bullets,
   c3BackendBytes,
@@ -63,6 +64,7 @@ export function runGate(
     ...a6AplusFictionPhrases(listing, pack),
     ...a7AplusAllergen(listing, pack),
     ...a8AplusProhibitedMarketing(listing),
+    ...a9AplusComparisonAndAudience(listing, pack),
   ];
   return { pass: failures.length === 0, failures };
 }

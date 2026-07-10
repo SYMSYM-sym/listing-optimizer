@@ -1,0 +1,5 @@
+{
+  "categoryMarkers": ["beauty", "cosmetic", "skin care", "skincare", "hair care", "fragrance"],
+  "titleMarkers": ["serum", "moisturizer", "shampoo", "conditioner", "perfume", "cleanser", "toner", "face cream"],
+  "fallbackSubcategory": "general"
+}

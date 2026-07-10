@@ -63,7 +63,7 @@ The engine and verify gate are **category-agnostic**. Category-specific data liv
 2. Extend `lib/knowledge/loadPack.ts` to assemble a new `KnowledgePack` id.
 3. Extend `lib/knowledge/detectCategory.ts` to route snapshots to the new pack id.
 
-No changes to `lib/engine/` or `lib/gate/` are required — they read limits, compliance terms, and schema from the active pack.
+No changes to `lib/engine/` or `lib/gate/` are required — they read limits, compliance terms, and schema from the active pack. The in-repo `cosmetics` pack proves the seam (own compliance + attribute schema + routing; zero engine/gate edits).
 
 ### Manual live smoke (after deploy)
 

@@ -1,5 +1,6 @@
 import 'server-only';
 import { env } from '@/lib/env';
+import { logServer } from '@/lib/server/log';
 import { parsePdpHtml } from '../parsePdpHtml';
 import { ProviderError, type ListingProvider, type RawListing } from './types';
 
@@ -15,6 +16,7 @@ const TIMEOUT_MS = 60_000;
 export const firecrawlProvider: ListingProvider = {
   async fetch(asin: string): Promise<RawListing> {
     const url = `https://www.amazon.com/dp/${asin}`;
+    const started = Date.now();
     let res: Response;
     try {
       res = await fetch('https://api.firecrawl.dev/v1/scrape', {
@@ -28,14 +30,24 @@ export const firecrawlProvider: ListingProvider = {
       });
     } catch (e) {
       if (e instanceof Error && e.name === 'TimeoutError') {
+        logServer('ingest.provider', { provider: 'firecrawl', asin, event: 'timeout', ms: Date.now() - started });
         throw new ProviderError('PROVIDER_TIMEOUT', 'Firecrawl request timed out');
       }
+      logServer('ingest.provider', { provider: 'firecrawl', asin, event: 'error', ms: Date.now() - started });
       throw new ProviderError('PROVIDER_ERROR', `Firecrawl request failed: ${String(e)}`);
     }
     if (res.status === 429) {
+      logServer('ingest.provider', { provider: 'firecrawl', asin, event: 'rate_limited', ms: Date.now() - started });
       throw new ProviderError('RATE_LIMITED', 'Firecrawl rate limit (429)');
     }
     if (!res.ok) {
+      logServer('ingest.provider', {
+        provider: 'firecrawl',
+        asin,
+        event: 'http_error',
+        status: res.status,
+        ms: Date.now() - started,
+      });
       throw new ProviderError('PROVIDER_ERROR', `Firecrawl HTTP ${res.status}`);
     }
     const data = (await res.json()) as {
@@ -45,6 +57,7 @@ export const firecrawlProvider: ListingProvider = {
     };
     const html = data.data?.rawHtml ?? data.data?.html;
     if (!data.success || !html) {
+      logServer('ingest.provider', { provider: 'firecrawl', asin, event: 'blocked', ms: Date.now() - started });
       throw new ProviderError(
         'PROVIDER_BLOCKED',
         `Firecrawl could not retrieve the page (likely blocked): ${data.error ?? 'no HTML returned'}`,
@@ -52,11 +65,18 @@ export const firecrawlProvider: ListingProvider = {
     }
     const listing = parsePdpHtml(html, asin, url);
     if (!listing.title) {
+      logServer('ingest.provider', {
+        provider: 'firecrawl',
+        asin,
+        event: 'blocked_no_title',
+        ms: Date.now() - started,
+      });
       throw new ProviderError(
         'PROVIDER_BLOCKED',
         'Retrieved page has no product title — likely a bot-check page. Use paste mode.',
       );
     }
+    logServer('ingest.provider', { provider: 'firecrawl', asin, event: 'ok', ms: Date.now() - started });
     return { ...listing, raw: { source: 'firecrawl' } };
   },
 };

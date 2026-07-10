@@ -226,6 +226,30 @@ describe('A-series fail fixtures', () => {
     const labels = runGate(l, pack, ctx).failures.filter((y) => y.checkId === 'A8');
     expect(labels.length).toBeGreaterThanOrEqual(5);
   });
+  it('A9 fails when comparison rows are below pack minimum', () => {
+    const l = mut((x) => {
+      x.aplusContent.comparison.rows = x.aplusContent.comparison.rows.slice(0, 1);
+    });
+    const f = runGate(l, pack, ctx).failures.find((y) => y.checkId === 'A9');
+    expect(f?.field).toBe('aplus.comparison');
+  });
+  it('A9 fails when no who-it\'s-for cue is present', () => {
+    const l = mut((x) => {
+      x.aplusContent.modules = x.aplusContent.modules.map((m) =>
+        m.id.includes('who')
+          ? { ...m, id: 'audience', headline: 'Audience', body: 'Adults seeking daily balance support.' }
+          : m,
+      );
+      x.aplusContent.faq = x.aplusContent.faq.map((f) =>
+        /who/i.test(f.q) ? { ...f, q: 'What does it support?', a: f.a } : f,
+      );
+    });
+    const f = runGate(l, pack, ctx).failures.find((y) => y.checkId === 'A9' && y.field === 'aplusContent');
+    expect(f).toBeTruthy();
+  });
+  it('A9 passes on the compliant fixture', () => {
+    expect(idsOf(clean).filter((id) => id === 'A9')).toEqual([]);
+  });
 });
 
 describe('PACK fail-closed', () => {
@@ -308,6 +332,7 @@ describe('per-check pass on compliant fixture', () => {
       () => import('@/lib/gate/checks').then((m) => m.a6AplusFictionPhrases(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.a7AplusAllergen(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.a8AplusProhibitedMarketing(clean)),
+      () => import('@/lib/gate/checks').then((m) => m.a9AplusComparisonAndAudience(clean, pack)),
     ];
     return Promise.all(checks.map((fn) => fn().then((f) => expect(f).toEqual([]))));
   });

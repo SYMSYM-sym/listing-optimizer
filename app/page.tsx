@@ -39,6 +39,7 @@ export default function Home() {
   const [result, setResult] = useState<RunResult | null>(null);
   const [tab, setTab] = useState<Tab>('listing');
   const [running, setRunning] = useState(false);
+  const [elapsedSec, setElapsedSec] = useState(0);
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -50,6 +51,8 @@ export default function Home() {
     setSuggestPaste(false);
     setResult(null);
     setRunning(true);
+    setElapsedSec(0);
+    const tick = window.setInterval(() => setElapsedSec((s) => s + 1), 1000);
     setIngestState('running');
     setOptimizeState('idle');
     setVerifyState('idle');
@@ -78,10 +81,13 @@ export default function Home() {
       setIngestState('done');
       setOptimizeState('running');
       setVerifyState('running');
+      setAuditState('running');
       const optRes = await fetch('/api/optimize', { method: 'POST', headers, body: JSON.stringify({ snapshot }) });
       if (!optRes.ok) {
         const e = (await optRes.json()) as { code: string; message: string };
         setOptimizeState('error');
+        setVerifyState('error');
+        setAuditState('error');
         setError(`${e.code}: ${e.message}`);
         return;
       }
@@ -96,7 +102,9 @@ export default function Home() {
       setIngestState((s) => (s === 'running' ? 'error' : s));
       setOptimizeState((s) => (s === 'running' ? 'error' : s));
       setVerifyState((s) => (s === 'running' ? 'error' : s));
+      setAuditState((s) => (s === 'running' ? 'error' : s));
     } finally {
+      window.clearInterval(tick);
       setRunning(false);
     }
   }
@@ -147,9 +155,14 @@ export default function Home() {
               disabled={running}
               className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-medium hover:bg-emerald-500 disabled:opacity-40 transition-colors"
             >
-              {running ? 'Running…' : 'Optimize'}
+              {running ? `Running… ${elapsedSec}s` : 'Optimize'}
             </button>
           </div>
+          {running && (
+            <p className="text-xs text-zinc-500">
+              Optimize fans out 8 LLM groups in parallel, then may run up to a few repair rounds. Typical wall-clock is 1–3 minutes — the timer above shows progress while you wait.
+            </p>
+          )}
           <div className="flex items-center gap-2 text-xs text-zinc-400">
             <span>Ingestion:</span>
             {(['rainforest', 'firecrawl', 'paste'] as Provider[]).map((p) => (

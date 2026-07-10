@@ -29,10 +29,10 @@ describe('lib/env runtime validation', () => {
     expect(() => env.ingestProvider()).toThrow(/rainforest\|firecrawl\|paste/);
   });
 
-  it('MAX_REPAIR_ITERATIONS defaults to 3 and bounds 0–10', async () => {
+  it('MAX_REPAIR_ITERATIONS defaults to 2 and bounds 0–10', async () => {
     vi.stubEnv('MAX_REPAIR_ITERATIONS', '');
     const { env } = await import('@/lib/env');
-    expect(env.maxRepairIterations()).toBe(3);
+    expect(env.maxRepairIterations()).toBe(2);
     vi.stubEnv('MAX_REPAIR_ITERATIONS', '99');
     vi.resetModules();
     const { env: env2 } = await import('@/lib/env');

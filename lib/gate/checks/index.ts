@@ -37,4 +37,5 @@ export {
   a6AplusFictionPhrases,
   a7AplusAllergen,
   a8AplusProhibitedMarketing,
+  a9AplusComparisonAndAudience,
 } from './a-aplus';

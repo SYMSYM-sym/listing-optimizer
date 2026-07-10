@@ -13,6 +13,17 @@
   "imageMainMinLongSidePx": 1000,
   "imageMainWhiteRgb": [255, 255, 255],
   "imageMainProductFillPct": 85,
+  "aplusComparisonMinRows": 3,
+  "whoItsForCues": [
+    "who it's for",
+    "who it is for",
+    "who its for",
+    "best for",
+    "ideal for",
+    "designed for",
+    "made for",
+    "perfect for"
+  ],
   "rules": [
     { "id": "title-legacy-200", "description": "Legacy title ≤200 chars (in force until Jul 27 2026 cutover)", "value": 200, "timeSensitive": true, "verifiedAsOf": "2026-07-09" },
     { "id": "title75", "description": "Title ≤75 chars effective Jul 27 2026 (all categories except media); violators subject to AI auto-rewrite (14-day review window for Brand Registry owners)", "value": 75, "timeSensitive": true, "verifiedAsOf": "2026-07-09" },

@@ -1,0 +1,20 @@
+Models overview - Claude Platform Docs
+  URL: https://platform.claude.com/docs/en/about-claude/models/overview
+  Claude is a family of state-of-the-art large language models developed by Anthropic. This guide introduces the available models and compares their ...
+
+Claude Platform Docs
+  URL: https://platform.claude.com/docs/en/release-notes/overview
+  We announced the deprecation of the Claude Opus 4.1 model ( claude-opus-4-1-20250805 ), with retirement on the Claude API scheduled for August 5, 2026. We ...
+
+List Models - Claude API Reference
+  URL: https://platform.claude.com/docs/en/api/models/list
+  List available models. The Models API response can be used to determine which models are available for use in the API. More recently released models are…
+
+Introducing Claude Sonnet 5 - Anthropic
+  URL: https://www.anthropic.com/news/claude-sonnet-5
+  Claude Sonnet 5 is built to be the most agentic Sonnet model yet. It can make plans, use tools like browsers and terminals, ...
+
+skills/skills/claude-api/shared/models.md at main - GitHub
+  URL: https://github.com/anthropics/skills/blob/main/skills/claude-api/shared/models.md
+  Only use exact model IDs listed in this file. Never guess or construct model IDs — incorrect IDs will cause API errors. Use aliases wherever available.
+  Category: github

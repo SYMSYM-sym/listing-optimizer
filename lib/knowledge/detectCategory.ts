@@ -1,5 +1,6 @@
 import type { ListingSnapshot } from '@/lib/types';
-import routingJson from '@/knowledge/routing.supplements.json';
+import routingSupplementsJson from '@/knowledge/routing.supplements.json';
+import routingCosmeticsJson from '@/knowledge/routing.cosmetics.json';
 import { loadPack, type PackId } from './loadPack';
 
 export interface CategoryDetection {
@@ -8,16 +9,42 @@ export interface CategoryDetection {
   subcategories: string[];
 }
 
-const routing = routingJson as {
+type Routing = {
   categoryMarkers: string[];
   titleMarkers: string[];
   fallbackSubcategory: string;
 };
 
+const routingSupplements = routingSupplementsJson as Routing;
+const routingCosmetics = routingCosmeticsJson as Routing;
+
+function matchMarkers(routing: Routing, category: string, title: string, attrText: string): boolean {
+  return (
+    routing.categoryMarkers.some((m) => category.includes(m)) ||
+    routing.titleMarkers.some((m) => title.includes(m)) ||
+    attrText.includes(routing.categoryMarkers[0] ?? '')
+  );
+}
+
+function detectSubcategories(
+  packId: 'supplements' | 'cosmetics',
+  title: string,
+  attrText: string,
+  fallback: string,
+): string[] {
+  const pack = loadPack(packId);
+  const keywords = pack.compliancePack?.subcategoryKeywords ?? {};
+  const haystack = `${title} ${attrText}`;
+  const subcategories = Object.entries(keywords)
+    .filter(([sub, terms]) => sub !== fallback && terms.some((t) => haystack.includes(t.toLowerCase())))
+    .map(([sub]) => sub);
+  return subcategories.length > 0 ? subcategories : [fallback];
+}
+
 /**
  * Map a snapshot to a pack id AND the SET of matching subcategories.
- * Detection reads pack data (subcategoryKeywords) — routing markers live in
- * knowledge/routing.supplements.json, not hard-coded here.
+ * Detection reads pack data — routing markers live in knowledge/, not hard-coded.
+ * Order: supplements first (regulated), then cosmetics, else generic.
  */
 export function detectCategory(snapshot: ListingSnapshot): CategoryDetection {
   const category = snapshot.category.toLowerCase();
@@ -25,27 +52,32 @@ export function detectCategory(snapshot: ListingSnapshot): CategoryDetection {
   const attrText = Object.values(snapshot.attributes).join(' ').toLowerCase();
 
   const isSupplement =
-    routing.categoryMarkers.some((m) => category.includes(m)) ||
-    routing.titleMarkers.some((m) => title.includes(m)) ||
+    matchMarkers(routingSupplements, category, title, attrText) ||
     attrText.includes('supplement');
 
-  if (!isSupplement) {
-    return { packId: 'generic', subcategories: [] };
+  if (isSupplement) {
+    return {
+      packId: 'supplements',
+      subcategories: detectSubcategories(
+        'supplements',
+        title,
+        attrText,
+        routingSupplements.fallbackSubcategory,
+      ),
+    };
   }
 
-  const pack = loadPack('supplements');
-  const keywords = pack.compliancePack?.subcategoryKeywords ?? {};
-  // Title + attributes only — category breadcrumbs contain "supplements" and
-  // cause false substring hits (e.g. "men" inside "supplements").
-  const haystack = `${title} ${attrText}`;
-  const subcategories = Object.entries(keywords)
-    .filter(([sub, terms]) => sub !== routing.fallbackSubcategory && terms.some((t) => haystack.includes(t.toLowerCase())))
-    .map(([sub]) => sub);
-
-  // Fallback so a routed supplement never hits PACK with zero subcategories.
-  if (subcategories.length === 0) {
-    return { packId: 'supplements', subcategories: [routing.fallbackSubcategory] };
+  if (matchMarkers(routingCosmetics, category, title, attrText)) {
+    return {
+      packId: 'cosmetics',
+      subcategories: detectSubcategories(
+        'cosmetics',
+        title,
+        attrText,
+        routingCosmetics.fallbackSubcategory,
+      ),
+    };
   }
 
-  return { packId: 'supplements', subcategories };
+  return { packId: 'generic', subcategories: [] };
 }

@@ -124,3 +124,42 @@ export function a8AplusProhibitedMarketing(l: OptimizedListing): Failure[] {
   }
   return out;
 }
+
+/**
+ * A9 — A+ comparison + who-it's-for presence (quality floor).
+ * Thresholds/cues come from pack.rules — not category-hard-coded.
+ */
+export function a9AplusComparisonAndAudience(l: OptimizedListing, pack: KnowledgePack): Failure[] {
+  const out: Failure[] = [];
+  const minRows = pack.rules.aplusComparisonMinRows;
+  const rows = l.aplusContent.comparison.rows.length;
+  if (rows < minRows) {
+    out.push(
+      fail(
+        'A9',
+        'aplus.comparison',
+        `${rows} rows`,
+        `A+ comparison must have ≥${minRows} rows framing ours vs a typical alternative`,
+      ),
+    );
+  }
+  const cues = pack.rules.whoItsForCues.map((c) => c.toLowerCase());
+  const hay = normalize(
+    [
+      ...l.aplusContent.modules.map((m) => `${m.id} ${m.headline} ${m.body} ${m.subcopy ?? ''}`),
+      ...l.aplusContent.faq.map((f) => `${f.q} ${f.a}`),
+    ].join(' '),
+  ).toLowerCase();
+  const hit = cues.some((c) => hay.includes(c));
+  if (!hit) {
+    out.push(
+      fail(
+        'A9',
+        'aplusContent',
+        'no who-it\'s-for cue found',
+        `Include a who-it's-for / best-for / ideal-for statement in an A+ module or FAQ (cues from pack.rules.whoItsForCues)`,
+      ),
+    );
+  }
+  return out;
+}

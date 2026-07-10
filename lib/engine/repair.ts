@@ -8,6 +8,7 @@ import type {
 } from '@/lib/types';
 import type { GateContext } from '@/lib/gate/checks';
 import { runGate } from '@/lib/gate/runGate';
+import { logServer } from '@/lib/server/log';
 import type { LlmClient } from './llm';
 import { optimize, type GroupName } from './optimize';
 
@@ -28,7 +29,7 @@ export const FIELD_TO_GROUP: ReadonlyArray<{ match: (field: string, checkId: str
   { match: (f) => f === 'description', group: 'description' },
   { match: (f) => f === 'backendSearchTerms', group: 'backend' },
   { match: (f) => f.startsWith('attributes.') || f === 'compliance', group: 'attributes' },
-  { match: (f) => f.startsWith('aplus'), group: 'aplus' },
+  { match: (f) => f.startsWith('aplus') || f === 'aplusContent', group: 'aplus' },
   { match: (f) => f.startsWith('qa'), group: 'qa' },
 ];
 
@@ -59,6 +60,9 @@ export async function runRepairLoop(
   // PACK fail-closed short-circuit: regeneration cannot repair a pack gap —
   // surface it immediately without burning LLM rounds.
   if (gateResult.failures.some((f) => f.checkId === 'PACK')) {
+    logServer('repair.pack_short_circuit', {
+      failures: gateResult.failures.map((f) => f.checkId),
+    });
     return { listing, gateResult, iterations };
   }
 
@@ -74,6 +78,11 @@ export async function runRepairLoop(
       failureContext[g] = failureContext[g] ? `${failureContext[g]}\n${line}` : line;
     }
     if (groups.size === 0) break; // nothing regenerable owns the failures
+    logServer('repair.round', {
+      iteration: iterations,
+      groups: [...groups],
+      failureIds: gateResult.failures.map((f) => f.checkId),
+    });
     listing = await optimize(snapshot, pack, llm, {
       groups: [...groups],
       base: listing,
@@ -82,5 +91,10 @@ export async function runRepairLoop(
     gateResult = runGate(listing, pack, ctx);
     if (gateResult.failures.some((f) => f.checkId === 'PACK')) break;
   }
+  logServer('repair.done', {
+    iterations,
+    verified: gateResult.pass,
+    failureIds: gateResult.failures.map((f) => f.checkId),
+  });
   return { listing, gateResult, iterations };
 }

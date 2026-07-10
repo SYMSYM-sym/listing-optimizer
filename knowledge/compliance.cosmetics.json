@@ -1,0 +1,30 @@
+{
+  "disclaimer": "This product is a cosmetic. Individual results may vary. Discontinue use if irritation occurs. Keep out of eyes. For external use only.",
+  "auditAcceptDisclaimers": [
+    "For external use only. Discontinue use if irritation occurs."
+  ],
+  "diseaseVerbs": ["treat", "treats", "treating", "cure", "cures", "curing", "prevent", "prevents", "preventing", "heal", "heals", "diagnose", "diagnoses"],
+  "coreDiseaseNouns": [
+    "eczema", "psoriasis", "dermatitis", "rosacea", "acne vulgaris", "melanoma",
+    "skin cancer", "infection", "infections", "disease", "herpes", "shingles"
+  ],
+  "diseaseNounsBySubcategory": {
+    "skincare": ["eczema", "psoriasis", "dermatitis", "rosacea", "acne vulgaris", "melasma", "vitiligo"],
+    "haircare": ["alopecia", "scalp psoriasis", "seborrheic dermatitis", "ringworm"],
+    "fragrance": ["contact dermatitis", "allergic reaction disorder"],
+    "general": ["eczema", "psoriasis", "dermatitis"]
+  },
+  "allergenRules": [
+    { "class": "Fragrance", "source": "fragrance|parfum", "canonicalString": "Contains: Fragrance" },
+    { "class": "Nuts", "source": "almond|argan|shea", "canonicalString": "Contains: Tree Nut Derivatives" }
+  ],
+  "superlativeBans": ["#1", "best seller", "bestselling", "miracle", "guaranteed", "clinically proven cure"],
+  "fictionPhrases": [],
+  "factUnits": ["ml", "oz", "fl oz", "g", "mg", "%", "spf"],
+  "subcategoryKeywords": {
+    "skincare": ["serum", "moisturizer", "cleanser", "toner", "retinoid", "skincare", "face cream"],
+    "haircare": ["shampoo", "conditioner", "hair oil", "haircare", "scalp"],
+    "fragrance": ["perfume", "cologne", "eau de", "fragrance"],
+    "general": ["cosmetic", "beauty"]
+  }
+}

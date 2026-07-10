@@ -61,6 +61,10 @@ export interface RuleSet {
   imageMainMinLongSidePx: number;
   imageMainWhiteRgb: [number, number, number];
   imageMainProductFillPct: number;
+  /** Minimum A+ comparison rows (gate A9). Category-agnostic quality floor. */
+  aplusComparisonMinRows: number;
+  /** Phrasing cues that count as a who-it's-for statement (gate A9). */
+  whoItsForCues: string[];
   rules: Rule[];
 }
 

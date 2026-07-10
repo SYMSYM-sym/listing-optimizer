@@ -6,6 +6,7 @@ import { runRepairLoop } from '@/lib/engine/repair';
 import { buildAudit } from '@/lib/audit/buildAudit';
 import { detectCategory, type CategoryDetection } from '@/lib/knowledge/detectCategory';
 import { loadPack } from '@/lib/knowledge/loadPack';
+import { logServer } from '@/lib/server/log';
 
 /**
  * Composable pipeline — ONE implementation shared by the API routes AND the
@@ -39,5 +40,13 @@ export async function runPipeline(
     ...listing,
     state: audit.verified ? ('verified' as const) : ('draft' as const),
   };
+  logServer('pipeline.done', {
+    packId: detection.packId,
+    iterations,
+    verified: audit.verified,
+    score: audit.scorecard.total,
+    gaps: audit.gaps.length,
+    failureIds: audit.gateResult.failures.map((f) => f.checkId),
+  });
   return { optimized, audit, iterations, detection };
 }

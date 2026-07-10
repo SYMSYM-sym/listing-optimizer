@@ -54,7 +54,9 @@ export const env = {
   },
 
   maxRepairIterations: (): number => {
-    const n = Number.parseInt(optional('MAX_REPAIR_ITERATIONS', '3'), 10);
+    // Default 2: fewer auto-repair rounds → faster wall-clock; more fixable
+    // failures may surface in the Audit tab instead of burning LLM rounds.
+    const n = Number.parseInt(optional('MAX_REPAIR_ITERATIONS', '2'), 10);
     if (!Number.isFinite(n) || n < 0 || n > 10) {
       throw new Error('MAX_REPAIR_ITERATIONS must be an integer 0–10');
     }

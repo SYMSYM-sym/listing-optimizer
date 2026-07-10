@@ -1,0 +1,15 @@
+[
+  { "field": "brand_name", "label": "Brand Name", "filterFacet": true, "required": true, "valueType": "string", "example": "GlowLab" },
+  { "field": "item_form", "label": "Item Form", "filterFacet": true, "required": true, "valueType": "string", "example": "Cream" },
+  { "field": "skin_type", "label": "Skin Type", "filterFacet": true, "required": false, "valueType": "string", "example": "All" },
+  { "field": "scent", "label": "Scent", "filterFacet": true, "required": false, "valueType": "string", "example": "Unscented" },
+  { "field": "unit_count", "label": "Unit Count", "filterFacet": true, "required": false, "valueType": "string", "example": "1" },
+  { "field": "item_volume", "label": "Item Volume", "filterFacet": true, "required": false, "valueType": "string", "example": "1.7 Fl Oz" },
+  { "field": "ingredients", "label": "Ingredients", "filterFacet": false, "required": true, "valueType": "string", "example": "Water; Glycerin; Niacinamide" },
+  { "field": "allergen_information", "label": "Allergen Information", "filterFacet": false, "required": false, "valueType": "string", "example": "Contains: Fragrance" },
+  { "field": "directions_for_use", "label": "Directions", "filterFacet": false, "required": false, "valueType": "string", "example": "Apply morning and night to clean skin." },
+  { "field": "safety_warning", "label": "Safety Warning", "filterFacet": false, "required": false, "valueType": "string", "example": "For external use only. Avoid contact with eyes." },
+  { "field": "target_gender", "label": "Target Gender", "filterFacet": true, "required": false, "valueType": "string", "example": "Unisex" },
+  { "field": "age_range_description", "label": "Age Range", "filterFacet": true, "required": false, "valueType": "string", "example": "Adult" },
+  { "field": "country_of_origin", "label": "Country of Origin", "filterFacet": false, "required": false, "valueType": "string", "example": "USA" }
+]
