@@ -1,4 +1,5 @@
 import 'server-only';
+import { env } from '@/lib/env';
 import type {
   AplusContent,
   KnowledgePack,
@@ -66,7 +67,7 @@ export async function optimize(
 ): Promise<OptimizedListing> {
   const facts = buildFacts(snapshot, pack.compliancePack?.factUnits ?? []);
   const system = buildSystemPrompt(pack, facts);
-  const groupPrompts = buildGroupPrompts(pack);
+  const groupPrompts = buildGroupPrompts(pack, env.titlePolicy());
   const disclaimer = pack.compliancePack?.disclaimer ?? '';
   const groups = opts.groups ?? ALL_GROUPS;
   const run = <T>(g: GroupName, fn: () => Promise<T>, fallback: T | undefined): Promise<T> => {

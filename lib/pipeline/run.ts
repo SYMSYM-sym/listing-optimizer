@@ -4,7 +4,7 @@ import type { ListingSnapshot, OptimizeResult } from '@/lib/types';
 import type { LlmClient } from '@/lib/engine/llm';
 import { runRepairLoop } from '@/lib/engine/repair';
 import { buildAudit } from '@/lib/audit/buildAudit';
-import { detectCategory } from '@/lib/knowledge/detectCategory';
+import { detectCategory, type CategoryDetection } from '@/lib/knowledge/detectCategory';
 import { loadPack } from '@/lib/knowledge/loadPack';
 
 /**
@@ -17,7 +17,7 @@ export async function runPipeline(
   snapshot: ListingSnapshot,
   llm: LlmClient,
   maxRepairIterations: number,
-): Promise<OptimizeResult & { iterations: number }> {
+): Promise<OptimizeResult & { iterations: number; detection: CategoryDetection }> {
   const detection = detectCategory(snapshot);
   const pack = loadPack(detection.packId);
   const ctx = {
@@ -39,5 +39,5 @@ export async function runPipeline(
     ...listing,
     state: audit.verified ? ('verified' as const) : ('draft' as const),
   };
-  return { optimized, audit, iterations };
+  return { optimized, audit, iterations, detection };
 }

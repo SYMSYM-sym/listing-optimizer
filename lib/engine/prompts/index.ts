@@ -1,4 +1,5 @@
 import type { KnowledgePack, ListingSnapshot } from '@/lib/types';
+import type { TitlePolicy } from '@/lib/env';
 import { aplusPrompt } from './aplus';
 import { attributesPrompt } from './attributes';
 import { backendPrompt } from './backend';
@@ -12,10 +13,10 @@ import { titlePrompt } from './title';
 export { buildSystemPrompt };
 
 /** Per-group prompt builders — rule-injected from the active pack. */
-export function buildGroupPrompts(pack: KnowledgePack) {
+export function buildGroupPrompts(pack: KnowledgePack, titlePolicy: TitlePolicy = 'dual') {
   const hasCompliance = pack.compliancePack !== null;
   return {
-    title: (s: ListingSnapshot) => titlePrompt(s),
+    title: (s: ListingSnapshot) => titlePrompt(s, titlePolicy),
     bullets: (s: ListingSnapshot) => bulletsPrompt(s),
     description: (s: ListingSnapshot) => descriptionPrompt(s, hasCompliance),
     backend: (s: ListingSnapshot) => backendPrompt(s),
