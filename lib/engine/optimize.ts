@@ -101,7 +101,7 @@ export async function optimize(
         base && { backendSearchTerms: base.backendSearchTerms }),
       run('attributes', () => generateGroup(llm, 'attributes', system, withCtx('attributes', groupPrompts.attributes(snapshot, schemaFields)), attributesGroupSchema, 3000),
         base && { attributes: base.attributes }),
-      run('aplus', () => generateGroup(llm, 'aplus', system, withCtx('aplus', groupPrompts.aplus(snapshot)), aplusGroupSchema, 4000),
+      run('aplus', () => generateGroup(llm, 'aplus', system, withCtx('aplus', groupPrompts.aplus(snapshot)), aplusGroupSchema, 6000),
         base && { modules: base.aplusContent.modules.map((m) => ({ ...m, body: stripDisclaimer(m.body, disclaimer) })), comparison: base.aplusContent.comparison, faq: base.aplusContent.faq.map((f) => ({ ...f, a: stripDisclaimer(f.a, disclaimer) })) }),
       run('images', () => generateGroup(llm, 'images', system, withCtx('images', groupPrompts.images(snapshot)), imagesGroupSchema, 2500),
         base && { imagePlan: base.imagePlan }),

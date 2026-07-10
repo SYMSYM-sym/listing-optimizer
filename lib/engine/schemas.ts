@@ -58,11 +58,19 @@ export const aplusGroupSchema = z
     comparison: z.object({
       rows: z
         .array(
-          z.object({
+          z.preprocess((raw) => {
+            if (!raw || typeof raw !== 'object') return raw;
+            const o = raw as Record<string, unknown>;
+            return {
+              label: String(o.label ?? o.feature ?? o.name ?? o.dimension ?? ''),
+              ours: String(o.ours ?? o.us ?? o.our ?? o.thisProduct ?? ''),
+              typical: String(o.typical ?? o.theirs ?? o.competitor ?? o.other ?? o.alternative ?? ''),
+            };
+          }, z.object({
             label: z.string().min(1),
             ours: z.string().min(1),
             typical: z.string().min(1),
-          }),
+          })),
         )
         .min(3),
     }),
