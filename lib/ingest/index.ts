@@ -20,11 +20,13 @@ export function selectProvider(): ListingProvider {
 }
 
 export async function ingestByAsin(asin: string): Promise<ListingSnapshot> {
-  const hit = cache.get(asin);
+  const providerId = env.ingestProvider();
+  const cacheKey = `${providerId}:${asin}`;
+  const hit = cache.get(cacheKey);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.snapshot;
   const provider = selectProvider();
   const rawListing = await provider.fetch(asin);
   const snapshot = toSnapshot(rawListing);
-  cache.set(asin, { at: Date.now(), snapshot });
+  cache.set(cacheKey, { at: Date.now(), snapshot });
   return snapshot;
 }

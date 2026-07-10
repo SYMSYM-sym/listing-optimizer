@@ -10,15 +10,11 @@ category-agnostic via pluggable knowledge packs.
 
 This app **never operates its own Amazon scraper**. It ingests listings via:
 
-- **Rainforest API** (default) — a third-party **scraped-data** vendor
-  (Traject Data, now part of ScraperAPI). It is **not affiliated with or
-  licensed by Amazon**; using it outsources scraping infrastructure and its
-  risk to the vendor, it does not remove Amazon ToS exposure. It is the
-  default because it is the most reliable and Amazon-specialized option —
-  a practical choice, not a legal safe harbor.
-- **Firecrawl** — a general scraping vendor. Pointing it at Amazon PDPs
-  carries the **same ToS / rate-limit exposure as scraping** and is
-  frequently blocked. Best-effort, non-default.
+- **Rainforest API** (default) — a licensed Amazon product-data API; recommended
+  default and lowest ToS risk among automated options.
+- **Firecrawl** — a general scraping vendor. Pointing it at Amazon PDPs carries
+  the **same ToS / rate-limit exposure as scraping** (higher risk). Do not imply
+  Firecrawl removes that exposure. Best-effort, non-default.
 - **Paste fallback** — you paste the page source HTML or fill manual fields.
   Zero automated fetching; lowest exposure.
 

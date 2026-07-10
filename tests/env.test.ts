@@ -38,4 +38,21 @@ describe('lib/env runtime validation', () => {
     const { env: env2 } = await import('@/lib/env');
     expect(() => env2.maxRepairIterations()).toThrow(/0–10/);
   });
+
+  it('does not require provider keys when INGEST_PROVIDER=paste', async () => {
+    vi.stubEnv('INGEST_PROVIDER', 'paste');
+    vi.stubEnv('RAINFOREST_API_KEY', '');
+    vi.stubEnv('FIRECRAWL_API_KEY', '');
+    const { env } = await import('@/lib/env');
+    expect(env.ingestProvider()).toBe('paste');
+    expect(env.rainforestApiKey()).toBe('');
+    expect(env.firecrawlApiKey()).toBe('');
+  });
+
+  it('requires RAINFOREST_API_KEY only when INGEST_PROVIDER=rainforest', async () => {
+    vi.stubEnv('INGEST_PROVIDER', 'rainforest');
+    vi.stubEnv('RAINFOREST_API_KEY', '');
+    const { env } = await import('@/lib/env');
+    expect(() => env.rainforestApiKey()).toThrow(/RAINFOREST_API_KEY/);
+  });
 });

@@ -3,10 +3,8 @@ import { env } from '@/lib/env';
 import { ProviderError, type ListingProvider, type RawListing } from './types';
 
 /**
- * Rainforest Product API adapter.
- * NOTE (ToS): Rainforest is a third-party scraped-data API (Traject Data /
- * ScraperAPI). It is NOT affiliated with or licensed by Amazon. It is the
- * default on reliability grounds, not as a legal safe harbor.
+ * Rainforest Product API adapter — a licensed Amazon product-data API
+ * (recommended default; lowest ToS risk among automated options).
  */
 
 interface RainforestProduct {

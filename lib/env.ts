@@ -39,8 +39,19 @@ export const env = {
     return v;
   },
 
-  rainforestApiKey: (): string => required('RAINFOREST_API_KEY'),
-  firecrawlApiKey: (): string => required('FIRECRAWL_API_KEY'),
+  rainforestApiKey: (): string => {
+    if (env.ingestProvider() !== 'rainforest') {
+      return optional('RAINFOREST_API_KEY', '');
+    }
+    return required('RAINFOREST_API_KEY');
+  },
+
+  firecrawlApiKey: (): string => {
+    if (env.ingestProvider() !== 'firecrawl') {
+      return optional('FIRECRAWL_API_KEY', '');
+    }
+    return required('FIRECRAWL_API_KEY');
+  },
 
   maxRepairIterations: (): number => {
     const n = Number.parseInt(optional('MAX_REPAIR_ITERATIONS', '3'), 10);
