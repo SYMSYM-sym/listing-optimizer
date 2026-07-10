@@ -1,0 +1,26 @@
+{
+  "verifiedAsOf": "2026-07-09",
+  "titleMaxLegacy": 200,
+  "title75Max": 75,
+  "itemHighlightsMax": 125,
+  "bulletCount": 5,
+  "bulletMax": 255,
+  "descriptionMax": 2000,
+  "backendMaxBytes": 249,
+  "aplusModuleMaxBasic": 5,
+  "aplusModuleMaxPremium": 7,
+  "imageGalleryMax": 9,
+  "rules": [
+    { "id": "title-legacy-200", "description": "Legacy title ≤200 chars (in force until Jul 27 2026 cutover)", "value": 200, "timeSensitive": true, "verifiedAsOf": "2026-07-09" },
+    { "id": "title75", "description": "Title ≤75 chars effective Jul 27 2026 (all categories except media); violators subject to AI auto-rewrite (14-day review window for Brand Registry owners)", "value": 75, "timeSensitive": true, "verifiedAsOf": "2026-07-09" },
+    { "id": "item-highlights-125", "description": "Item Highlights ≤125 chars, searchable, effective Jul 27 2026; absorbs title overflow; may not be writable in all templates yet (seller-reported error 100476)", "value": 125, "timeSensitive": true, "verifiedAsOf": "2026-07-09" },
+    { "id": "title-word-repetition", "description": "No word appears more than 2× in the title (brand counts; short prepositions/articles exempt)", "value": 2, "timeSensitive": false },
+    { "id": "title-banned-chars", "description": "Banned title characters: ! $ ? _ { } ^ ¬ ¦ ; avoid en dash (normalize to hyphen/comma)", "value": "!$?_{}^¬¦", "timeSensitive": false },
+    { "id": "bullets-5x255", "description": "Exactly 5 bullets for 3P sellers, ≤255 chars each", "value": 255, "timeSensitive": false },
+    { "id": "description-2000", "description": "Description ≤2000 chars, plain text with blank-line paragraphs", "value": 2000, "timeSensitive": false },
+    { "id": "backend-249-bytes", "description": "Backend search terms: ≤249 UTF-8 BYTES saved (US); exceeding de-indexes the entire field; no brands/ASINs/disease terms; no title repeats", "value": 249, "timeSensitive": false },
+    { "id": "image-main", "description": "Main image: pure white RGB 255/255/255, product ≥85% of frame, longest side ≥1000px; regulated panels (Supplement Facts) must be real photographs", "value": "white-85pct-1000px", "timeSensitive": false },
+    { "id": "aplus-premium-7", "description": "Premium A+: up to 7 modules, 1464px wide; Basic: 5 modules, 970px", "value": 7, "timeSensitive": true, "verifiedAsOf": "2026-07-09" },
+    { "id": "copy-bans", "description": "No price/$ in A+/images; no unsubstantiated superlatives; no star/review claims; no urgency; no guarantees; no Buy Now / Subscribe & Save in A+", "value": true, "timeSensitive": false }
+  ]
+}

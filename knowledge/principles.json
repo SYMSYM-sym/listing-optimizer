@@ -1,0 +1,18 @@
+[
+  { "id": "P1", "text": "Front-load the primary keyword — category-defining term early in the title, immediately after the product name (name always leads).", "weight": 12, "scorable": true, "autoCheck": true },
+  { "id": "P2", "text": "One term, one place — don't waste indexed space repeating a word already indexed.", "weight": 6, "scorable": true, "autoCheck": true },
+  { "id": "P3", "text": "Backend = pure discovery reserve — synonyms, misspellings, other-language variants appearing nowhere in visible copy.", "weight": 8, "scorable": true, "autoCheck": false, "rubric": "Current backend terms are seller-private: score 'unknown' for the current listing unless operator-supplied." },
+  { "id": "P4", "text": "Fill every attribute field — blank structured fields lose filters and COSMO retrieval.", "weight": 10, "scorable": true, "autoCheck": true },
+  { "id": "P5", "text": "Map to the tightest valid browse node (suggestion only without Seller Central access).", "weight": 4, "scorable": true, "autoCheck": false, "rubric": "Compare current category depth to the most specific plausible node for the product type." },
+  { "id": "P6", "text": "Cover the full query surface — head terms, long-tail, use-case phrases, misspellings across title + highlights + bullets + backend, without duplication.", "weight": 10, "scorable": true, "autoCheck": false, "rubric": "Judge breadth of distinct query intents covered across surfaces." },
+  { "id": "P7", "text": "Write for situations, not just keywords — lead content with the buyer situation.", "weight": 10, "scorable": true, "autoCheck": false, "rubric": "Do bullets/description lead with concrete buyer situations?" },
+  { "id": "P8", "text": "One situational anchor per major use-case — a distinct, quotable line per core scenario.", "weight": 8, "scorable": true, "autoCheck": true },
+  { "id": "P9", "text": "Use comparative framing — what the product is for vs alternatives and who it's best for.", "weight": 8, "scorable": true, "autoCheck": true },
+  { "id": "P10", "text": "Keep A+ modules as real text — comparison, who-it's-for, FAQ extractable as text, not baked into images.", "weight": 8, "scorable": true, "autoCheck": true },
+  { "id": "P11", "text": "Mirror compliant buyer/review language so semantics reinforce each other.", "weight": 4, "scorable": true, "autoCheck": false, "rubric": "Does copy phrasing align with plausible buyer language for the use-cases?" },
+  { "id": "P12", "text": "Seed accurate structured Q&A mirroring the same facts as bullets and A+ FAQ.", "weight": 6, "scorable": true, "autoCheck": true },
+  { "id": "P13", "text": "Substantiated trust over forbidden social proof — no star/review claims; documentable signals only.", "weight": 2, "scorable": true, "autoCheck": true },
+  { "id": "P14", "text": "Consistency is a ranking and trust asset — every recurring fact agrees across all surfaces.", "weight": 4, "scorable": true, "autoCheck": true },
+  { "id": "P15", "text": "Time events 6–8 weeks ahead for reindex + AI-model incorporation.", "weight": 0, "scorable": false, "autoCheck": false, "rubric": "Process rule — not a property of a listing snapshot." },
+  { "id": "P16", "text": "Worker ≠ checker — copy writer never approves; independent verification before state advance.", "weight": 0, "scorable": false, "autoCheck": false, "rubric": "Process rule — enforced structurally by the app (audit module computes verified)." }
+]

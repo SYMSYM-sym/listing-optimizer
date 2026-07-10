@@ -1,0 +1,36 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+describe('lib/env runtime validation', () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.unstubAllEnvs();
+  });
+
+  it('throws at use time when ANTHROPIC_API_KEY is missing', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    const { env } = await import('@/lib/env');
+    expect(() => env.anthropicApiKey()).toThrow(/ANTHROPIC_API_KEY/);
+  });
+
+  it('accepts valid INGEST_PROVIDER values', async () => {
+    vi.stubEnv('INGEST_PROVIDER', 'paste');
+    const { env } = await import('@/lib/env');
+    expect(env.ingestProvider()).toBe('paste');
+  });
+
+  it('rejects invalid INGEST_PROVIDER', async () => {
+    vi.stubEnv('INGEST_PROVIDER', 'scraper');
+    const { env } = await import('@/lib/env');
+    expect(() => env.ingestProvider()).toThrow(/rainforest\|firecrawl\|paste/);
+  });
+
+  it('MAX_REPAIR_ITERATIONS defaults to 3 and bounds 0–10', async () => {
+    vi.stubEnv('MAX_REPAIR_ITERATIONS', '');
+    const { env } = await import('@/lib/env');
+    expect(env.maxRepairIterations()).toBe(3);
+    vi.stubEnv('MAX_REPAIR_ITERATIONS', '99');
+    vi.resetModules();
+    const { env: env2 } = await import('@/lib/env');
+    expect(() => env2.maxRepairIterations()).toThrow(/0–10/);
+  });
+});
