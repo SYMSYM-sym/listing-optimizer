@@ -25,7 +25,6 @@ export function anthropicClient(): LlmClient {
     const msg = await _anthropic.messages.create({
       model: env.anthropicModel(),
       max_tokens: maxTokens,
-      temperature: 0.2,
       system: [
         {
           type: 'text',
