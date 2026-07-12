@@ -12,8 +12,10 @@ const FORBIDDEN = [
   'ANTHROPIC_API_KEY',
   'RAINFOREST_API_KEY',
   'FIRECRAWL_API_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
   'sk-ant-',
   'process.env.ANTHROPIC',
+  'process.env.SUPABASE_SERVICE',
 ];
 
 function walk(dir, files = []) {

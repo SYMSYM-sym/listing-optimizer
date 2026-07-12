@@ -55,10 +55,22 @@ vi.mock('@/lib/audit/buildAudit', () => ({
 vi.mock('@/lib/env', () => ({
   env: {
     maxRepairIterations: vi.fn(() => 3),
+    supabaseUrl: vi.fn(() => ''),
+    supabaseServiceRoleKey: vi.fn(() => ''),
   },
 }));
 
+vi.mock('@/lib/store/runs', () => ({
+  saveRun: vi.fn(async () => 'run-saved-id'),
+}));
+
+vi.mock('@/lib/server/log', () => ({
+  logServer: vi.fn(),
+}));
+
 import { runRepairLoop } from '@/lib/engine/repair';
+import { saveRun } from '@/lib/store/runs';
+import { logServer } from '@/lib/server/log';
 
 function post(body: unknown): Promise<Response> {
   return POST(
@@ -83,7 +95,7 @@ describe('POST /api/optimize', () => {
     vi.clearAllMocks();
   });
 
-  it('returns optimized listing, audit, and detection for a valid snapshot', async () => {
+  it('returns optimized listing, audit, detection, and runId for a valid snapshot', async () => {
     const res = await post({ snapshot });
     expect(res.status).toBe(200);
     const data = await res.json();
@@ -91,7 +103,22 @@ describe('POST /api/optimize', () => {
     expect(data.detection.packId).toBe('supplements');
     expect(data.audit.verified).toBe(true);
     expect(data.iterations).toBe(1);
+    expect(data.runId).toBe('run-saved-id');
     expect(runRepairLoop).toHaveBeenCalledOnce();
+    expect(saveRun).toHaveBeenCalledOnce();
+  });
+
+  it('still returns 200 with null runId when saveRun throws', async () => {
+    vi.mocked(saveRun).mockRejectedValueOnce(new Error('db down'));
+    const res = await post({ snapshot });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.optimized.title).toBe(snapshot.title);
+    expect(data.runId).toBeNull();
+    expect(logServer).toHaveBeenCalledWith(
+      'store.error',
+      expect.objectContaining({ op: 'saveRun' }),
+    );
   });
 
   it('returns 400 for invalid JSON', async () => {

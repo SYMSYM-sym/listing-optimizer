@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { anthropicClient } from '@/lib/engine/llm';
 import { runPipeline } from '@/lib/pipeline/run';
 import { checkAccess } from '@/lib/server/guard';
+import { logServer } from '@/lib/server/log';
+import { saveRun } from '@/lib/store/runs';
 import { env } from '@/lib/env';
 import type { ListingSnapshot } from '@/lib/types';
 
@@ -11,9 +13,10 @@ export const maxDuration = 300;
  * Full pipeline stage: snapshot -> optimize -> bounded repair loop -> audit.
  * Delegates to the ONE shared `runPipeline` (the exact code path the golden
  * E2E exercises), so the route and the deterministic test can never drift.
- * Returns { optimized, audit, detection, iterations, gateResult }.
+ * Returns { optimized, audit, detection, iterations, gateResult, runId? }.
  * `audit.verified` is derived server-side by the audit module re-running the
  * gate (worker != checker); a client-carried gate result is never trusted.
+ * Persistence failures never break the optimize response.
  */
 export async function POST(req: Request): Promise<NextResponse> {
   const denied = checkAccess(req);
@@ -33,7 +36,37 @@ export async function POST(req: Request): Promise<NextResponse> {
       anthropicClient(),
       env.maxRepairIterations(),
     );
-    return NextResponse.json({ optimized, audit, detection, iterations, gateResult: audit.gateResult });
+
+    let runId: string | null = null;
+    try {
+      runId = await saveRun({
+        asin: body.snapshot.asin,
+        url: body.snapshot.url,
+        productName: optimized.productName,
+        packId: detection.packId,
+        verified: audit.verified,
+        score: audit.scorecard.total,
+        gaps: audit.gaps.length,
+        failureIds: audit.gateResult.failures.map((f) => f.checkId),
+        snapshot: body.snapshot,
+        optimized,
+        audit,
+      });
+    } catch (e) {
+      logServer('store.error', {
+        op: 'saveRun',
+        message: e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200),
+      });
+    }
+
+    return NextResponse.json({
+      optimized,
+      audit,
+      detection,
+      iterations,
+      gateResult: audit.gateResult,
+      runId,
+    });
   } catch (e) {
     return NextResponse.json(
       { code: 'ENGINE_ERROR', message: e instanceof Error ? e.message : 'Generation failed.' },

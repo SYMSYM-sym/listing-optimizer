@@ -78,4 +78,10 @@ export const env = {
 
   /** Optional shared-secret gate for the public deployment (empty = open). */
   appAccessToken: (): string => optional('APP_ACCESS_TOKEN', ''),
+
+  /** Supabase project URL for run history (optional — store no-ops when unset). */
+  supabaseUrl: (): string => optional('SUPABASE_URL', ''),
+
+  /** Server-only service role key — never expose to the client. */
+  supabaseServiceRoleKey: (): string => optional('SUPABASE_SERVICE_ROLE_KEY', ''),
 };
