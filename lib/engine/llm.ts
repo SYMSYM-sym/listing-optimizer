@@ -73,7 +73,47 @@ function extractJson(text: string): string {
   if (start === -1 || end === -1 || end <= start) {
     throw new Error('No JSON object found in LLM output');
   }
-  return candidate.slice(start, end + 1);
+  return sanitizeJsonControlChars(candidate.slice(start, end + 1));
+}
+
+/**
+ * LLMs sometimes emit raw newlines/tabs inside JSON string values.
+ * Escape those control characters so JSON.parse can succeed (zod still validates shape).
+ */
+function sanitizeJsonControlChars(json: string): string {
+  let out = '';
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < json.length; i++) {
+    const c = json[i]!;
+    if (escape) {
+      out += c;
+      escape = false;
+      continue;
+    }
+    if (c === '\\' && inString) {
+      out += c;
+      escape = true;
+      continue;
+    }
+    if (c === '"') {
+      inString = !inString;
+      out += c;
+      continue;
+    }
+    if (inString) {
+      const code = c.charCodeAt(0);
+      if (code < 0x20) {
+        if (c === '\n') out += '\\n';
+        else if (c === '\r') out += '\\r';
+        else if (c === '\t') out += '\\t';
+        // drop other control chars
+        continue;
+      }
+    }
+    out += c;
+  }
+  return out;
 }
 
 /**
