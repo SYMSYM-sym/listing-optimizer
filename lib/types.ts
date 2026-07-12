@@ -226,7 +226,7 @@ export interface OptimizedListing {
 // ---------------------------------------------------------------------------
 
 export interface Failure {
-  checkId: string; // 'C1'..'C16', 'A1'..'A8', 'PACK'
+  checkId: string; // 'C1'..'C16', 'A1'..'A9', 'PACK'
   field: string;
   context: string;
   fix: string;

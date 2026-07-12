@@ -8,9 +8,9 @@ export const fail = (checkId: string, field: string, context: string, fix: strin
   fix,
 });
 
-/** Customer-surface set (compliance-scanned fields). */
+/** Customer-surface set (compliance-scanned fields — every buyer-facing surface). */
 export function customerSurfaces(l: OptimizedListing): [string, string][] {
-  return [
+  const out: [string, string][] = [
     ['title', l.title],
     ['title75', l.title75],
     ['itemHighlights', l.itemHighlights],
@@ -18,6 +18,24 @@ export function customerSurfaces(l: OptimizedListing): [string, string][] {
     ['backendSearchTerms', l.backendSearchTerms],
     ...l.bullets.map((b, i) => [`bullets[${i}]`, b] as [string, string]),
   ];
+  // Q&A (brain/02 + brain/05: disease terms banned on every surface including Q&A)
+  l.qa.forEach((item, i) => {
+    out.push([`qa[${i}].q`, item.q]);
+    out.push([`qa[${i}].a`, item.a]);
+  });
+  // Image plan copy can also carry claims
+  l.imagePlan.forEach((slot, i) => {
+    out.push([`imagePlan[${i}].purpose`, slot.purpose]);
+    out.push([`imagePlan[${i}].spec`, slot.spec]);
+    out.push([`imagePlan[${i}].notes`, slot.notes]);
+  });
+  // Attribute values (disclaimer constant is subtracted by scanSurfacesForBanned).
+  // Skip brand_name/manufacturer — backend-only identity fields checked by C7 separately.
+  for (const [key, value] of Object.entries(l.attributes)) {
+    if (key === 'brand_name' || key === 'manufacturer') continue;
+    out.push([`attributes.${key}`, value]);
+  }
+  return out;
 }
 
 /** Every A+ text field (headlines, bodies, subcopy, comparison cells, FAQ q/a). */

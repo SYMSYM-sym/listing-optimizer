@@ -49,8 +49,12 @@ GitHub Actions runs `npm run verify` on every push/PR (see `.github/workflows/ve
 
 **Live app:** https://listing-optimizer-livid.vercel.app
 
+**Git auto-deploy:** This Vercel project is connected to the GitHub repo. A push to `master` triggers a production build via the Vercel Git webhook (no manual `vercel deploy` required for routine updates). Confirm the new deployment is **Ready** in the Vercel dashboard before relying on live smoke.
+
+Manual / first-time setup:
+
 1. Push this folder to GitHub (`listing-optimizer` is the app root).
-2. Import the repo in [Vercel](https://vercel.com). Set **Root Directory** to `listing-optimizer` if the repo includes the builder kit parent folder.
+2. Import the repo in [Vercel](https://vercel.com) (or connect Git if not already linked). Set **Root Directory** to `listing-optimizer` if the repo includes the builder kit parent folder.
 3. Set environment variables from `.env.example` in the Vercel project settings (all server-side).
 4. Set `APP_ACCESS_TOKEN` on production to prevent anonymous spend.
 5. Deploy — API routes (`/api/ingest`, `/api/optimize`, `/api/audit`) run as serverless functions (`maxDuration: 300` in `vercel.json`).

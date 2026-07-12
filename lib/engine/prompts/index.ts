@@ -1,5 +1,6 @@
 import type { KnowledgePack, ListingSnapshot } from '@/lib/types';
 import type { TitlePolicy } from '@/lib/env';
+import type { TitleSurfaces } from '../backendSanitize';
 import { aplusPrompt } from './aplus';
 import { attributesPrompt } from './attributes';
 import { backendPrompt } from './backend';
@@ -19,7 +20,8 @@ export function buildGroupPrompts(pack: KnowledgePack, titlePolicy: TitlePolicy 
     title: (s: ListingSnapshot) => titlePrompt(s, titlePolicy),
     bullets: (s: ListingSnapshot) => bulletsPrompt(s),
     description: (s: ListingSnapshot) => descriptionPrompt(s, hasCompliance),
-    backend: (s: ListingSnapshot) => backendPrompt(s),
+    // Title surfaces (when known) feed C16 forbidden stems into the backend prompt.
+    backend: (s: ListingSnapshot, surfaces?: TitleSurfaces) => backendPrompt(s, surfaces),
     attributes: (s: ListingSnapshot, schemaFields: string) =>
       attributesPrompt(s, schemaFields, hasCompliance),
     aplus: (s: ListingSnapshot) => aplusPrompt(s),

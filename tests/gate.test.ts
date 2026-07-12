@@ -88,6 +88,20 @@ describe('C-series fail fixtures (exact checkId + field)', () => {
     const f = runGate(l, pack, ctx).failures.find((y) => y.checkId === 'C6');
     expect(f?.field).toBe('bullets[0]');
   });
+  it('C6 disease noun in a Q&A answer', () => {
+    const l = mut((x) => {
+      x.qa[0] = { q: 'Who is this for?', a: 'Anyone managing diabetes symptoms daily.', claimBearing: false };
+    });
+    const f = runGate(l, pack, ctx).failures.find((y) => y.checkId === 'C6');
+    expect(f?.field).toBe('qa[0].a');
+  });
+  it('C6 disease noun in imagePlan notes', () => {
+    const l = mut((x) => {
+      x.imagePlan[0] = { ...x.imagePlan[0]!, notes: 'Call out cancer support claim on overlay' };
+    });
+    const f = runGate(l, pack, ctx).failures.find((y) => y.checkId === 'C6');
+    expect(f?.field).toBe('imagePlan[0].notes');
+  });
   it('C6 core noun in backend + treat/cure combo', () => {
     const l = mut((x) => { x.backendSearchTerms = 'remedio diabetes ayuda'; });
     expect(idsOf(l)).toContain('C6');
@@ -324,6 +338,7 @@ describe('per-check pass on compliant fixture', () => {
       () => import('@/lib/gate/checks').then((m) => m.c11FictionPhrases(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.c12FactConsistency(clean)),
       () => import('@/lib/gate/checks').then((m) => m.c15NewTitlePolicy(clean, pack)),
+      () => import('@/lib/gate/checks').then((m) => m.c16BackendDedup(clean)),
       () => import('@/lib/gate/checks').then((m) => m.a1AplusDisclaimer(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.a2AplusBannedTerms(clean, pack, ctx)),
       () => import('@/lib/gate/checks').then((m) => m.a3AplusBrandLeakage(clean)),
@@ -350,8 +365,8 @@ describe('repair loop', () => {
     expect(fieldToGroup({ checkId: 'PACK', field: 'compliance', context: '', fix: '' })).toBeNull();
   });
 
-  it('regenerates only owning groups and terminates at the cap; persistent failure surfaced', async () => {
-    // An LLM that ALWAYS produces an over-byte backend: unrepairable by regeneration.
+  it('deterministic backend sanitize clears over-byte C3 (generation policy, gate still re-runs)', async () => {
+    // LLM always emits an over-byte backend; sanitize truncates to ≤249 UTF-8 bytes.
     const badBackendLlm: typeof mockLlm = async (req) => {
       const res = await mockLlm(req);
       if (req.user.includes('Backend search terms')) {
@@ -359,16 +374,33 @@ describe('repair loop', () => {
       }
       return res;
     };
+    const outcome = await runRepairLoop(snapshot, pack, badBackendLlm, ctx, 2);
+    expect(outcome.gateResult.failures.some((f) => f.checkId === 'C3')).toBe(false);
+    expect(utf8Bytes(outcome.listing.backendSearchTerms)).toBeLessThanOrEqual(pack.rules.backendMaxBytes);
+    expect(outcome.gateResult.pass).toBe(true);
+  });
+
+  it('regenerates only owning groups and terminates at the cap; persistent failure surfaced', async () => {
+    // An LLM that ALWAYS produces an over-long title: unrepairable by regeneration within budget.
+    const badTitleLlm: typeof mockLlm = async (req) => {
+      const res = await mockLlm(req);
+      if (req.user.includes('TASK: Generate the title group')) {
+        const parsed = JSON.parse(res) as Record<string, unknown>;
+        parsed.title = `BrandX ${'k'.repeat(220)}`;
+        return JSON.stringify(parsed);
+      }
+      return res;
+    };
     const calls: string[] = [];
     const counting: typeof mockLlm = async (req) => {
       calls.push(req.user.slice(0, 40));
-      return badBackendLlm(req);
+      return badTitleLlm(req);
     };
     const outcome = await runRepairLoop(snapshot, pack, counting, ctx, 2);
     expect(outcome.gateResult.pass).toBe(false);
     expect(outcome.iterations).toBe(2);
-    expect(outcome.gateResult.failures.some((f) => f.checkId === 'C3')).toBe(true);
-    // initial full run = 8 calls; each repair round regenerates ONLY backend (+retry inside generateGroup is same group)
+    expect(outcome.gateResult.failures.some((f) => f.checkId === 'C1')).toBe(true);
+    // initial full run = 8 calls; each repair round regenerates ONLY title (+retry inside generateGroup)
     expect(calls.length).toBeLessThanOrEqual(8 + 2 * 2);
   });
 

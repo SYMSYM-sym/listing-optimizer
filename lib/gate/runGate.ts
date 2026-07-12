@@ -30,8 +30,8 @@ import {
 } from './checks';
 
 /**
- * The verify gate: C1–C12 + C15 + C16 + A1–A8 (C13/C14 are source-project-only
- * and intentionally omitted). PASS only if zero failures.
+ * The verify gate: C1–C12 + C15 + C16 + A1–A9 + PACK (C13/C14 are
+ * source-project-only and intentionally omitted). PASS only if zero failures.
  * The gate REPORTS — it never mutates content to force a pass.
  */
 export function runGate(

@@ -1,5 +1,6 @@
 import 'server-only';
 import { env } from '@/lib/env';
+import { logServer } from '@/lib/server/log';
 import { ProviderError, type ListingProvider, type RawListing } from './types';
 
 /**
@@ -46,31 +47,76 @@ async function callOnce(asin: string): Promise<Response> {
 
 export const rainforestProvider: ListingProvider = {
   async fetch(asin: string): Promise<RawListing> {
+    const started = Date.now();
     let res: Response;
     try {
       res = await callOnce(asin);
       if (res.status === 429) {
+        logServer('ingest.provider', {
+          provider: 'rainforest',
+          asin,
+          event: 'rate_limited',
+          ms: Date.now() - started,
+        });
         // one retry with jitter
         await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1500));
         res = await callOnce(asin);
       }
     } catch (e) {
       if (e instanceof Error && e.name === 'TimeoutError') {
+        logServer('ingest.provider', {
+          provider: 'rainforest',
+          asin,
+          event: 'timeout',
+          ms: Date.now() - started,
+        });
         throw new ProviderError('PROVIDER_TIMEOUT', 'Rainforest request timed out');
       }
+      logServer('ingest.provider', {
+        provider: 'rainforest',
+        asin,
+        event: 'error',
+        ms: Date.now() - started,
+      });
       throw new ProviderError('PROVIDER_ERROR', `Rainforest request failed: ${String(e)}`);
     }
     if (res.status === 429) {
+      logServer('ingest.provider', {
+        provider: 'rainforest',
+        asin,
+        event: 'rate_limited_exhausted',
+        ms: Date.now() - started,
+      });
       throw new ProviderError('RATE_LIMITED', 'Rainforest plan rate limit reached (429)');
     }
     if (res.status === 404) {
+      logServer('ingest.provider', {
+        provider: 'rainforest',
+        asin,
+        event: 'not_found',
+        status: 404,
+        ms: Date.now() - started,
+      });
       throw new ProviderError('ASIN_NOT_FOUND', `ASIN ${asin} not found`);
     }
     if (!res.ok) {
+      logServer('ingest.provider', {
+        provider: 'rainforest',
+        asin,
+        event: 'http_error',
+        status: res.status,
+        ms: Date.now() - started,
+      });
       throw new ProviderError('PROVIDER_ERROR', `Rainforest HTTP ${res.status}`);
     }
     const data = (await res.json()) as RainforestResponse;
     if (data.request_info?.success === false) {
+      logServer('ingest.provider', {
+        provider: 'rainforest',
+        asin,
+        event: 'api_failure',
+        ms: Date.now() - started,
+      });
       throw new ProviderError(
         'PROVIDER_ERROR',
         `Rainforest reported failure: ${data.request_info.message ?? 'unknown'}`,
@@ -78,8 +124,20 @@ export const rainforestProvider: ListingProvider = {
     }
     const p = data.product;
     if (!p?.title) {
+      logServer('ingest.provider', {
+        provider: 'rainforest',
+        asin,
+        event: 'not_found',
+        ms: Date.now() - started,
+      });
       throw new ProviderError('ASIN_NOT_FOUND', `No product data returned for ${asin}`);
     }
+    logServer('ingest.provider', {
+      provider: 'rainforest',
+      asin,
+      event: 'ok',
+      ms: Date.now() - started,
+    });
     return mapProduct(asin, p, data);
   },
 };

@@ -6,6 +6,7 @@ import type {
   ListingSnapshot,
   OptimizedListing,
 } from '@/lib/types';
+import { sanitizeBackendSearchTerms } from './backendSanitize';
 import { buildFacts } from './facts';
 import { generateGroup, type LlmClient } from './llm';
 import { buildGroupPrompts, buildSystemPrompt } from './prompts';
@@ -87,17 +88,41 @@ export async function optimize(
 
   const base = opts.base;
 
-  // Independent groups fan out in parallel (facts are precomputed; no
-  // inter-group data dependency). Wall time ≈ slowest group.
-  const [title, bullets, description, backend, attributes, aplus, images, qa] =
+  // Title runs first so backend generation knows the optimized title-surface
+  // stems (C16). Remaining groups still fan out in parallel.
+  const title = await run(
+    'title',
+    () =>
+      generateGroup(
+        llm,
+        'title',
+        system,
+        withCtx('title', groupPrompts.title(snapshot)),
+        titleGroupSchema,
+        1000,
+      ),
+    base && {
+      productName: base.productName,
+      primaryKeyword: base.primaryKeyword,
+      title: base.title,
+      title75: base.title75,
+      itemHighlights: base.itemHighlights,
+    },
+  );
+
+  const titleSurfaces = {
+    title: title.title,
+    title75: title.title75,
+    itemHighlights: title.itemHighlights,
+  };
+
+  const [bullets, description, backend, attributes, aplus, images, qa] =
     await Promise.all([
-      run('title', () => generateGroup(llm, 'title', system, withCtx('title', groupPrompts.title(snapshot)), titleGroupSchema, 1000),
-        base && { productName: base.productName, primaryKeyword: base.primaryKeyword, title: base.title, title75: base.title75, itemHighlights: base.itemHighlights }),
       run('bullets', () => generateGroup(llm, 'bullets', system, withCtx('bullets', groupPrompts.bullets(snapshot)), bulletsGroupSchema, 2000),
         base && { bullets: base.bullets.map((text, i) => ({ text, useCaseAnchor: base.bulletAnchors?.[i] ?? '', claimBearing: text.trimEnd().endsWith('*') })) }),
       run('description', () => generateGroup(llm, 'description', system, withCtx('description', groupPrompts.description(snapshot)), descriptionGroupSchema, 2000),
         base && { description: stripDisclaimer(base.description, disclaimer) }),
-      run('backend', () => generateGroup(llm, 'backend', system, withCtx('backend', groupPrompts.backend(snapshot)), backendGroupSchema, 600),
+      run('backend', () => generateGroup(llm, 'backend', system, withCtx('backend', groupPrompts.backend(snapshot, titleSurfaces)), backendGroupSchema, 600),
         base && { backendSearchTerms: base.backendSearchTerms }),
       run('attributes', () => generateGroup(llm, 'attributes', system, withCtx('attributes', groupPrompts.attributes(snapshot, schemaFields)), attributesGroupSchema, 3000),
         base && { attributes: base.attributes }),
@@ -141,7 +166,12 @@ export async function optimize(
     bullets: bullets.bullets.map((b) => b.text),
     bulletAnchors: bullets.bullets.map((b) => b.useCaseAnchor),
     description: finalDescription,
-    backendSearchTerms: backend.backendSearchTerms,
+    // Deterministic C3/C16 cleanup after LLM (gate still re-validates).
+    backendSearchTerms: sanitizeBackendSearchTerms(
+      backend.backendSearchTerms,
+      titleSurfaces,
+      pack.rules.backendMaxBytes,
+    ),
     attributes: finalAttributes,
     facts,
     fdaDisclaimer: disclaimer,
