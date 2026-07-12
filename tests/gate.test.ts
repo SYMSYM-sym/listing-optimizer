@@ -102,6 +102,19 @@ describe('C-series fail fixtures (exact checkId + field)', () => {
     const f = runGate(l, pack, ctx).failures.find((y) => y.checkId === 'C6');
     expect(f?.field).toBe('imagePlan[0].notes');
   });
+  it('C6 negation: "No disease language" in image notes is not a violation', () => {
+    const l = mut((x) => {
+      x.imagePlan[0] = { ...x.imagePlan[0]!, notes: 'Structure/function overlay only. No disease language, no guarantees.' };
+    });
+    expect(idsOf(l).filter((id) => id === 'C6')).toEqual([]);
+  });
+  it('C6 disease noun in an attribute value', () => {
+    const l = mut((x) => {
+      x.attributes.special_ingredients = 'Formulated for diabetes support';
+    });
+    const f = runGate(l, pack, ctx).failures.find((y) => y.checkId === 'C6');
+    expect(f?.field).toBe('attributes.special_ingredients');
+  });
   it('C6 core noun in backend + treat/cure combo', () => {
     const l = mut((x) => { x.backendSearchTerms = 'remedio diabetes ayuda'; });
     expect(idsOf(l)).toContain('C6');

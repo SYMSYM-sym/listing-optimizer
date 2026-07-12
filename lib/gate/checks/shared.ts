@@ -8,7 +8,7 @@ export const fail = (checkId: string, field: string, context: string, fix: strin
   fix,
 });
 
-/** Customer-surface set (compliance-scanned fields — every buyer-facing surface). */
+/** Customer-surface set used by C6–C12 (buyer-facing copy). */
 export function customerSurfaces(l: OptimizedListing): [string, string][] {
   const out: [string, string][] = [
     ['title', l.title],
@@ -18,19 +18,26 @@ export function customerSurfaces(l: OptimizedListing): [string, string][] {
     ['backendSearchTerms', l.backendSearchTerms],
     ...l.bullets.map((b, i) => [`bullets[${i}]`, b] as [string, string]),
   ];
-  // Q&A (brain/02 + brain/05: disease terms banned on every surface including Q&A)
+  // Q&A + image plan (brain/02: disease terms banned on every surface including Q&A/images)
   l.qa.forEach((item, i) => {
     out.push([`qa[${i}].q`, item.q]);
     out.push([`qa[${i}].a`, item.a]);
   });
-  // Image plan copy can also carry claims
   l.imagePlan.forEach((slot, i) => {
     out.push([`imagePlan[${i}].purpose`, slot.purpose]);
     out.push([`imagePlan[${i}].spec`, slot.spec]);
     out.push([`imagePlan[${i}].notes`, slot.notes]);
   });
-  // Attribute values (disclaimer constant is subtracted by scanSurfacesForBanned).
-  // Skip brand_name/manufacturer — backend-only identity fields checked by C7 separately.
+  return out;
+}
+
+/**
+ * Attribute values scanned for banned disease terms only (C6).
+ * Not folded into customerSurfaces — size/count attributes would false-trip C12.
+ * brand_name/manufacturer stay out (C7 owns those identity fields).
+ */
+export function attributeComplianceSurfaces(l: OptimizedListing): [string, string][] {
+  const out: [string, string][] = [];
   for (const [key, value] of Object.entries(l.attributes)) {
     if (key === 'brand_name' || key === 'manufacturer') continue;
     out.push([`attributes.${key}`, value]);
@@ -69,6 +76,8 @@ export function scanSurfacesForBanned(
   for (const [field, textRaw] of surfaces) {
     const text = subtractDisclaimers(normalize(textRaw), disclaimers.map(normalize));
     for (const m of scanTerms(text, nouns)) {
+      // "No disease language" / "not for diabetes" are prohibitions, not claims
+      if (hasNegationContext(text, m.index)) continue;
       out.push(fail(checkId, field, m.context, `Remove banned disease term '${m.term}' — reframe as a structure/function state`));
     }
     for (const verb of cp.diseaseVerbs) {

@@ -5,6 +5,19 @@ import { z } from 'zod';
  * LLM boundary (counts/shapes here; char/byte limits are the gate's job).
  */
 
+/** Coerce missing/odd LLM claimBearing flags to boolean (default false). */
+const claimBearingField = z.preprocess((v) => {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase();
+    if (s === 'true' || s === 'yes' || s === '1') return true;
+    if (s === 'false' || s === 'no' || s === '0' || s === '') return false;
+  }
+  if (v === 1 || v === 0) return Boolean(v);
+  // Missing/undefined → non-claim-bearing (safe default; disclaimer still code-inserted when true)
+  return false;
+}, z.boolean());
+
 export const titleGroupSchema = z.object({
   productName: z.string().min(2),
   primaryKeyword: z.string().min(2),
@@ -20,7 +33,7 @@ export const bulletsGroupSchema = z.object({
         .object({
           text: z.string().min(20),
           useCaseAnchor: z.string().min(2),
-          claimBearing: z.boolean(),
+          claimBearing: claimBearingField,
         })
         .refine((b) => !b.claimBearing || b.text.trimEnd().endsWith('*'), {
           message: 'claim-bearing bullets must end with *',
@@ -50,7 +63,7 @@ export const aplusGroupSchema = z
           headline: z.string().min(3),
           body: z.string().min(30),
           subcopy: z.string().optional(),
-          claimBearing: z.boolean(),
+          claimBearing: claimBearingField,
         }),
       )
       .min(5)
@@ -79,7 +92,7 @@ export const aplusGroupSchema = z
         z.object({
           q: z.string().min(5),
           a: z.string().min(10),
-          claimBearing: z.boolean(),
+          claimBearing: claimBearingField,
         }),
       )
       .min(5)
@@ -111,7 +124,7 @@ export const qaGroupSchema = z.object({
       z.object({
         q: z.string().min(5),
         a: z.string().min(10),
-        claimBearing: z.boolean(),
+        claimBearing: claimBearingField,
       }),
     )
     .min(15)

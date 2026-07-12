@@ -42,6 +42,7 @@ const NEGATION_CUES = [
   'there is no',
   'avoid',
   'not ',
+  'no ', // "No disease language" / "makes no claims about …"
   'cannot',
   'must not',
   'prohibited',

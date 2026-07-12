@@ -1,7 +1,7 @@
 import type { Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { normalize } from '../util';
 import { activeDiseaseNouns } from './pack';
-import { customerSurfaces, fail, scanSurfacesForBanned } from './shared';
+import { attributeComplianceSurfaces, customerSurfaces, fail, scanSurfacesForBanned } from './shared';
 import type { GateContext } from './types';
 
 export function c5Disclaimer(l: OptimizedListing, pack: KnowledgePack): Failure[] {
@@ -25,7 +25,12 @@ export function c6BannedTerms(
   const cp = pack.compliancePack;
   if (!cp) return [];
   const nouns = activeDiseaseNouns(cp, ctx.subcategories);
-  return scanSurfacesForBanned(customerSurfaces(l), cp, nouns, 'C6');
+  return scanSurfacesForBanned(
+    [...customerSurfaces(l), ...attributeComplianceSurfaces(l)],
+    cp,
+    nouns,
+    'C6',
+  );
 }
 
 export function c7BrandLeakage(l: OptimizedListing): Failure[] {
