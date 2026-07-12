@@ -33,6 +33,7 @@ describe('deterministic facts producer', () => {
   it('extracts formula / strain counts', () => {
     expect(extractFormulaCount('10-strain probiotic blend')).toBe(10);
     expect(extractFormulaCount('5 in 1 daily formula')).toBe(5);
+    expect(extractFormulaCount('Immunity Complete 20-in-1 Multivitamin')).toBe(20);
     expect(extractFormulaCount('plain text')).toBeUndefined();
   });
   it('parses per-day directions', () => {

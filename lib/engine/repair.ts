@@ -30,6 +30,7 @@ export const FIELD_TO_GROUP: ReadonlyArray<{ match: (field: string, checkId: str
   { match: (f) => f === 'backendSearchTerms', group: 'backend' },
   { match: (f) => f.startsWith('attributes.') || f === 'compliance', group: 'attributes' },
   { match: (f) => f.startsWith('aplus') || f === 'aplusContent', group: 'aplus' },
+  { match: (f) => f.startsWith('imagePlan'), group: 'images' },
   { match: (f) => f.startsWith('qa'), group: 'qa' },
 ];
 

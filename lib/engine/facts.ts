@@ -40,7 +40,7 @@ export function extractPotency(
 export function extractFormulaCount(text: string): number | undefined {
   const strain = text.match(/(\d+)\s*-?\s*strains?\b/i);
   if (strain?.[1]) return Number.parseInt(strain[1], 10);
-  const inOne = text.match(/\b(\d+)\s*in\s*1\b/i);
+  const inOne = text.match(/\b(\d+)\s*-?\s*in\s*-?\s*1\b/i);
   if (inOne?.[1]) return Number.parseInt(inOne[1], 10);
   return undefined;
 }

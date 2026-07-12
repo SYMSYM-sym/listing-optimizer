@@ -7,6 +7,7 @@ import type {
   OptimizedListing,
 } from '@/lib/types';
 import { sanitizeBackendSearchTerms } from './backendSanitize';
+import { sanitizeBullets } from './bulletSanitize';
 import { buildFacts } from './facts';
 import { generateGroup, type LlmClient } from './llm';
 import { buildGroupPrompts, buildSystemPrompt } from './prompts';
@@ -163,7 +164,10 @@ export async function optimize(
     title: title.title,
     title75: title.title75,
     itemHighlights: title.itemHighlights,
-    bullets: bullets.bullets.map((b) => b.text),
+    bullets: sanitizeBullets(
+      bullets.bullets.map((b) => b.text),
+      pack.rules.bulletMax,
+    ),
     bulletAnchors: bullets.bullets.map((b) => b.useCaseAnchor),
     description: finalDescription,
     // Deterministic C3/C16 cleanup after LLM (gate still re-validates).

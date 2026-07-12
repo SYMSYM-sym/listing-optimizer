@@ -375,6 +375,7 @@ describe('repair loop', () => {
     expect(fieldToGroup({ checkId: 'C3', field: 'backendSearchTerms', context: '', fix: '' })).toBe('backend');
     expect(fieldToGroup({ checkId: 'C9', field: 'attributes.allergen_information', context: '', fix: '' })).toBe('attributes');
     expect(fieldToGroup({ checkId: 'A1', field: 'aplus.modules[hero]', context: '', fix: '' })).toBe('aplus');
+    expect(fieldToGroup({ checkId: 'C6', field: 'imagePlan[0].notes', context: '', fix: '' })).toBe('images');
     expect(fieldToGroup({ checkId: 'PACK', field: 'compliance', context: '', fix: '' })).toBeNull();
   });
 
