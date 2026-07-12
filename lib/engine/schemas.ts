@@ -58,13 +58,24 @@ export const aplusGroupSchema = z
   .object({
     modules: z
       .array(
-        z.object({
+        z.preprocess((raw) => {
+          // LLMs often rename headline → title/heading on brand-story/hero; map aliases
+          // so the first attempt validates without a costly reparse round.
+          if (!raw || typeof raw !== 'object') return raw;
+          const o = raw as Record<string, unknown>;
+          const headline = o.headline ?? o.title ?? o.heading ?? o.header ?? o.name;
+          return {
+            ...o,
+            headline: typeof headline === 'string' ? headline : headline != null ? String(headline) : undefined,
+            body: o.body ?? o.text ?? o.copy ?? o.content,
+          };
+        }, z.object({
           id: z.string(),
           headline: z.string().min(3),
           body: z.string().min(30),
           subcopy: z.string().optional(),
           claimBearing: claimBearingField,
-        }),
+        })),
       )
       .min(5)
       .max(7),
