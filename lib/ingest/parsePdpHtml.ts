@@ -43,7 +43,17 @@ export function parsePdpHtml(html: string, asin: string, url: string): RawListin
     const t = $(el).text().replace(/\s+/g, ' ').trim();
     const m = t.match(/^(.{2,60}?)\s*[:‏:]\s*(.+)$/);
     if (m?.[1] && m[2]) {
-      attributesRaw.push({ name: m[1].replace(/[‎‏]/g, '').trim(), value: m[2].trim() });
+      attributesRaw.push({
+        name: m[1].replace(/[‎‏]/g, '').trim(),
+        // Amazon embeds LRM/RLM marks and a stray leading colon in detail-bullet
+        // values (e.g. ": ‎ Instant Sleep"). Strip them so the value is usable
+        // by detection, the audit, and the attribute table.
+        value: m[2]
+          .replace(/[‎‏]/g, '')
+          .replace(/^[\s:：]+/, '')
+          .replace(/\s+/g, ' ')
+          .trim(),
+      });
     }
   });
 
