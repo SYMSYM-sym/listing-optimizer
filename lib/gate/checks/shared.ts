@@ -1,5 +1,12 @@
-import type { AplusContent, CompliancePack, Failure, OptimizedListing } from '@/lib/types';
+import type {
+  AplusContent,
+  CompliancePack,
+  Failure,
+  OptimizedListing,
+  UnitRules,
+} from '@/lib/types';
 import {
+  collapseSeparators,
   hasNegationContext,
   normalize,
   scanTerms,
@@ -74,6 +81,18 @@ export function aplusSurfaces(a: AplusContent): [string, string][] {
 }
 
 /**
+ * A+ surfaces that must agree with OUR canonical facts (C12).
+ *
+ * Identical to `aplusSurfaces` minus the comparison `typical` column: that cell
+ * describes a TYPICAL ALTERNATIVE product, so its figures are deliberately not
+ * ours and must never be measured against `facts`. Every other A+ cell is
+ * first-person product copy and is checked.
+ */
+export function aplusFactSurfaces(a: AplusContent): [string, string][] {
+  return aplusSurfaces(a).filter(([field]) => !/^aplus\.comparison\[\d+\]\.typical$/.test(field));
+}
+
+/**
  * Negation settings for the DISEASE-TERM path (C6/A2).
  * A cue only suppresses a disease term when it negates THAT term: same clause,
  * tight window, and no disease verb in between. Genuine meta-phrases
@@ -101,20 +120,31 @@ export function scanSurfacesForBanned(
   const neg = diseaseNegationOptions(cp);
   for (const [field, textRaw] of surfaces) {
     const text = subtractDisclaimers(normalize(textRaw), disclaimers.map(normalize));
-    for (const m of scanTerms(text, nouns, neg)) {
-      // "No disease language" / "not for diabetes" are prohibitions, not claims
-      if (hasNegationContext(text, m.index, neg)) continue;
-      out.push(fail(checkId, field, m.context, `Remove banned disease term '${m.term}' — reframe as a structure/function state`));
-    }
-    for (const verb of cp.diseaseVerbs) {
-      const vre = termRegex(verb);
-      let vm: RegExpExecArray | null;
-      while ((vm = vre.exec(text)) !== null) {
-        if (hasNegationContext(text, vm.index, neg)) continue;
-        const windowText = text.slice(vm.index, vm.index + verb.length + 25);
-        const nounHit = nouns.find((n) => termRegex(n).test(windowText));
-        if (nounHit) {
-          out.push(fail(checkId, field, text.slice(Math.max(0, vm.index - 30), vm.index + 60), `Drug-claim pattern '${verb} … ${nounHit}' — prohibited`));
+    // The SAME scan runs over a separator-collapsed copy of the surface, so
+    // "c-a-n-c-e-r" is caught without the primary scan ever being weakened.
+    const collapsed = collapseSeparators(text);
+    const variants: string[] = collapsed === text ? [text] : [text, collapsed];
+    const seen = new Set<string>();
+    for (const variant of variants) {
+      for (const m of scanTerms(variant, nouns, neg)) {
+        // "No disease language" / "not for diabetes" are prohibitions, not claims
+        if (hasNegationContext(variant, m.index, neg)) continue;
+        if (seen.has(`n:${m.term}`)) continue;
+        seen.add(`n:${m.term}`);
+        out.push(fail(checkId, field, m.context, `Remove banned disease term '${m.term}' — reframe as a structure/function state`));
+      }
+      for (const verb of cp.diseaseVerbs) {
+        const vre = termRegex(verb);
+        let vm: RegExpExecArray | null;
+        while ((vm = vre.exec(variant)) !== null) {
+          if (hasNegationContext(variant, vm.index, neg)) continue;
+          const windowText = variant.slice(vm.index, vm.index + verb.length + 25);
+          const nounHit = nouns.find((n) => termRegex(n).test(windowText));
+          if (nounHit) {
+            if (seen.has(`v:${verb}|${nounHit}`)) continue;
+            seen.add(`v:${verb}|${nounHit}`);
+            out.push(fail(checkId, field, variant.slice(Math.max(0, vm.index - 30), vm.index + 60), `Drug-claim pattern '${verb} … ${nounHit}' — prohibited`));
+          }
         }
       }
     }
@@ -122,19 +152,100 @@ export function scanSurfacesForBanned(
   return out;
 }
 
-export const PER_SERVING_RE = /(\d[\d,.]*)\s*(mg|mcg|g|iu|cfu|billion(?:\s+cfu)?)\b[^.]{0,40}?\bper\s+serving/gi;
-export const DELIVERS_RE = /\b(delivers?|provides?|contains?)\b[^.]{0,40}?(\d[\d,.]*)\s*(mg|mcg|g|iu|cfu|billion(?:\s+cfu)?)\b[^.]{0,30}?\bper\s+serving/gi;
+// ---------------------------------------------------------------------------
+// Unit-anchored machinery — 100% PACK DATA (`rules.units`).
+// Nothing below names a unit, a dosage form or a potency phrase: every token
+// comes off the pack, so the gate carries no category lexicon.
+// ---------------------------------------------------------------------------
 
-export function potencyPhrasingOver(surfaces: [string, string][], checkId: string): Failure[] {
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Longest-first alternation source for pack tokens (inner whitespace flexible). */
+function alternationSource(tokens: string[]): string {
+  return [...new Set(tokens.map((t) => t.trim()).filter(Boolean))]
+    .sort((a, b) => b.length - a.length)
+    .map((t) => escapeRe(t).replace(/\s+/g, '\\s+'))
+    .join('|');
+}
+
+export type Dimension = string;
+
+interface CompiledUnits {
+  unitRe: RegExp;
+  dimensionOf: Map<string, Dimension>;
+  familyOf: Map<string, string>;
+  perServingRe: RegExp;
+  deliversRe: RegExp;
+}
+
+const UNIT_CACHE = new WeakMap<UnitRules, CompiledUnits>();
+
+function compileUnits(units: UnitRules): CompiledUnits {
+  const cached = UNIT_CACHE.get(units);
+  if (cached) return cached;
+
+  const dimensionOf = new Map<string, Dimension>();
+  const all: string[] = [];
+  for (const [dimension, tokens] of Object.entries(units.dimensions ?? {})) {
+    for (const token of tokens) {
+      const key = token.trim().toLowerCase().replace(/\s+/g, ' ');
+      if (!key) continue;
+      dimensionOf.set(key, dimension);
+      all.push(token);
+    }
+  }
+  const familyOf = new Map<string, string>();
+  for (const family of units.families ?? []) {
+    const canonical = family[0]?.trim().toLowerCase();
+    if (!canonical) continue;
+    for (const member of family) {
+      familyOf.set(member.trim().toLowerCase().replace(/\s+/g, ' '), canonical);
+    }
+  }
+
+  const potency = alternationSource(units.dimensions?.potency ?? []);
+  const perServing = alternationSource(units.perServingPhrases ?? []);
+  const verbs = alternationSource(units.potencyVerbs ?? []);
+  // A pack with no potency units or no per-dose phrasing simply has no C10/A5
+  // rule — an impossible pattern is used so the check is a documented no-op.
+  const never = '(?!)';
+
+  const compiled: CompiledUnits = {
+    unitRe: new RegExp(`(\\d[\\d,]*(?:\\.\\d+)?)[\\s-]*(${all.length ? alternationSource(all) : never})\\b`, 'gi'),
+    dimensionOf,
+    familyOf,
+    perServingRe: new RegExp(
+      potency && perServing
+        ? `(\\d[\\d,.]*)\\s*(${potency})\\b[^.]{0,40}?\\b(?:${perServing})`
+        : never,
+      'gi',
+    ),
+    deliversRe: new RegExp(
+      potency && perServing && verbs
+        ? `\\b(?:${verbs})\\b[^.]{0,40}?(\\d[\\d,.]*)\\s*(${potency})\\b[^.]{0,30}?\\b(?:${perServing})`
+        : never,
+      'gi',
+    ),
+  };
+  UNIT_CACHE.set(units, compiled);
+  return compiled;
+}
+
+export function potencyPhrasingOver(
+  surfaces: [string, string][],
+  units: UnitRules,
+  checkId: string,
+): Failure[] {
+  const { perServingRe, deliversRe } = compileUnits(units);
   const out: Failure[] = [];
   for (const [field, textRaw] of surfaces) {
     const text = normalize(textRaw);
-    for (const re of [PER_SERVING_RE, DELIVERS_RE]) {
+    for (const re of [perServingRe, deliversRe]) {
       re.lastIndex = 0;
       let m: RegExpExecArray | null;
       while ((m = re.exec(text)) !== null) {
         if (!hasNegationContext(text, m.index)) {
-          out.push(fail(checkId, field, m[0], 'Attach the headline potency to the blend/formula, never "per serving"'));
+          out.push(fail(checkId, field, m[0], 'Attach the headline potency to the blend/formula, never to a single dose'));
         }
       }
     }
@@ -153,15 +264,6 @@ export function fictionOver(surfaces: [string, string][], cp: CompliancePack, ch
   return out;
 }
 
-export type Dimension = 'potency' | 'count' | 'days';
-
-const UNIT_DIMENSION: [RegExp, Dimension][] = [
-  [/^(mg|mcg|g|iu)$/i, 'potency'],
-  [/^(billion\s+cfu|billion|cfu)$/i, 'potency'],
-  [/^(capsule|capsules|gummy|gummies|softgel|softgels|tablet|tablets|count)$/i, 'count'],
-  [/^(day|days)$/i, 'days'],
-];
-
 export interface UnitNumber {
   value: number;
   unit: string;
@@ -170,19 +272,21 @@ export interface UnitNumber {
   index: number;
 }
 
-export function extractUnitNumbers(text: string): UnitNumber[] {
+export function extractUnitNumbers(text: string, units: UnitRules): UnitNumber[] {
+  const { unitRe, dimensionOf } = compileUnits(units);
   const out: UnitNumber[] = [];
-  const re = /(\d[\d,]*(?:\.\d+)?)[\s-]*(billion\s+cfu|billion|mg|mcg|g|iu|cfu|capsules?|gummies|gummy|softgels?|tablets?|count|days?)\b/gi;
+  unitRe.lastIndex = 0;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
+  while ((m = unitRe.exec(text)) !== null) {
     const numStr = m[1];
     const unitStr = m[2];
     if (!numStr || !unitStr) continue;
-    const dim = UNIT_DIMENSION.find(([u]) => u.test(unitStr))?.[1];
+    const unit = unitStr.toLowerCase().replace(/\s+/g, ' ');
+    const dim = dimensionOf.get(unit);
     if (!dim) continue;
     out.push({
       value: Number.parseFloat(numStr.replace(/,/g, '')),
-      unit: unitStr.toLowerCase().replace(/\s+/g, ' '),
+      unit,
       dimension: dim,
       raw: m[0],
       index: m.index,
@@ -191,28 +295,26 @@ export function extractUnitNumbers(text: string): UnitNumber[] {
   return out;
 }
 
-function parsePotencyFact(potency: string | undefined): UnitNumber | null {
+function parsePotencyFact(potency: string | undefined, units: UnitRules): UnitNumber | null {
   if (!potency) return null;
-  const nums = extractUnitNumbers(potency);
+  const nums = extractUnitNumbers(potency, units).filter((n) => n.dimension === 'potency');
   return nums[0] ?? null;
-}
-
-function unitFamily(unit: string): string {
-  if (/billion|cfu/.test(unit)) return 'cfu';
-  return unit;
 }
 
 export function factConsistencyOver(
   surfaces: [string, string][],
   l: OptimizedListing,
+  units: UnitRules,
   checkId: string,
 ): Failure[] {
+  const { familyOf } = compileUnits(units);
+  const family = (unit: string): string => familyOf.get(unit) ?? unit;
   const out: Failure[] = [];
   const facts = l.facts;
-  const potencyFact = parsePotencyFact(facts.potency);
+  const potencyFact = parsePotencyFact(facts.potency, units);
   const allowedCounts = new Set<number>(
     [facts.unitCount, facts.servings, facts.daySupply, facts.formulaCount,
-      ...(facts.servingSize ? extractUnitNumbers(facts.servingSize).map((n) => n.value) : []),
+      ...(facts.servingSize ? extractUnitNumbers(facts.servingSize, units).map((n) => n.value) : []),
       1, 2, 3, 4,
     ].filter((n): n is number => typeof n === 'number'),
   );
@@ -222,11 +324,11 @@ export function factConsistencyOver(
 
   for (const [field, textRaw] of surfaces) {
     const text = normalize(textRaw);
-    const nums = extractUnitNumbers(text);
+    const nums = extractUnitNumbers(text, units);
 
     if (potencyFact) {
       const sameUnit = nums.filter(
-        (n) => n.dimension === 'potency' && unitFamily(n.unit) === unitFamily(potencyFact.unit),
+        (n) => n.dimension === 'potency' && family(n.unit) === family(potencyFact.unit),
       );
       for (const n of sameUnit) {
         if (n.value !== potencyFact.value) {

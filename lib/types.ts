@@ -58,6 +58,12 @@ export interface StyleRules {
   allCapsAllowlist: string[];
   /** Every bullet must open with a capital letter. */
   bulletMustStartCapital: boolean;
+  /**
+   * A RUN of this many consecutive ALL-CAPS word tokens counts as shouting
+   * regardless of word length, and the acronym allowlist is NOT honoured inside
+   * such a run (gate C17, FIX D).
+   */
+  allCapsRunMin: number;
   /** Bullets must not end with sentence punctuation. */
   bulletNoTrailingPunctuation: boolean;
   /** Trailing markers that are allowed and stripped before the punctuation check (e.g. the '*' claim marker). */
@@ -92,6 +98,50 @@ export interface StyleRules {
   descriptionMaxBytes: number;
   /** HTML tag detection pattern (source string, compiled by the gate). */
   htmlTagPattern: string;
+}
+
+/**
+ * Unit lexicon (pack data). The gate compiles every unit-anchored regex from
+ * this — C10/A5 potency phrasing and C12 fact consistency hold no unit,
+ * dosage-form or "per serving" literal of their own.
+ */
+export interface UnitRules {
+  /** Dimension name -> the unit tokens (all surface forms, singular AND plural). */
+  dimensions: Record<string, string[]>;
+  /** Units of the SAME dimension that must compare against each other; entry[0] is the canonical family name. */
+  families: string[][];
+  /** Phrases that make a potency figure a per-dose claim (gate C10/A5). */
+  perServingPhrases: string[];
+  /** Verbs that introduce a potency figure (gate C10/A5 second pattern). */
+  potencyVerbs: string[];
+  /** Dosage-form tokens the facts producer parses "take N <form> daily" with. */
+  dosageForms: string[];
+}
+
+/** Snapshot attribute keys the deterministic facts producer reads (pack data). */
+export interface FactFieldRules {
+  unitCount: string;
+  servings: string;
+  servingSize: string;
+  directions: string;
+  weight: string;
+  price: string;
+  potencySources: string[];
+  formulaCountSources: string[];
+}
+
+/** Title word-repetition rule (pack data, read by gate check C1). */
+export interface TitleWordRepetitionRules {
+  /** Maximum times one stemmed content word may appear in the title. */
+  max: number;
+  /** Short function words exempt from the count. */
+  stopwords: string[];
+}
+
+/** Substring cues gate A4 uses to find the required A+ modules by id (pack data). */
+export interface AplusModuleCues {
+  brandStory: string;
+  hero: string;
 }
 
 /** Prohibited detail-page content patterns (pack data, read by gate check C18). */
@@ -135,6 +185,16 @@ export interface RuleSet {
   whoItsForCues: string[];
   /** Amazon STYLE rules — the data behind gate C17. */
   style: StyleRules;
+  /** Unit/dosage-form/potency-phrasing lexicon behind C10, C12, A5 and the facts producer. */
+  units: UnitRules;
+  /** Snapshot attribute keys the facts producer reads. */
+  factFields: FactFieldRules;
+  /** Title word-repetition limit + stopwords (gate C1). */
+  titleWordRepetition: TitleWordRepetitionRules;
+  /** Required A+ module ids (rendered into the A+ prompt). */
+  aplusModuleIds: string[];
+  /** Id cues gate A4 locates the required A+ modules with. */
+  aplusModuleCues: AplusModuleCues;
   /** Amazon-prohibited detail-page content (price/availability/condition/contact). Pack data. */
   prohibitedContent?: ProhibitedContentRules;
   /** Amazon-prohibited marketing claims (urgency/guarantee/rank/review). Pack data. */
@@ -150,6 +210,28 @@ export interface AllergenRule {
   class: string; // e.g. 'Tree Nuts'
   source: string; // e.g. the specific nut
   canonicalString: string; // e.g. 'Contains: Tree Nuts ([nut])'
+}
+
+/** Attribute keys + phrasing behind the allergen checks (pack data). */
+export interface AllergenFields {
+  /** Attribute key holding the full label / component list. */
+  labelList: string;
+  /** Attribute key holding the canonical allergen declaration. */
+  declaration: string;
+  /** Verb that makes a sentence an allergen DECLARATION ("contains"). */
+  declarationVerb: string;
+  /** Substring cue identifying the A+ module that must carry the declaration. */
+  aplusModuleIdCue: string;
+}
+
+/** Category-specific prompt guidance (pack data — the engine holds no lexicon). */
+export interface PromptRules {
+  system?: string[];
+  attributes?: string[];
+  bullets?: string[];
+  description?: string[];
+  qa?: string[];
+  aplus?: string[];
 }
 
 export interface CompliancePack {
@@ -173,6 +255,15 @@ export interface CompliancePack {
   /** Subcategory label -> that subcategory's disease/infection nouns (non-empty). */
   diseaseNounsBySubcategory: Record<string, string[]>;
   allergenRules: AllergenRule[];
+  /**
+   * Attribute keys + phrasing the allergen checks (C9/A7) read. Pack data, so
+   * the gate holds no attribute-key or allergen-phrase literal.
+   */
+  allergenFields: AllergenFields;
+  /** Phrases that must never appear when a declarable allergen is present (C9). */
+  noAllergenPhrases: string[];
+  /** Category-specific generation guidance injected into the prompts. */
+  promptRules?: PromptRules;
   superlativeBans: string[];
   /** Operator-supplied known-false descriptors; empty by default (C11 no-op). */
   fictionPhrases: string[];

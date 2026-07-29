@@ -51,23 +51,25 @@ export function a3AplusBrandLeakage(l: OptimizedListing): Failure[] {
   return out;
 }
 
-export function a4AplusProductName(l: OptimizedListing): Failure[] {
+export function a4AplusProductName(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const out: Failure[] = [];
   const name = normalize(l.productName).toLowerCase();
   const a = l.aplusContent;
-  const brandStory = a.modules.find((m) => m.id.includes('brand'));
-  const hero = a.modules.find((m) => m.id.includes('hero')) ?? a.modules[0];
+  // Module-id cues are PACK DATA (`rules.aplusModuleCues`) — no id literal here.
+  const cues = pack.rules.aplusModuleCues;
+  const brandStory = a.modules.find((m) => m.id.includes(cues.brandStory));
+  const hero = a.modules.find((m) => m.id.includes(cues.hero)) ?? a.modules[0];
   if (!brandStory || !normalize(`${brandStory.headline} ${brandStory.body}`).toLowerCase().includes(name)) {
-    out.push(fail('A4', 'aplus.modules[brand-story]', brandStory ? 'product name missing' : 'no brand-story module', 'Product name must appear in the Brand-Story module'));
+    out.push(fail('A4', `aplus.modules[${cues.brandStory}]`, brandStory ? 'product name missing' : `no '${cues.brandStory}' module`, `Product name must appear in the '${cues.brandStory}' module`));
   }
   if (!hero || !normalize(`${hero.headline} ${hero.body}`).toLowerCase().includes(name)) {
-    out.push(fail('A4', 'aplus.modules[hero]', hero ? 'product name missing' : 'no hero module', 'Product name must appear in the hero module'));
+    out.push(fail('A4', `aplus.modules[${cues.hero}]`, hero ? 'product name missing' : `no '${cues.hero}' module`, `Product name must appear in the '${cues.hero}' module`));
   }
   return out;
 }
 
-export function a5AplusPotencyPhrasing(l: OptimizedListing): Failure[] {
-  return potencyPhrasingOver(aplusSurfaces(l.aplusContent), 'A5');
+export function a5AplusPotencyPhrasing(l: OptimizedListing, pack: KnowledgePack): Failure[] {
+  return potencyPhrasingOver(aplusSurfaces(l.aplusContent), pack.rules.units, 'A5');
 }
 
 export function a6AplusFictionPhrases(l: OptimizedListing, pack: KnowledgePack): Failure[] {
@@ -81,12 +83,13 @@ export function a7AplusAllergen(l: OptimizedListing, pack: KnowledgePack): Failu
   if (!cp) return [];
   const present = presentAllergens(l, cp);
   if (present.length === 0) return [];
-  const ingredientsModule = l.aplusContent.modules.find((m) => m.id.includes('ingredient'));
+  const cue = cp.allergenFields.aplusModuleIdCue;
+  const ingredientsModule = l.aplusContent.modules.find((m) => m.id.includes(cue));
   const out: Failure[] = [];
   for (const rule of present) {
     const text = ingredientsModule ? `${ingredientsModule.headline} ${ingredientsModule.body} ${ingredientsModule.subcopy ?? ''}` : '';
-    if (!ingredientsModule || !allergenMentioned(text, rule)) {
-      out.push(fail('A7', 'aplus.modules[ingredients]', ingredientsModule ? `does not declare ${rule.class}` : 'no ingredients module', `Declare the allergen ('${rule.canonicalString}') in the A+ ingredients module`));
+    if (!ingredientsModule || !allergenMentioned(text, rule, cp)) {
+      out.push(fail('A7', `aplus.modules[${ingredientsModule?.id ?? cue}]`, ingredientsModule ? `does not declare ${rule.class}` : `no '${cue}' module`, `Declare the allergen ('${rule.canonicalString}') in the A+ '${cue}' module`));
     }
   }
   return out;

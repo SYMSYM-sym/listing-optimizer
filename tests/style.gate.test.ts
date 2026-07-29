@@ -270,6 +270,7 @@ describe('C17 is category-agnostic and pack-driven', () => {
     bare.rules.style = {
       ...bare.rules.style,
       allCapsMinWordLen: 999,
+      allCapsRunMin: 0, // FIX D: the shouting-run rule is pack-driven too
       bulletMustStartCapital: false,
       bulletNoTrailingPunctuation: false,
       bannedSymbols: [],

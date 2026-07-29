@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET as GET_LIST } from '@/app/api/runs/route';
 import { GET as GET_ONE } from '@/app/api/runs/[id]/route';
-import { checkAccess } from '@/lib/server/guard';
+import { requireAccess } from '@/lib/server/guard';
 import { getRun, listRuns } from '@/lib/store/runs';
 import type { RunListItem, RunRecord } from '@/lib/store/runs';
 
 vi.mock('@/lib/server/guard', () => ({
   checkAccess: vi.fn(() => null),
+  requireAccess: vi.fn(() => null),
 }));
 
 vi.mock('@/lib/store/runs', () => ({
@@ -20,7 +21,7 @@ describe('GET /api/runs', () => {
   });
 
   it('enforces the access guard', async () => {
-    vi.mocked(checkAccess).mockReturnValueOnce(
+    vi.mocked(requireAccess).mockReturnValueOnce(
       Response.json({ code: 'UNAUTHORIZED' }, { status: 401 }) as never,
     );
     const res = await GET_LIST(new Request('http://localhost/api/runs'));
@@ -58,7 +59,7 @@ describe('GET /api/runs/[id]', () => {
   });
 
   it('enforces the access guard', async () => {
-    vi.mocked(checkAccess).mockReturnValueOnce(
+    vi.mocked(requireAccess).mockReturnValueOnce(
       Response.json({ code: 'UNAUTHORIZED' }, { status: 401 }) as never,
     );
     const res = await GET_ONE(new Request('http://localhost/api/runs/abc'), {

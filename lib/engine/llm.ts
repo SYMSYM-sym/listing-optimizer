@@ -1,6 +1,6 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
-import type { z } from 'zod';
+import { ZodError, type z } from 'zod';
 import { env } from '@/lib/env';
 import { logServer } from '@/lib/server/log';
 
@@ -117,6 +117,15 @@ function sanitizeJsonControlChars(json: string): string {
 }
 
 /**
+ * Failing schema PATHS only ("bullets.0.text") — never messages, never values.
+ * Model output must never reach the log stream.
+ */
+function zodIssuePaths(e: unknown): string[] {
+  if (!(e instanceof ZodError)) return [];
+  return [...new Set(e.issues.map((i) => i.path.join('.') || '(root)'))].slice(0, 20);
+}
+
+/**
  * Generate one group: prompt → JSON → zod parse; ONE reparse retry with the
  * validation error appended (separate from the gate's repair budget).
  */
@@ -142,7 +151,13 @@ export async function generateGroup<S extends z.ZodType>(
     return await attempt();
   } catch (e) {
     const detail = e instanceof Error ? e.message.slice(0, 600) : String(e);
-    logServer('llm.reparse', { group: groupName, detail: detail.slice(0, 200) });
+    // NEVER log `detail` — a zod message embeds the offending model OUTPUT.
+    // Only the error name and the failing schema PATHS are safe to record.
+    logServer('llm.reparse', {
+      group: groupName,
+      error: e instanceof Error ? e.name : 'unknown',
+      issuePaths: zodIssuePaths(e),
+    });
     try {
       return await attempt(detail);
     } catch (e2) {

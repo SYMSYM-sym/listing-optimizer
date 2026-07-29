@@ -113,15 +113,28 @@ function judge(id: string, v: SnapshotView): { score: Verdict; rationale: string
       return { score: 'full', rationale: 'No forbidden superlatives or review claims found.' };
     }
     case 'P14': {
-      const facts = buildFacts(s, pack.compliancePack?.factUnits ?? []);
+      const facts = buildFacts(s, pack);
       if (!facts.potency && !facts.unitCount) return { score: 'unknown', rationale: 'Too few structured facts to test consistency.' };
       const surfaces = [s.title, ...s.bullets, s.description];
       const conflicts: string[] = [];
+      // Potency units + their equivalence families are PACK DATA — no unit literal here.
+      const families = pack.rules.units.families;
+      const familyOf = (unit: string): string =>
+        families.find((f) => f.some((u) => u.toLowerCase() === unit))?.[0]?.toLowerCase() ?? unit;
       for (const surface of surfaces) {
-        const nums = extractUnitNumbers(surface);
-        const cfu = nums.filter((n) => /cfu|billion/.test(n.unit));
-        const distinct = new Set(cfu.map((n) => n.value));
-        if (distinct.size > 1) conflicts.push([...distinct].join(' vs '));
+        const nums = extractUnitNumbers(surface, pack.rules.units).filter(
+          (n) => n.dimension === 'potency',
+        );
+        const byFamily = new Map<string, Set<number>>();
+        for (const n of nums) {
+          const key = familyOf(n.unit);
+          const set = byFamily.get(key) ?? new Set<number>();
+          set.add(n.value);
+          byFamily.set(key, set);
+        }
+        for (const distinct of byFamily.values()) {
+          if (distinct.size > 1) conflicts.push([...distinct].join(' vs '));
+        }
       }
       return conflicts.length > 0
         ? { score: 'none', rationale: `Potency figures conflict within a surface: ${conflicts.join('; ')}.` }

@@ -26,9 +26,9 @@ function listTsFiles(dir: string): string[] {
 
 describe('deterministic facts producer', () => {
   it('extracts unit-anchored potency', () => {
-    expect(extractPotency('Probiotic 50 Billion CFU capsules', pack.compliancePack!.factUnits)).toBe('50 Billion CFU');
-    expect(extractPotency('Turmeric 1,000 mg extract', pack.compliancePack!.factUnits)).toBe('1000 mg');
-    expect(extractPotency('no numbers here', pack.compliancePack!.factUnits)).toBeUndefined();
+    expect(extractPotency('Probiotic 50 Billion CFU capsules', pack.rules.units.dimensions.potency!)).toBe('50 Billion CFU');
+    expect(extractPotency('Turmeric 1,000 mg extract', pack.rules.units.dimensions.potency!)).toBe('1000 mg');
+    expect(extractPotency('no numbers here', pack.rules.units.dimensions.potency!)).toBeUndefined();
   });
   it('extracts formula / strain counts', () => {
     expect(extractFormulaCount('10-strain probiotic blend')).toBe(10);
@@ -37,12 +37,12 @@ describe('deterministic facts producer', () => {
     expect(extractFormulaCount('plain text')).toBeUndefined();
   });
   it('parses per-day directions', () => {
-    expect(parsePerDay('Take 2 capsules daily with food')).toBe(2);
-    expect(parsePerDay('Take once a day')).toBe(1);
-    expect(parsePerDay(undefined)).toBeUndefined();
+    expect(parsePerDay('Take 2 capsules daily with food', pack.rules.units.dosageForms)).toBe(2);
+    expect(parsePerDay('Take once a day', pack.rules.units.dosageForms)).toBe(1);
+    expect(parsePerDay(undefined, pack.rules.units.dosageForms)).toBeUndefined();
   });
   it('builds facts from the fixture snapshot (never LLM-guessed)', () => {
-    const facts = buildFacts(snapshot, pack.compliancePack!.factUnits);
+    const facts = buildFacts(snapshot, pack);
     expect(facts.unitCount).toBe(60);
     expect(facts.servingSize).toBe('1 Capsule');
     expect(facts.potency).toBe('50 Billion CFU');

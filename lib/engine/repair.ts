@@ -22,13 +22,15 @@ import { optimize, type GroupName } from './optimize';
 /**
  * Explicit ownership table: gate failure field → prompt group that owns repair.
  * PACK failures are intentionally absent — they are not repairable by regeneration.
+ * The disclaimer field is absent too: it is CODE-inserted verbatim, never
+ * LLM-owned, so regenerating the title group could not repair it.
  */
 export const FIELD_TO_GROUP: ReadonlyArray<{ match: (field: string, checkId: string) => boolean; group: GroupName }> = [
-  { match: (f) => f === 'title' || f === 'title75' || f === 'itemHighlights' || f === 'fdaDisclaimer', group: 'title' },
+  { match: (f) => f === 'title' || f === 'title75' || f === 'itemHighlights', group: 'title' },
   { match: (f) => f.startsWith('bullets'), group: 'bullets' },
   { match: (f) => f === 'description', group: 'description' },
   { match: (f) => f === 'backendSearchTerms', group: 'backend' },
-  { match: (f) => f.startsWith('attributes.') || f === 'compliance', group: 'attributes' },
+  { match: (f) => f.startsWith('attributes.'), group: 'attributes' },
   { match: (f) => f.startsWith('aplus') || f === 'aplusContent', group: 'aplus' },
   { match: (f) => f.startsWith('imagePlan'), group: 'images' },
   { match: (f) => f.startsWith('qa'), group: 'qa' },
@@ -73,7 +75,15 @@ export async function runRepairLoop(
     const failureContext: Partial<Record<GroupName, string>> = {};
     for (const failure of gateResult.failures) {
       const g = fieldToGroup(failure);
-      if (!g) continue;
+      if (!g) {
+        // Nothing regenerable owns this failure — say so instead of dropping it
+        // silently, so an unmapped field surfaces in the logs.
+        logServer('repair.unowned_failure', {
+          checkId: failure.checkId,
+          field: failure.field,
+        });
+        continue;
+      }
       groups.add(g);
       const line = `[${failure.checkId}] ${failure.field}: ${failure.context} → FIX: ${failure.fix}`;
       failureContext[g] = failureContext[g] ? `${failureContext[g]}\n${line}` : line;

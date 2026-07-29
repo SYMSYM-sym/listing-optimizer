@@ -67,7 +67,7 @@ export async function optimize(
   llm: LlmClient,
   opts: OptimizeOptions = {},
 ): Promise<OptimizedListing> {
-  const facts = buildFacts(snapshot, pack.compliancePack?.factUnits ?? []);
+  const facts = buildFacts(snapshot, pack);
   // Detected subcategories flow in on the snapshot (pipeline enriches it) so
   // the prompt teaches exactly the noun set the gate will enforce.
   const system = buildSystemPrompt(pack, facts, snapshot.subcategory ?? []);

@@ -31,6 +31,7 @@
   ],
   "style": {
     "allCapsMinWordLen": 4,
+    "allCapsRunMin": 3,
     "allCapsAllowlist": [
       "5HTP",
       "AHCC",
@@ -274,6 +275,30 @@
       [
         "\\b(?:\\+?1[\\s.-]?)?\\(?\\d{3}\\)?[\\s.-]\\d{3}[\\s.-]\\d{4}\\b",
         "phone number"
+      ],
+      [
+        "\\b[\\w-]{2,}\\.(?:com|net|org|co|io|shop|store|us)\\b",
+        "website URL (bare domain)"
+      ],
+      [
+        "\\b\\d{10}\\b",
+        "phone number (unseparated)"
+      ],
+      [
+        "\\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)[\\s-]?(?:\\w+[\\s-])?(?:dollars?|cents?)\\b",
+        "price (spelled-out currency)"
+      ],
+      [
+        "\\bhalf price\\b",
+        "discount claim"
+      ],
+      [
+        "\\btwo for one\\b",
+        "promotional claim"
+      ],
+      [
+        "\\bbogo\\b",
+        "promotional claim"
       ]
     ],
     "surfaces": [
@@ -324,5 +349,111 @@
       "attributes",
       "aplus"
     ]
+  },
+  "units": {
+    "_comment": "Unit lexicon for the gate (C10/C12/A5) and the deterministic facts producer. PACK DATA — lib/gate and lib/engine hold no unit literals. Order inside each list is irrelevant; the gate compiles longest-first alternations.",
+    "dimensions": {
+      "potency": [
+        "billion cfu",
+        "billion",
+        "mcg",
+        "cfu",
+        "mg",
+        "iu",
+        "g"
+      ],
+      "count": [
+        "capsule",
+        "capsules",
+        "gummy",
+        "gummies",
+        "softgel",
+        "softgels",
+        "tablet",
+        "tablets",
+        "count"
+      ],
+      "days": [
+        "day",
+        "days"
+      ]
+    },
+    "_familiesComment": "Units that are the SAME physical dimension and must be compared with each other (first entry is the canonical family name).",
+    "families": [
+      [
+        "cfu",
+        "billion",
+        "billion cfu"
+      ]
+    ],
+    "perServingPhrases": [
+      "per serving"
+    ],
+    "potencyVerbs": [
+      "delivers",
+      "deliver",
+      "provides",
+      "provide",
+      "contains",
+      "contain"
+    ],
+    "dosageForms": [
+      "capsule",
+      "capsules",
+      "gummy",
+      "gummies",
+      "softgel",
+      "softgels",
+      "tablet",
+      "tablets",
+      "scoop",
+      "scoops"
+    ]
+  },
+  "factFields": {
+    "_comment": "Snapshot attribute keys read by lib/engine/facts.ts. PACK DATA so the facts producer holds no category attribute-key literals.",
+    "unitCount": "unit_count",
+    "servings": "servings_per_container",
+    "servingSize": "serving_size",
+    "directions": "directions_for_use",
+    "weight": "item_weight",
+    "price": "standard_price",
+    "potencySources": [
+      "maximum_dosage"
+    ],
+    "formulaCountSources": [
+      "active_ingredients",
+      "maximum_dosage"
+    ]
+  },
+  "titleWordRepetition": {
+    "_comment": "Gate C1 sub-rule: no stemmed content word may appear more than `max` times in the title.",
+    "max": 2,
+    "stopwords": [
+      "a",
+      "an",
+      "the",
+      "and",
+      "or",
+      "for",
+      "of",
+      "in",
+      "on",
+      "with",
+      "to",
+      "by"
+    ]
+  },
+  "aplusModuleIds": [
+    "brand-story",
+    "hero",
+    "ingredients",
+    "how-to-use",
+    "who-its-for"
+  ],
+  "aplusModuleCues": {
+    "_comment": "Substring cues gate A4 uses to locate the required A+ modules by id.",
+    "brandStory": "brand",
+    "hero": "hero"
   }
 }

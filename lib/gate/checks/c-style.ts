@@ -64,14 +64,49 @@ export function styleSurfaces(l: OptimizedListing): StyleSurface[] {
   return out;
 }
 
-/** ALL-CAPS words at/over the pack minimum length that are not allow-listed. */
+/** True for a token that is written entirely in capitals. */
+const isAllCaps = (word: string): boolean =>
+  word === word.toUpperCase() && /[A-Z]/.test(word);
+
+/**
+ * Runs of `style.allCapsRunMin`+ CONSECUTIVE all-caps tokens.
+ *
+ * The per-word rule alone let "NEW BIG WOW gut support" through (every word is
+ * under the minimum length) and let allow-listed acronyms double as emphasis
+ * ("SAME NON USA GABA blend"). Shouting is a property of the RUN, not of one
+ * word, so a run is reported whatever the token lengths are — and the acronym
+ * allowlist is NOT honoured for tokens inside a run.
+ */
+export function allCapsRuns(text: string, style: StyleRules): string[][] {
+  const min = style.allCapsRunMin;
+  if (!min || min < 2) return [];
+  const runs: string[][] = [];
+  let current: string[] = [];
+  for (const word of text.match(WORD_RE) ?? []) {
+    if (isAllCaps(word)) {
+      current.push(word);
+      continue;
+    }
+    if (current.length >= min) runs.push(current);
+    current = [];
+  }
+  if (current.length >= min) runs.push(current);
+  return runs;
+}
+
+/**
+ * ALL-CAPS words at/over the pack minimum length that are not allow-listed.
+ * Tokens that already belong to a shouting RUN are left to `allCapsRuns` so the
+ * same word is not reported twice.
+ */
 export function allCapsOffenders(text: string, style: StyleRules): string[] {
   const allow = new Set(style.allCapsAllowlist);
+  const inRun = new Set(allCapsRuns(text, style).flat());
   const seen = new Set<string>();
   for (const word of text.match(WORD_RE) ?? []) {
     if (word.length < style.allCapsMinWordLen) continue;
-    if (word !== word.toUpperCase()) continue; // contains a lowercase letter
-    if (!/[A-Z]/.test(word)) continue; // must carry at least one letter
+    if (!isAllCaps(word)) continue;
+    if (inRun.has(word)) continue; // reported by the run rule instead
     if (allow.has(word)) continue; // exact, case-sensitive allowlist hit
     seen.add(word);
   }
@@ -116,7 +151,19 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
     const text = clean(surface.text);
     if (!text) continue;
 
-    // 1 — ALL-CAPS emphasis
+    // 1 — ALL-CAPS emphasis: shouting RUNS first (allowlist does not apply
+    // inside a run), then the per-word length rule for isolated offenders.
+    const runs = allCapsRuns(text, style);
+    if (runs.length > 0) {
+      out.push(
+        fail(
+          CHECK_ID,
+          surface.field,
+          runs.map((r) => r.join(' ')).join(' | '),
+          `Rewrite in sentence case — ${style.allCapsRunMin}+ consecutive ALL-CAPS words read as shouting (the acronym allowlist does not apply inside such a run)`,
+        ),
+      );
+    }
     const caps = allCapsOffenders(text, style);
     if (caps.length > 0) {
       out.push(

@@ -27,6 +27,9 @@ export function buildSystemPrompt(
     .map((p) => `- [${p.id}] ${p.text}`)
     .join('\n');
 
+  // Category-specific instruction lines are PACK DATA (`compliancePack.promptRules`)
+  // — this module renders them, it never authors them.
+  const packLines = (cp?.promptRules?.system ?? []).map((line) => `- ${line}`).join('\n');
   const compliance = cp
     ? `
 COMPLIANCE (structure/function claims ONLY — this is load-bearing):
@@ -34,14 +37,17 @@ COMPLIANCE (structure/function claims ONLY — this is load-bearing):
 - Banned verbs as product claims: ${cp.diseaseVerbs.join(', ')}.
 - NEVER use disease/condition nouns anywhere. The deterministic gate scans for ALL of these on EVERY surface: ${activeNouns.join(', ')} — plus any other condition name. Reframe as a structure/function state ("supports healthy [system] function", "[parameter] balance").
 - Banned marketing phrases: ${cp.superlativeBans.join(', ')}. No star-rating or review-count claims. No price in copy.
-- Do NOT write the FDA disclaimer anywhere — the system inserts the verbatim constant itself. Claim-bearing bullets end with a trailing "*" marker only.
-- If an allergen is present, declare it exactly as "Contains: [Allergen]" consistently; never write "No Known Allergens" when one is present.`
+${packLines}`
     : `
-No category compliance module is active. Write factual, non-medical copy. No superlatives, no price, no review claims. Do not write any FDA disclaimer text.`;
+No category compliance module is active. Write factual, non-medical copy. No superlatives, no price, no review claims. Do not write any disclaimer text.`;
 
   const disclaimerHeadroom = cp
-    ? `- Description ≤${r.descriptionMax} chars (leave ~250 chars headroom — the system appends the FDA disclaimer).`
+    ? `- Description ≤${r.descriptionMax} chars (leave ~250 chars headroom — the system appends the verbatim compliance disclaimer).`
     : `- Description ≤${r.descriptionMax} chars.`;
+
+  const dosePhrasing = (r.units?.perServingPhrases ?? []).length > 0
+    ? `\n- Potency figures attach to the blend/formula, NEVER phrased ${(r.units.perServingPhrases).map((x) => `"${x}"`).join(' / ')}.`
+    : '';
 
   return `You are an Amazon listing copy engine. You write ONE JSON object per request, matching the requested schema exactly. No prose outside JSON.
 
@@ -50,14 +56,13 @@ HARD LIMITS (checked by deterministic code — leave headroom):
 - Exactly ${r.bulletCount} bullets, each ≤${r.bulletMax} chars.
 ${disclaimerHeadroom}
 - Backend search terms ≤${r.backendMaxBytes} UTF-8 BYTES, lowercase, space-separated, no punctuation.
-- No word more than 2× in the title. Banned title chars: ${r.style.bannedChars.join(' ')} (use hyphen/comma/&/parentheses).
+- No word more than ${r.titleWordRepetition.max}× in the title. Banned title chars: ${r.style.bannedChars.join(' ')} (use hyphen/comma/&/parentheses).
 
 OPTIMIZATION PRINCIPLES (ground copy in these):
 ${principleLines}
 
 CANONICAL FACTS (every number you write MUST match these exactly; if a fact is absent, do not invent one):
-${JSON.stringify(facts, null, 2)}
-- Potency figures attach to the blend/formula, NEVER phrased "per serving".
+${JSON.stringify(facts, null, 2)}${dosePhrasing}
 ${compliance}
 
 ${styleRulesBlock(r.style)}

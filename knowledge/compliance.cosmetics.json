@@ -34,5 +34,38 @@
     "haircare": ["shampoo", "conditioner", "hair oil", "haircare", "scalp"],
     "fragrance": ["perfume", "cologne", "eau de", "fragrance"],
     "general": ["cosmetic", "beauty"]
+  },
+  "allergenFields": {
+    "_comment": "Mirror of the supplements pack: attribute keys + phrasing the allergen checks (C9/A7) use.",
+    "labelList": "ingredients",
+    "declaration": "allergen_information",
+    "declarationVerb": "contains",
+    "aplusModuleIdCue": "ingredient"
+  },
+  "noAllergenPhrases": [
+    "no known allergens"
+  ],
+  "promptRules": {
+    "_comment": "Category-specific generation guidance injected into the prompts.",
+    "system": [
+      "Do NOT write the disclaimer anywhere — the system inserts the verbatim constant itself. Claim-bearing bullets end with a trailing \"*\" marker only.",
+      "If an allergen is present, declare it exactly as \"Contains: [Allergen]\" consistently; never write \"No Known Allergens\" when one is present."
+    ],
+    "attributes": [
+      "\"ingredients\": the full INCI label list, in label order.",
+      "\"allergen_information\": exact canonical string if an allergen is present, else \"Free from major allergens per label\" ONLY if the label says so, else omit."
+    ],
+    "bullets": [
+      "One bullet must declare the allergen (\"Contains: ...\") if any allergen is present in the ingredients; if none, one bullet covers quality/testing signals instead."
+    ],
+    "description": [
+      "Cover: what it is, who it's for, how to use, quality/safety (including \"Contains: [Allergen]\" if applicable and a short safety note: patch-test / discontinue use if irritation occurs / keep out of reach of children)."
+    ],
+    "qa": [
+      "Cover: usage, routine placement, who it's for, skin/hair suitability and allergens, storage, what makes it different, results expectations (compliant phrasing)."
+    ],
+    "aplus": [
+      "In the ingredients/feature module, declare \"Contains: [Allergen]\" if an allergen is applicable."
+    ]
   }
 }

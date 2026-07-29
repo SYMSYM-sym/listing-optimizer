@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { checkAccess } from '@/lib/server/guard';
+import { requireAccess } from '@/lib/server/guard';
 import { listRuns } from '@/lib/store/runs';
 
 export const maxDuration = 30;
 
 /** GET /api/runs?limit=&offset=&asin= — list run summaries (no jsonb payloads). */
 export async function GET(req: Request): Promise<NextResponse> {
-  const denied = checkAccess(req);
+  const denied = requireAccess(req);
   if (denied) return denied as NextResponse;
   const url = new URL(req.url);
   const limit = Number.parseInt(url.searchParams.get('limit') ?? '50', 10);

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { checkAccess } from '@/lib/server/guard';
+import { requireAccess } from '@/lib/server/guard';
 import { getRun } from '@/lib/store/runs';
 
 export const maxDuration = 30;
@@ -9,7 +9,7 @@ export async function GET(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const denied = checkAccess(req);
+  const denied = requireAccess(req);
   if (denied) return denied as NextResponse;
   const { id } = await ctx.params;
   if (!id) {

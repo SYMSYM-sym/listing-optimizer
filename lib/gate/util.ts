@@ -19,10 +19,73 @@ const ENTITIES: Record<string, string> = {
   '&mdash;': '-',
 };
 
-/** Curly→straight quotes, en/em dash→hyphen, entity decode, collapse whitespace. */
+/**
+ * Latin-lookalike letters (Cyrillic / Greek) folded to their ASCII twin.
+ *
+ * Unicode NFKC does NOT touch these — `Fights cаncer` (Cyrillic а) is a
+ * different string from `Fights cancer` as far as every scan is concerned, which
+ * is exactly how a homoglyph payload walks past a banned-term list. This is a
+ * SCRIPT-confusable table, not a domain lexicon: it holds no category words.
+ */
+const CONFUSABLES: Record<string, string> = {
+  // Cyrillic lowercase
+  'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'х': 'x',
+  'і': 'i', 'ѕ': 's', 'у': 'y', 'ј': 'j', 'һ': 'h', 'ԁ': 'd',
+  'ӏ': 'l', 'ԛ': 'q', 'ԝ': 'w', 'к': 'k', 'м': 'm', 'т': 't',
+  'н': 'n', 'в': 'b', 'г': 'r',
+  // Cyrillic uppercase
+  'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H',
+  'О': 'O', 'Р': 'P', 'С': 'C', 'Т': 'T', 'У': 'Y', 'Х': 'X',
+  'Ѕ': 'S', 'І': 'I', 'Ј': 'J', 'З': '3',
+  // Greek lowercase
+  'α': 'a', 'ε': 'e', 'ι': 'i', 'κ': 'k', 'ν': 'v', 'ο': 'o',
+  'ρ': 'p', 'τ': 't', 'υ': 'u', 'χ': 'x', 'γ': 'y', 'σ': 'o',
+  // Greek uppercase
+  'Α': 'A', 'Β': 'B', 'Ε': 'E', 'Ζ': 'Z', 'Η': 'H', 'Ι': 'I',
+  'Κ': 'K', 'Μ': 'M', 'Ν': 'N', 'Ο': 'O', 'Ρ': 'P', 'Τ': 'T',
+  'Υ': 'Y', 'Χ': 'X',
+};
+
+/** Zero-width / invisible formatting characters used to break up scanned words. */
+const INVISIBLE_RE = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g;
+
+/**
+ * Per-character NFKC fold, restricted to folds that yield exactly ONE letter or
+ * digit (fullwidth `ｃ`, math-bold, circled digits, ...).
+ *
+ * Whole-string NFKC would also rewrite meaningful SYMBOLS into ASCII letter
+ * pairs, which would silently blind the pack-driven banned-symbol scan — so the
+ * fold is deliberately limited to single alphanumeric results.
+ */
+function foldCompatibility(text: string): string {
+  let out = '';
+  for (const ch of text) {
+    if (ch.charCodeAt(0) < 128) {
+      out += ch;
+      continue;
+    }
+    const mapped = CONFUSABLES[ch];
+    if (mapped !== undefined) {
+      out += mapped;
+      continue;
+    }
+    const nfkc = ch.normalize('NFKC');
+    out += nfkc.length === 1 && /[\p{L}\p{N}]/u.test(nfkc) ? nfkc : ch;
+  }
+  return out;
+}
+
+/**
+ * Curly→straight quotes, en/em dash→hyphen, entity decode, INVISIBLE-character
+ * strip, compatibility/confusable fold, collapse whitespace.
+ *
+ * The fold is what makes the scans homoglyph-proof: without it a Cyrillic
+ * `а` or a zero-width space inside a banned word evades every check.
+ */
 export function normalize(text: string): string {
-  let t = text;
+  let t = text.replace(INVISIBLE_RE, '');
   for (const [k, v] of Object.entries(ENTITIES)) t = t.split(k).join(v);
+  t = foldCompatibility(t);
   return t
     .replace(/[‘’‚′]/g, "'")
     .replace(/[“”„″]/g, '"')
@@ -30,6 +93,20 @@ export function normalize(text: string): string {
     .replace(/\u00a0/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Separator-padded evasion (`c-a-n-c-e-r`, `d.i.a.b.e.t.e.s`, `c a n c e r`).
+ *
+ * ONLY runs of SINGLE letters joined by a single separator are collapsed, so
+ * genuine hyphenated words (`5-HTP`, `L-theanine`, `third-party`, `Non-GMO`)
+ * are left completely untouched. The result is scanned IN ADDITION to the
+ * normal surface — it never replaces it.
+ */
+const PADDED_RUN_RE = /(?<![A-Za-z0-9])[A-Za-z](?:[-.·\s][A-Za-z])+(?![A-Za-z0-9])/g;
+
+export function collapseSeparators(text: string): string {
+  return text.replace(PADDED_RUN_RE, (run) => run.replace(/[-.·\s]/g, ''));
 }
 
 // Per brain/04: "never", "banned", "do not", "there is no", "avoid", "not"
