@@ -95,7 +95,7 @@ const responses: Record<string, unknown> = {
     imagePlan: [
       { slot: 1, purpose: 'main-white-background', spec: 'Pure white RGB 255/255/255 background; bottle fills ≥85% of frame; longest side ≥1000px', notes: 'Front label fully legible; no badges or text overlays' },
       { slot: 2, purpose: 'value-prop-infographic', spec: '1000px+; brand palette; ≤5 icon callouts', notes: '50 Billion CFU blend, 10 strains, vegan, shelf stable, two-month supply' },
-      { slot: 3, purpose: 'supplement-facts-panel', spec: 'REAL PHOTOGRAPH of the printed Supplement Facts panel — never AI-generated or altered; sharp, evenly lit, fully readable', notes: 'Show full panel and ingredient list' },
+      { slot: 3, purpose: 'supplement-facts-panel', spec: 'Real photograph of the printed Supplement Facts panel — never AI-generated or altered; sharp, evenly lit, fully readable', notes: 'Show full panel and ingredient list' },
       { slot: 4, purpose: 'ingredient-story', spec: '1000px+; macro texture or strain-diagram illustration', notes: '10-strain blend with prebiotic fiber; name key strains' },
       { slot: 5, purpose: 'how-to-use-routine', spec: '1000px+; 3-step layout', notes: 'One capsule daily, with or without food, morning routine framing' },
       { slot: 6, purpose: 'trust-heritage', spec: '1000px+; factual badges only (third-party tested, cGMP, Non-GMO)', notes: 'No ratings, guarantees, or unsubstantiated claims' },

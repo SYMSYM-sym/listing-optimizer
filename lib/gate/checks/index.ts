@@ -1,6 +1,6 @@
 export type { GateContext } from './types';
 export { activeDiseaseNouns, packFailClosed } from './pack';
-export { extractUnitNumbers } from './shared';
+export { extractUnitNumbers, diseaseNegationOptions } from './shared';
 export type { UnitNumber, Dimension } from './shared';
 
 export {
@@ -41,4 +41,4 @@ export {
   a8AplusProhibitedMarketing,
   a9AplusComparisonAndAudience,
 } from './a-aplus';
-export { c18ProhibitedContent } from './c-prohibited';
+export { c18ProhibitedContent, c19ProhibitedMarketing } from './c-prohibited';

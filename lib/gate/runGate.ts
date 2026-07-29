@@ -27,12 +27,13 @@ import {
   c16BackendDedup,
   c17Style,
   c18ProhibitedContent,
+  c19ProhibitedMarketing,
   packFailClosed,
   type GateContext,
 } from './checks';
 
 /**
- * The verify gate: C1–C12 + C15–C18 + A1–A9 + PACK (C13/C14 are
+ * The verify gate: C1–C12 + C15–C19 + A1–A9 + PACK (C13/C14 are
  * source-project-only and intentionally omitted). PASS only if zero failures.
  * The gate REPORTS — it never mutates content to force a pass.
  */
@@ -60,6 +61,7 @@ export function runGate(
     ...c16BackendDedup(listing),
     ...c17Style(listing, pack),
     ...c18ProhibitedContent(listing, pack),
+    ...c19ProhibitedMarketing(listing, pack),
     ...a1AplusDisclaimer(listing, pack),
     ...a2AplusBannedTerms(listing, pack, ctx),
     ...a3AplusBrandLeakage(listing),
@@ -67,7 +69,7 @@ export function runGate(
     ...a5AplusPotencyPhrasing(listing),
     ...a6AplusFictionPhrases(listing, pack),
     ...a7AplusAllergen(listing, pack),
-    ...a8AplusProhibitedMarketing(listing),
+    ...a8AplusProhibitedMarketing(listing, pack),
     ...a9AplusComparisonAndAudience(listing, pack),
   ];
   return { pass: failures.length === 0, failures };

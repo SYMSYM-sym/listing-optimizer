@@ -27,7 +27,21 @@
     "viral infection", "bacterial infection", "parasitic infection", "parasite", "autoimmune disease",
     "autoimmune disorder", "lupus", "anorexia", "bulimia", "eating disorder", "addiction", "alcoholism",
     "substance abuse", "hemorrhoids", "varicose veins", "hives", "urticaria", "covid-19", "sars",
-    "long covid", "tumour", "tumours", "cancerous"
+    "long covid", "tumour", "tumours", "cancerous",
+    "anxiety", "high blood pressure", "high cholesterol", "acne", "gout", "osteoarthritis", "hypothyroidism", "anemia", "erectile dysfunction", "fatty liver", "hair loss", "enlarged prostate", "prostate enlargement", "ibs", "irritable bowel syndrome", "colitis"
+  ],
+  "negationMetaPhrases": [
+    "not intended to diagnose, treat, cure, or prevent any disease",
+    "not intended to diagnose, treat, cure or prevent any disease",
+    "not intended to diagnose",
+    "does not diagnose, treat, cure, or prevent any disease",
+    "does not diagnose",
+    "no disease language",
+    "no disease claims",
+    "makes no disease claims",
+    "is not a drug",
+    "is not a medicine",
+    "not a substitute for medical advice"
   ],
   "diseaseNounsBySubcategory": {
     "probiotic": [
@@ -40,7 +54,8 @@
       "helicobacter pylori", "h pylori", "thrush", "oral thrush", "vaginitis", "vaginosis",
       "candidiasis", "yeast overgrowth", "candida overgrowth", "small intestinal bacterial overgrowth",
       "inflammatory bowel disease", "ibd", "crohn disease", "microscopic colitis", "pouchitis",
-      "proctitis", "rotavirus", "norovirus", "intestinal parasites", "giardia", "celiac disease"
+      "proctitis", "rotavirus", "norovirus", "intestinal parasites", "giardia", "celiac disease",
+      "bloating"
     ],
     "digestive": [
       "ibs", "irritable bowel syndrome", "crohn's", "crohns", "ulcerative colitis", "colitis", "gerd",
@@ -52,7 +67,8 @@
       "short bowel syndrome", "diverticulosis", "gallbladder disease", "gallstones", "bile reflux",
       "anal fissure", "hemorrhoids", "fecal incontinence", "chronic diarrhea", "chronic constipation",
       "colon cancer", "colorectal cancer", "stomach cancer", "enteritis", "ileitis", "gastroenteritis",
-      "inflammatory bowel disease", "ibd", "dysbiosis"
+      "inflammatory bowel disease", "ibd", "dysbiosis",
+      "bloating", "chronic bloating"
     ],
     "joint": [
       "osteoarthritis", "rheumatoid arthritis", "gout", "bursitis", "tendonitis", "tendinitis",
@@ -80,7 +96,8 @@
       "obstructive sleep apnea", "restless legs syndrome", "sleep disorders",
       "circadian rhythm disorder", "delayed sleep phase disorder", "parasomnia", "sleepwalking",
       "night terrors", "sleep paralysis", "jet lag disorder", "shift work sleep disorder",
-      "hypersomnia", "bruxism", "sleep deprivation disorder"
+      "hypersomnia", "bruxism", "sleep deprivation disorder",
+      "insomnia"
     ],
     "immunity": [
       "common cold", "pneumonia", "bronchitis", "sinusitis", "strep", "rsv", "mono", "mononucleosis",
@@ -89,7 +106,8 @@
       "laryngitis", "croup", "whooping cough", "pertussis", "strep throat", "staph infection", "mrsa",
       "shingles", "herpes zoster", "measles", "chickenpox", "viral infection", "bacterial infection",
       "immunodeficiency", "autoimmune disease", "hay fever", "allergic rhinitis", "seasonal allergies",
-      "influenza a", "influenza b", "covid"
+      "influenza a", "influenza b", "covid",
+      "flu", "influenza"
     ],
     "mood": [
       "ptsd", "bipolar", "panic attacks", "panic disorder", "ocd", "clinical depression",
@@ -99,7 +117,8 @@
       "mania", "psychosis", "paranoia", "suicidal thoughts", "self-harm", "postpartum depression",
       "dysthymia", "borderline personality disorder", "obsessive compulsive disorder", "phobia",
       "agoraphobia", "post-traumatic stress disorder", "adjustment disorder", "mental illness",
-      "psychiatric disorder", "nervous breakdown", "anorexia nervosa", "bulimia nervosa"
+      "psychiatric disorder", "nervous breakdown", "anorexia nervosa", "bulimia nervosa",
+      "anxiety"
     ],
     "brain": [
       "parkinson's", "parkinsons", "brain fog syndrome", "memory loss", "cognitive decline",
@@ -135,13 +154,15 @@
       "preeclampsia", "gestational diabetes", "postpartum depression", "osteoporosis",
       "vulvovaginal candidiasis", "vaginal infection", "cervical dysplasia", "breast cancer",
       "ovarian cancer", "cervical cancer", "mastitis", "interstitial cystitis", "recurrent uti",
-      "pelvic inflammatory disease", "vaginal atrophy", "endometrial cancer"
+      "pelvic inflammatory disease", "vaginal atrophy", "endometrial cancer",
+      "menopause", "perimenopause"
     ],
     "mens": [
       "erectile dysfunction", "low testosterone disorder", "infertility", "prostatitis", "impotence",
       "low testosterone", "hypogonadism", "male infertility", "low sperm count", "oligospermia",
       "benign prostatic hyperplasia", "prostate cancer", "testicular cancer", "peyronie's disease",
-      "premature ejaculation", "gynecomastia", "andropause disorder"
+      "premature ejaculation", "gynecomastia", "andropause disorder",
+      "enlarged prostate", "prostate enlargement"
     ],
     "prostate": [
       "bph", "benign prostatic hyperplasia", "prostatitis", "prostate cancer", "enlarged prostate",
@@ -156,7 +177,8 @@
       "atopic dermatitis", "contact dermatitis", "eczema", "psoriasis", "acne vulgaris", "cystic acne",
       "melasma", "hyperpigmentation disorder", "nail fungus", "onychomycosis", "athlete's foot",
       "athletes foot", "tinea", "cellulitis", "impetigo", "skin cancer", "warts", "cold sores",
-      "hidradenitis suppurativa"
+      "hidradenitis suppurativa",
+      "hair loss"
     ],
     "eye": [
       "macular degeneration", "glaucoma", "cataracts", "dry eye disease", "retinopathy",
@@ -235,7 +257,8 @@
       "arthritis", "depression", "anxiety disorder", "infection", "immunodeficiency",
       "nutritional deficiency", "iron deficiency", "vitamin d deficiency", "b12 deficiency",
       "chronic disease", "degenerative disease", "metabolic disease", "viral infection",
-      "bacterial infection", "fungal infection", "food poisoning"
+      "bacterial infection", "fungal infection", "food poisoning",
+      "anxiety", "acne", "high cholesterol", "insomnia", "flu", "migraine", "migraines"
     ]
   },
   "subcategoryKeywords": {

@@ -20,9 +20,11 @@ const routingCosmetics = routingCosmeticsJson as Routing;
 
 function matchMarkers(routing: Routing, category: string, title: string, attrText: string): boolean {
   return (
-    routing.categoryMarkers.some((m) => category.includes(m)) ||
-    routing.titleMarkers.some((m) => title.includes(m)) ||
-    attrText.includes(routing.categoryMarkers[0] ?? '')
+    routing.categoryMarkers.some((m) => m && category.includes(m)) ||
+    routing.titleMarkers.some((m) => m && title.includes(m)) ||
+    // NEVER `includes(markers[0] ?? '')`: an emptied marker list made
+    // ''.includes('') true and routed EVERY product here (fail-open).
+    routing.categoryMarkers.some((m) => m && attrText.includes(m))
   );
 }
 

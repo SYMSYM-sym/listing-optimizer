@@ -1,10 +1,27 @@
 import type { Facts, KnowledgePack } from '@/lib/types';
+import { activeDiseaseNouns } from '@/lib/gate/checks/pack';
 import { prohibitedContentBlock, styleRulesBlock } from './shared';
 
-/** Shared system preamble — identical across groups for prompt caching. */
-export function buildSystemPrompt(pack: KnowledgePack, facts: Facts): string {
+/**
+ * Upper bound on the injected disease-noun list. The generator must be told
+ * every term the gate will actually fail it on (prevention layer) — truncating
+ * to a handful guaranteed repair rounds on terms it was never shown.
+ */
+const MAX_INJECTED_NOUNS = 250;
+
+/**
+ * Shared system preamble — identical across groups for prompt caching.
+ * `subcategories` are the DETECTED subcategories: the injected disease-noun set
+ * is exactly the union the gate scans (core ∪ active subcategory lists).
+ */
+export function buildSystemPrompt(
+  pack: KnowledgePack,
+  facts: Facts,
+  subcategories: string[] = [],
+): string {
   const r = pack.rules;
   const cp = pack.compliancePack;
+  const activeNouns = cp ? activeDiseaseNouns(cp, subcategories).slice(0, MAX_INJECTED_NOUNS) : [];
   const principleLines = pack.principles
     .filter((p) => p.scorable)
     .map((p) => `- [${p.id}] ${p.text}`)
@@ -15,7 +32,7 @@ export function buildSystemPrompt(pack: KnowledgePack, facts: Facts): string {
 COMPLIANCE (structure/function claims ONLY — this is load-bearing):
 - NEVER claim to diagnose, treat, cure, prevent, or mitigate any disease or symptom.
 - Banned verbs as product claims: ${cp.diseaseVerbs.join(', ')}.
-- NEVER use disease/condition nouns anywhere (examples: ${cp.coreDiseaseNouns.slice(0, 40).join(', ')}, and any condition name). Reframe as a structure/function state ("supports healthy [system] function", "[parameter] balance").
+- NEVER use disease/condition nouns anywhere. The deterministic gate scans for ALL of these on EVERY surface: ${activeNouns.join(', ')} — plus any other condition name. Reframe as a structure/function state ("supports healthy [system] function", "[parameter] balance").
 - Banned marketing phrases: ${cp.superlativeBans.join(', ')}. No star-rating or review-count claims. No price in copy.
 - Do NOT write the FDA disclaimer anywhere — the system inserts the verbatim constant itself. Claim-bearing bullets end with a trailing "*" marker only.
 - If an allergen is present, declare it exactly as "Contains: [Allergen]" consistently; never write "No Known Allergens" when one is present.`

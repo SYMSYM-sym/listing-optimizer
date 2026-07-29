@@ -92,28 +92,21 @@ export function a7AplusAllergen(l: OptimizedListing, pack: KnowledgePack): Failu
   return out;
 }
 
-const A8_PATTERNS: [RegExp, string][] = [
-  [/\$\s*\d/g, 'price / $ figure'],
-  [/\b(?:cents?|dollars?)\s+(?:a|per)\s+day\b/gi, 'per-day price framing'],
-  [/\bbuy\s+now\b/gi, '"buy now" CTA'],
-  [/\bsubscribe\s*(?:&|and)\s*save\b/gi, '"subscribe & save"'],
-  [/\bhurry\b/gi, 'urgency'],
-  [/\btoday\s+only\b/gi, 'urgency'],
-  [/\blimited\s+time\b/gi, 'urgency'],
-  [/\bmoney[- ]back\b/gi, 'guarantee'],
-  [/\bguarantee[ds]?\b/gi, 'guarantee'],
-  [/#\s?1\b/g, '"#1" claim'],
-  [/\bbest[- ]?sell(?:er|ing)\b/gi, 'best-seller claim'],
-  [/\b\d(?:\.\d)?\s*[- ]?star\b/gi, 'star-rating claim'],
-  [/\b[\d,]+\+?\s*(?:customer\s+)?reviews\b/gi, 'review-count claim'],
-];
-
-export function a8AplusProhibitedMarketing(l: OptimizedListing): Failure[] {
+/**
+ * A8 — prohibited marketing on A+ surfaces.
+ * The pattern lexicon is PACK DATA (`rules.prohibitedMarketing.patterns`) —
+ * this module holds no literals, so the gate stays category-agnostic. C19
+ * applies the same pack lexicon to every non-A+ surface.
+ */
+export function a8AplusProhibitedMarketing(l: OptimizedListing, pack: KnowledgePack): Failure[] {
+  const patterns = pack.rules.prohibitedMarketing?.patterns ?? [];
+  if (patterns.length === 0) return [];
   const out: Failure[] = [];
   for (const [field, textRaw] of aplusSurfaces(l.aplusContent)) {
     const text = normalize(textRaw);
-    for (const [re, label] of A8_PATTERNS) {
-      re.lastIndex = 0;
+    for (const [source, label] of patterns) {
+      if (!source) continue;
+      const re = new RegExp(source, 'gi');
       let m: RegExpExecArray | null;
       while ((m = re.exec(text)) !== null) {
         if (!hasNegationContext(text, m.index)) {

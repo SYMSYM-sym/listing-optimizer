@@ -360,7 +360,7 @@ describe('per-check pass on compliant fixture', () => {
       () => import('@/lib/gate/checks').then((m) => m.a5AplusPotencyPhrasing(clean)),
       () => import('@/lib/gate/checks').then((m) => m.a6AplusFictionPhrases(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.a7AplusAllergen(clean, pack)),
-      () => import('@/lib/gate/checks').then((m) => m.a8AplusProhibitedMarketing(clean)),
+      () => import('@/lib/gate/checks').then((m) => m.a8AplusProhibitedMarketing(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.a9AplusComparisonAndAudience(clean, pack)),
     ];
     return Promise.all(checks.map((fn) => fn().then((f) => expect(f).toEqual([]))));

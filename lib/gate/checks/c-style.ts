@@ -48,9 +48,19 @@ export function styleSurfaces(l: OptimizedListing): StyleSurface[] {
     out.push({ field: `qa[${i}].q`, group: 'qa', text: item.q });
     out.push({ field: `qa[${i}].a`, group: 'qa', text: item.a });
   });
+  // EVERY image-plan text field: purpose and spec render as on-image copy just
+  // as often as notes do, so a $ price or an ALL-CAPS banner hides there too.
   (l.imagePlan ?? []).forEach((slot, i) => {
+    out.push({ field: `imagePlan[${i}].purpose`, group: 'images', text: slot.purpose });
+    out.push({ field: `imagePlan[${i}].spec`, group: 'images', text: slot.spec });
     out.push({ field: `imagePlan[${i}].notes`, group: 'images', text: slot.notes });
   });
+  // Attribute VALUES are customer-visible (filters, detail table). The pack's
+  // surface scoping keeps '$'/'?' bannedChars off this group so legitimate
+  // values like '500 mg' or '60 capsules' never false-trip.
+  for (const [key, value] of Object.entries(l.attributes ?? {})) {
+    out.push({ field: `attributes.${key}`, group: 'attributes', text: value });
+  }
   return out;
 }
 

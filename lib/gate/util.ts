@@ -48,11 +48,126 @@ const NEGATION_CUES = [
   'prohibited',
 ];
 
-/** True when ~90 preceding chars contain a negation cue (term prohibits itself). */
-export function hasNegationContext(text: string, matchIndex: number): boolean {
-  const windowStart = Math.max(0, matchIndex - 90);
-  const preceding = text.slice(windowStart, matchIndex).toLowerCase();
-  return NEGATION_CUES.some((cue) => preceding.includes(cue));
+/** Legacy proximity window (A8 / potency phrasing keep the original behaviour). */
+const LEGACY_WINDOW_CHARS = 90;
+/**
+ * Tightened window for the disease-term path. Compliant supplement copy is full
+ * of "No fillers", "Not a drug" — a cue 90 chars back was laundering real drug
+ * claims, so a cue now has to sit right on top of the term to suppress it.
+ */
+const STRICT_WINDOW_CHARS = 28;
+/** How far after a meta-phrase ("not intended to …") the term may still sit. */
+const META_MAX_GAP_CHARS = 40;
+const SENTENCE_BOUNDARY_RE = /[.;:!?]/;
+
+export interface NegationOptions {
+  /**
+   * `legacy` — the original ~90-char proximity guard (A8, potency phrasing).
+   * `strict` — clause-scoped + tight window + verb veto + pack meta-phrases.
+   *            Used by the disease-term path (C6/A2).
+   */
+  mode?: 'legacy' | 'strict';
+  /** Override the proximity window in characters. */
+  windowChars?: number;
+  /** Strict mode only: treat a comma as a clause break. */
+  commaBreaks?: boolean;
+  /**
+   * Terms that VETO suppression when they appear between the negation cue and
+   * the matched term — "No fillers … treats cancer" is a drug claim, not a
+   * disclaimer. Pack data (`compliancePack.diseaseVerbs`).
+   */
+  blockingVerbs?: string[];
+  /**
+   * Pack-driven meta-phrases that genuinely negate ("not intended to …").
+   * When the match sits inside (or immediately after) one of these, suppress.
+   * Absent/empty ⇒ fall back to the tightened clause rule alone.
+   */
+  metaPhrases?: string[];
+}
+
+/** True when any of `terms` occurs in `text` on a word boundary. */
+function containsTerm(text: string, terms: string[]): boolean {
+  return terms.some((t) => t.trim() && termRegex(t).test(text));
+}
+
+/**
+ * Meta-phrase suppression: the match is INSIDE a genuine meta-phrase span, or
+ * sits just after one with no sentence break and no disease verb in between.
+ */
+function metaPhraseSuppresses(
+  lower: string,
+  matchIndex: number,
+  phrases: string[],
+  blockingVerbs: string[],
+): boolean {
+  for (const raw of phrases) {
+    const phrase = raw.trim().toLowerCase();
+    if (!phrase) continue;
+    let from = 0;
+    for (;;) {
+      const start = lower.indexOf(phrase, from);
+      if (start < 0) break;
+      const end = start + phrase.length;
+      from = start + 1;
+      if (matchIndex >= start && matchIndex < end) return true; // inside the phrase
+      if (end <= matchIndex && matchIndex - end <= META_MAX_GAP_CHARS) {
+        const between = lower.slice(end, matchIndex);
+        if (SENTENCE_BOUNDARY_RE.test(between)) continue;
+        if (blockingVerbs.length > 0 && containsTerm(between, blockingVerbs)) continue;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * True when the term at `matchIndex` is actually NEGATED by its context.
+ *
+ * Default (`legacy`) keeps the original ~90-char proximity rule. `strict` mode
+ * requires the cue to negate THE TERM: same clause, tight window, no disease
+ * verb in between — plus a pack-driven allowlist of real meta-phrases.
+ */
+export function hasNegationContext(
+  text: string,
+  matchIndex: number,
+  opts: NegationOptions = {},
+): boolean {
+  const lower = text.toLowerCase();
+  if ((opts.mode ?? 'legacy') === 'legacy') {
+    const windowStart = Math.max(0, matchIndex - (opts.windowChars ?? LEGACY_WINDOW_CHARS));
+    const preceding = lower.slice(windowStart, matchIndex);
+    return NEGATION_CUES.some((cue) => preceding.includes(cue));
+  }
+
+  const blockingVerbs = opts.blockingVerbs ?? [];
+  const metaPhrases = opts.metaPhrases ?? [];
+  if (metaPhrases.length > 0 && metaPhraseSuppresses(lower, matchIndex, metaPhrases, blockingVerbs)) {
+    return true;
+  }
+
+  // (a) cut the preceding window at the nearest clause boundary
+  const before = lower.slice(0, matchIndex);
+  const boundaryRe = opts.commaBreaks ? /[.;:!?,]/g : /[.;:!?]/g;
+  let clauseStart = 0;
+  let bm: RegExpExecArray | null;
+  while ((bm = boundaryRe.exec(before)) !== null) clauseStart = bm.index + 1;
+  const windowStart = Math.max(clauseStart, matchIndex - (opts.windowChars ?? STRICT_WINDOW_CHARS));
+  const preceding = lower.slice(windowStart, matchIndex);
+
+  let cueEnd = -1;
+  for (const cue of NEGATION_CUES) {
+    const i = preceding.lastIndexOf(cue);
+    if (i >= 0) cueEnd = Math.max(cueEnd, i + cue.length);
+  }
+  if (cueEnd < 0) return false;
+
+  // (b) a disease verb between the cue and the term means the cue negates
+  // something else entirely — never suppress.
+  if (blockingVerbs.length > 0 && containsTerm(preceding.slice(cueEnd), blockingVerbs)) {
+    return false;
+  }
+  return true;
 }
 
 /** Word-boundary regex for a term, tolerating simple plural s/es and flexible inner whitespace. */
@@ -71,14 +186,14 @@ export interface TermMatch {
 }
 
 /** All non-negated matches of `terms` in `text` (text should be normalized first). */
-export function scanTerms(text: string, terms: string[]): TermMatch[] {
+export function scanTerms(text: string, terms: string[], neg: NegationOptions = {}): TermMatch[] {
   const matches: TermMatch[] = [];
   for (const term of terms) {
     if (!term.trim()) continue;
     const re = termRegex(term);
     let m: RegExpExecArray | null;
     while ((m = re.exec(text)) !== null) {
-      if (!hasNegationContext(text, m.index)) {
+      if (!hasNegationContext(text, m.index, neg)) {
         matches.push({
           term,
           index: m.index,

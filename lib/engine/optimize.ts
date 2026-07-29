@@ -68,7 +68,9 @@ export async function optimize(
   opts: OptimizeOptions = {},
 ): Promise<OptimizedListing> {
   const facts = buildFacts(snapshot, pack.compliancePack?.factUnits ?? []);
-  const system = buildSystemPrompt(pack, facts);
+  // Detected subcategories flow in on the snapshot (pipeline enriches it) so
+  // the prompt teaches exactly the noun set the gate will enforce.
+  const system = buildSystemPrompt(pack, facts, snapshot.subcategory ?? []);
   const groupPrompts = buildGroupPrompts(pack, env.titlePolicy());
   const disclaimer = pack.compliancePack?.disclaimer ?? '';
   const groups = opts.groups ?? ALL_GROUPS;

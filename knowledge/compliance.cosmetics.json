@@ -8,6 +8,14 @@
     "eczema", "psoriasis", "dermatitis", "rosacea", "acne vulgaris", "melanoma",
     "skin cancer", "infection", "infections", "disease", "herpes", "shingles"
   ],
+  "negationMetaPhrases": [
+    "not intended to diagnose, treat, cure, or prevent any disease",
+    "not intended to diagnose",
+    "does not diagnose",
+    "no disease language",
+    "no disease claims",
+    "is not a drug"
+  ],
   "diseaseNounsBySubcategory": {
     "skincare": ["eczema", "psoriasis", "dermatitis", "rosacea", "acne vulgaris", "melasma", "vitiligo"],
     "haircare": ["alopecia", "scalp psoriasis", "seborrheic dermatitis", "ringworm"],

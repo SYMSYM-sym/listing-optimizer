@@ -102,6 +102,18 @@ export interface ProhibitedContentRules {
   surfaces: string[];
 }
 
+/**
+ * Prohibited MARKETING patterns (urgency / guarantees / rank + review claims).
+ * Pack data read by gate checks A8 (A+) and C19 (every surface) — the gate
+ * itself holds no literal marketing lexicon.
+ */
+export interface ProhibitedMarketingRules {
+  /** [regexSource, humanLabel] pairs. */
+  patterns: [string, string][];
+  /** Which surfaces C19 scans. */
+  surfaces: string[];
+}
+
 export interface RuleSet {
   titleMaxLegacy: number; // 200
   title75Max: number; // 75
@@ -125,6 +137,8 @@ export interface RuleSet {
   style: StyleRules;
   /** Amazon-prohibited detail-page content (price/availability/condition/contact). Pack data. */
   prohibitedContent?: ProhibitedContentRules;
+  /** Amazon-prohibited marketing claims (urgency/guarantee/rank/review). Pack data. */
+  prohibitedMarketing?: ProhibitedMarketingRules;
   /** ISO date the rule snapshot was last re-verified against live policy. */
   verifiedAsOf: string;
   /** Non-blocking staleness horizon in days for `verifiedAsOf`. */
@@ -150,6 +164,12 @@ export interface CompliancePack {
   diseaseVerbs: string[];
   /** Always-on disease/infection nouns scanned for EVERY product in this pack. */
   coreDiseaseNouns: string[];
+  /**
+   * Genuine meta-phrases that SHOULD suppress a nearby disease term
+   * ("not intended to diagnose, treat, cure, or prevent any disease").
+   * Pack data — the negation guard holds no lexicon of its own.
+   */
+  negationMetaPhrases?: string[];
   /** Subcategory label -> that subcategory's disease/infection nouns (non-empty). */
   diseaseNounsBySubcategory: Record<string, string[]>;
   allergenRules: AllergenRule[];

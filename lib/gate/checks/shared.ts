@@ -1,5 +1,12 @@
 import type { AplusContent, CompliancePack, Failure, OptimizedListing } from '@/lib/types';
-import { hasNegationContext, normalize, scanTerms, subtractDisclaimers, termRegex } from '../util';
+import {
+  hasNegationContext,
+  normalize,
+  scanTerms,
+  subtractDisclaimers,
+  termRegex,
+  type NegationOptions,
+} from '../util';
 
 export const fail = (checkId: string, field: string, context: string, fix: string): Failure => ({
   checkId,
@@ -34,12 +41,13 @@ export function customerSurfaces(l: OptimizedListing): [string, string][] {
 /**
  * Attribute values scanned for banned disease terms only (C6).
  * Not folded into customerSurfaces — size/count attributes would false-trip C12.
- * brand_name/manufacturer stay out (C7 owns those identity fields).
+ * EVERY attribute is scanned, brand_name/manufacturer included: a brand string
+ * like "CuresCancer Labs treats diabetes" is a drug claim wherever it sits.
+ * (C7 keeps its own, separate brand-LEAKAGE logic for those two fields.)
  */
 export function attributeComplianceSurfaces(l: OptimizedListing): [string, string][] {
   const out: [string, string][] = [];
   for (const [key, value] of Object.entries(l.attributes)) {
-    if (key === 'brand_name' || key === 'manufacturer') continue;
     out.push([`attributes.${key}`, value]);
   }
   return out;
@@ -65,6 +73,23 @@ export function aplusSurfaces(a: AplusContent): [string, string][] {
   return out;
 }
 
+/**
+ * Negation settings for the DISEASE-TERM path (C6/A2).
+ * A cue only suppresses a disease term when it negates THAT term: same clause,
+ * tight window, and no disease verb in between. Genuine meta-phrases
+ * ("not intended to diagnose, treat, cure, or prevent any disease") come from
+ * pack data (`compliancePack.negationMetaPhrases`); when the pack ships none we
+ * fall back to the tightened clause rule alone.
+ */
+export function diseaseNegationOptions(cp: CompliancePack): NegationOptions {
+  return {
+    mode: 'strict',
+    commaBreaks: true,
+    blockingVerbs: cp.diseaseVerbs,
+    metaPhrases: cp.negationMetaPhrases ?? [],
+  };
+}
+
 export function scanSurfacesForBanned(
   surfaces: [string, string][],
   cp: CompliancePack,
@@ -73,18 +98,19 @@ export function scanSurfacesForBanned(
 ): Failure[] {
   const out: Failure[] = [];
   const disclaimers = [cp.disclaimer, ...cp.auditAcceptDisclaimers];
+  const neg = diseaseNegationOptions(cp);
   for (const [field, textRaw] of surfaces) {
     const text = subtractDisclaimers(normalize(textRaw), disclaimers.map(normalize));
-    for (const m of scanTerms(text, nouns)) {
+    for (const m of scanTerms(text, nouns, neg)) {
       // "No disease language" / "not for diabetes" are prohibitions, not claims
-      if (hasNegationContext(text, m.index)) continue;
+      if (hasNegationContext(text, m.index, neg)) continue;
       out.push(fail(checkId, field, m.context, `Remove banned disease term '${m.term}' — reframe as a structure/function state`));
     }
     for (const verb of cp.diseaseVerbs) {
       const vre = termRegex(verb);
       let vm: RegExpExecArray | null;
       while ((vm = vre.exec(text)) !== null) {
-        if (hasNegationContext(text, vm.index)) continue;
+        if (hasNegationContext(text, vm.index, neg)) continue;
         const windowText = text.slice(vm.index, vm.index + verb.length + 25);
         const nounHit = nouns.find((n) => termRegex(n).test(windowText));
         if (nounHit) {

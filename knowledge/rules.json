@@ -285,6 +285,43 @@
       "backendSearchTerms",
       "qa",
       "imagePlan",
+      "attributes",
+      "aplus"
+    ]
+  },
+  "prohibitedMarketing": {
+    "_comment": "Amazon-prohibited MARKETING claims: urgency, guarantees, rank/best-seller, star ratings, review counts and false regulatory-approval claims. PACK DATA — gate A8 (A+ surfaces) and C19 (every surface) read these patterns; the gate holds no literal marketing lexicon. C19 additionally scans compliancePack.superlativeBans.",
+    "patterns": [
+      ["\\$\\s*\\d", "price / $ figure"],
+      ["\\b(?:cents?|dollars?)\\s+(?:a|per)\\s+day\\b", "per-day price framing"],
+      ["\\bbuy\\s+now\\b", "\"buy now\" CTA"],
+      ["\\bshop\\s+now\\b", "\"shop now\" CTA"],
+      ["\\border\\s+(?:now|today)\\b", "urgency CTA"],
+      ["\\bsubscribe\\s*(?:&|and)\\s*save\\b", "\"subscribe & save\""],
+      ["\\bhurry\\b", "urgency"],
+      ["\\btoday\\s+only\\b", "urgency"],
+      ["\\blimited\\s+time\\b", "urgency"],
+      ["\\bwhile\\s+supplies\\s+last\\b", "urgency"],
+      ["\\bact\\s+(?:now|fast)\\b", "urgency"],
+      ["\\bmoney[- ]back\\b", "guarantee"],
+      ["\\bguarantee[ds]?\\b", "guarantee"],
+      ["#\\s?1\\b", "\"#1\" claim"],
+      ["\\bbest[- ]?sell(?:er|ing)\\b", "best-seller claim"],
+      ["\\btop[- ]?rated\\b", "ranking claim"],
+      ["\\b\\d(?:\\.\\d)?\\s*[- ]?star\\b", "star-rating claim"],
+      ["\\b[\\d,]+\\+?\\s*(?:customer\\s+)?reviews\\b", "review-count claim"],
+      ["\\bfda[- ]approved\\b", "false regulatory-approval claim"]
+    ],
+    "surfaces": [
+      "title",
+      "title75",
+      "itemHighlights",
+      "bullets",
+      "description",
+      "backendSearchTerms",
+      "qa",
+      "imagePlan",
+      "attributes",
       "aplus"
     ]
   }
