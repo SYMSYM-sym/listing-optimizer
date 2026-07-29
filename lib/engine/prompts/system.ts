@@ -1,4 +1,5 @@
 import type { Facts, KnowledgePack } from '@/lib/types';
+import { styleRulesBlock } from './shared';
 
 /** Shared system preamble — identical across groups for prompt caching. */
 export function buildSystemPrompt(pack: KnowledgePack, facts: Facts): string {
@@ -33,7 +34,7 @@ HARD LIMITS (checked by deterministic code — leave headroom):
 - Exactly ${r.bulletCount} bullets, each ≤${r.bulletMax} chars.
 ${disclaimerHeadroom}
 - Backend search terms ≤${r.backendMaxBytes} UTF-8 BYTES, lowercase, space-separated, no punctuation.
-- No word more than 2× in the title. Banned title chars: ! $ ? _ { } ^ ¬ ¦ (use hyphen/comma/&/parentheses).
+- No word more than 2× in the title. Banned title chars: ${r.style.bannedChars.join(' ')} (use hyphen/comma/&/parentheses).
 
 OPTIMIZATION PRINCIPLES (ground copy in these):
 ${principleLines}
@@ -43,7 +44,9 @@ ${JSON.stringify(facts, null, 2)}
 - Potency figures attach to the blend/formula, NEVER phrased "per serving".
 ${compliance}
 
-STYLE:
+${styleRulesBlock(r.style)}
+
+STRUCTURE:
 - Product name comes FIRST in both titles; the primary keyword immediately after it (never displace the name).
 - Write for buyer situations; one distinct, quotable situational anchor per major use-case.
 - Include comparative framing (vs typical alternatives) and who-it's-for, phrased compliantly.

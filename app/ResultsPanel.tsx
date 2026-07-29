@@ -5,6 +5,7 @@ import rules from '@/knowledge/rules.json';
 import type { Audit, Failure, ListingSnapshot, OptimizedListing } from '@/lib/types';
 import { toMarkdown } from '@/lib/export/markdown';
 import type { GroupName } from '@/lib/engine/optimize';
+import { toSellerCentralDescription } from '@/lib/export/descriptionHtml';
 import { CopyButton, Field, SeverityBadge } from './ui';
 
 export type ResultsTab = 'listing' | 'aplus' | 'images' | 'qa' | 'audit';
@@ -252,6 +253,14 @@ export function ResultsPanel({
             text={result.optimized.description}
             limit={rules.descriptionMax}
             gateFailed={gateFailedOn(gateFailures, 'description')}
+            copyLabel="Copy (plain)"
+            note="Amazon's description field accepts only the <br> tag. Paste the plain text to keep it simple, or use the <br> variant to preserve these paragraph breaks in Seller Central."
+            actions={
+              <CopyButton
+                text={toSellerCentralDescription(result.optimized.description)}
+                label="Copy for Seller Central (<br>)"
+              />
+            }
           />
 
           <SectionHeader
@@ -448,6 +457,17 @@ export function ResultsPanel({
               </ul>
             )}
           </div>
+          {result.audit.rulesStale && (
+            <div className="rounded-lg border border-amber-900 bg-amber-950/30 p-4">
+              <h3 className="text-sm font-semibold text-amber-200 mb-1">
+                ⚠️ Rule snapshot may be stale (non-blocking)
+              </h3>
+              <p className="text-xs text-amber-100/80">
+                {result.audit.rulesStaleNotice ??
+                  'Re-verify the time-sensitive Amazon limits in the knowledge pack.'}
+              </p>
+            </div>
+          )}
           <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
             <h3 className="text-sm font-medium text-zinc-200 mb-3">
               Current listing vs optimization principles — {result.audit.scorecard.total}/100

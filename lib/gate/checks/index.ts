@@ -28,6 +28,8 @@ export {
   c12FactConsistency,
 } from './c-quality';
 
+export { c17Style, styleSurfaces, allCapsOffenders } from './c-style';
+
 export {
   a1AplusDisclaimer,
   a2AplusBannedTerms,

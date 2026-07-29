@@ -25,12 +25,13 @@ import {
   c12FactConsistency,
   c15NewTitlePolicy,
   c16BackendDedup,
+  c17Style,
   packFailClosed,
   type GateContext,
 } from './checks';
 
 /**
- * The verify gate: C1–C12 + C15 + C16 + A1–A9 + PACK (C13/C14 are
+ * The verify gate: C1–C12 + C15–C17 + A1–A9 + PACK (C13/C14 are
  * source-project-only and intentionally omitted). PASS only if zero failures.
  * The gate REPORTS — it never mutates content to force a pass.
  */
@@ -56,6 +57,7 @@ export function runGate(
     ...c12FactConsistency(listing),
     ...c15NewTitlePolicy(listing, pack),
     ...c16BackendDedup(listing),
+    ...c17Style(listing, pack),
     ...a1AplusDisclaimer(listing, pack),
     ...a2AplusBannedTerms(listing, pack, ctx),
     ...a3AplusBrandLeakage(listing),

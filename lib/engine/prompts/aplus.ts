@@ -1,8 +1,10 @@
 import type { ListingSnapshot } from '@/lib/types';
 import { snapshotBlock } from './shared';
 
-export function aplusPrompt(snapshot: ListingSnapshot): string {
+export function aplusPrompt(snapshot: ListingSnapshot, styleBlock = ''): string {
   return `${snapshotBlock(snapshot)}
+
+${styleBlock}
 
 TASK: A+ content — real extractable text (AI/voice engines read it).
 - 5–7 modules. EVERY module MUST include a non-empty "headline" string (min ~3 chars) — including id "brand-story" and id "hero". Never omit "headline"; do not rename it to title/heading/header.

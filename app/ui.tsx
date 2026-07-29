@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { utf8Bytes } from '@/lib/shared/utf8Bytes';
 
 export { utf8Bytes };
@@ -50,6 +50,9 @@ export function Field({
   unit = 'chars',
   mono = false,
   gateFailed = false,
+  copyLabel,
+  actions,
+  note,
 }: {
   label: string;
   text: string;
@@ -58,6 +61,12 @@ export function Field({
   mono?: boolean;
   /** True when the verify gate flagged this field — highlights beyond the raw counter. */
   gateFailed?: boolean;
+  /** Overrides the default copy-button label (e.g. 'Copy (plain)'). */
+  copyLabel?: string;
+  /** Extra copy actions rendered beside the default one (e.g. the Seller Central <br> variant). */
+  actions?: ReactNode;
+  /** Small helper line under the header explaining a format choice. */
+  note?: string;
 }) {
   const count = unit === 'bytes' ? utf8Bytes(text) : text.length;
   const over = limit !== undefined && count > limit;
@@ -71,8 +80,12 @@ export function Field({
             <span className="text-xs text-red-400 font-medium">gate failure</span>
           )}
         </div>
-        <CopyButton text={text} />
+        <div className="flex shrink-0 items-center gap-2">
+          <CopyButton text={text} label={copyLabel} />
+          {actions}
+        </div>
       </div>
+      {note && <p className="mb-2 text-xs text-zinc-500">{note}</p>}
       <p className={`text-sm text-zinc-300 whitespace-pre-wrap break-words ${mono ? 'font-mono text-xs' : ''}`}>
         {text}
       </p>

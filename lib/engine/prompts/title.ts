@@ -9,8 +9,14 @@ const POLICY_EMPHASIS: Record<TitlePolicy, string> = {
   new75: 'EMPHASIS: the \u226475 title + itemHighlights are the primary surfaces (Jul 27 2026 policy) \u2014 make them the strongest; still return a valid legacy title.',
 };
 
-export function titlePrompt(snapshot: ListingSnapshot, policy: TitlePolicy = 'dual'): string {
+export function titlePrompt(
+  snapshot: ListingSnapshot,
+  policy: TitlePolicy = 'dual',
+  styleBlock = '',
+): string {
   return `${snapshotBlock(snapshot)}
+
+${styleBlock}
 
 TASK: Generate the title group.
 - "productName": the customer-facing product name (not the backend brand string if it differs).

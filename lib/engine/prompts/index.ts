@@ -8,6 +8,7 @@ import { bulletsPrompt } from './bullets';
 import { descriptionPrompt } from './description';
 import { imagesPrompt } from './images';
 import { qaPrompt } from './qa';
+import { styleRulesBlock } from './shared';
 import { buildSystemPrompt } from './system';
 import { titlePrompt } from './title';
 
@@ -16,15 +17,18 @@ export { buildSystemPrompt };
 /** Per-group prompt builders — rule-injected from the active pack. */
 export function buildGroupPrompts(pack: KnowledgePack, titlePolicy: TitlePolicy = 'dual') {
   const hasCompliance = pack.compliancePack !== null;
+  // Style rules are rendered from PACK DATA and injected into every copy group
+  // that gate C17 scans, so repair rounds can actually fix a style failure.
+  const styleBlock = styleRulesBlock(pack.rules.style);
   return {
-    title: (s: ListingSnapshot) => titlePrompt(s, titlePolicy),
-    bullets: (s: ListingSnapshot) => bulletsPrompt(s),
-    description: (s: ListingSnapshot) => descriptionPrompt(s, hasCompliance),
+    title: (s: ListingSnapshot) => titlePrompt(s, titlePolicy, styleBlock),
+    bullets: (s: ListingSnapshot) => bulletsPrompt(s, styleBlock),
+    description: (s: ListingSnapshot) => descriptionPrompt(s, hasCompliance, styleBlock),
     // Title surfaces (when known) feed C16 forbidden stems into the backend prompt.
     backend: (s: ListingSnapshot, surfaces?: TitleSurfaces) => backendPrompt(s, surfaces),
     attributes: (s: ListingSnapshot, schemaFields: string) =>
       attributesPrompt(s, schemaFields, hasCompliance),
-    aplus: (s: ListingSnapshot) => aplusPrompt(s),
+    aplus: (s: ListingSnapshot) => aplusPrompt(s, styleBlock),
     images: (s: ListingSnapshot) => imagesPrompt(s, pack),
     qa: (s: ListingSnapshot) => qaPrompt(s),
   };

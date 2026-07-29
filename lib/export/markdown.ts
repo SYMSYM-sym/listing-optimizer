@@ -1,4 +1,5 @@
 import type { Audit, OptimizedListing } from '@/lib/types';
+import { toSellerCentralDescription } from './descriptionHtml';
 
 /**
  * Pure Markdown export builder — used by the UI download and the golden test.
@@ -26,8 +27,15 @@ export function toMarkdown(listing: OptimizedListing, audit: Audit): string {
   lines.push('## Bullets');
   listing.bullets.forEach((b, i) => lines.push(`${i + 1}. ${b}`));
   lines.push('');
-  lines.push('## Description');
+  lines.push('## Description (plain text — paste into Seller Central as-is)');
   lines.push(listing.description);
+  lines.push('');
+  lines.push('## Description — Seller Central `<br>` variant');
+  lines.push('Amazon\'s description field accepts only the `<br>` tag; paste this variant to keep the paragraph breaks.');
+  lines.push('');
+  lines.push('```html');
+  lines.push(toSellerCentralDescription(listing.description));
+  lines.push('```');
   lines.push('');
   lines.push('## Backend Search Terms (≤249 UTF-8 bytes)');
   lines.push('```');

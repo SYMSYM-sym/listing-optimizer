@@ -77,7 +77,21 @@ describe('output contract field parity (brain/05)', () => {
       gaps: [],
       gateResult: { pass: false, failures: [] },
       verified: false,
+      rulesStale: false,
     };
     expect(auditShape.verified).toBe(auditShape.gateResult.pass);
+  });
+
+  it('rulesStale is advisory — it never participates in verified', () => {
+    const stale: Audit = {
+      scorecard: { total: 0, perPrinciple: [] },
+      gaps: [],
+      gateResult: { pass: true, failures: [] },
+      verified: true,
+      rulesStale: true,
+      rulesStaleNotice: 'snapshot is old',
+    };
+    expect(stale.verified).toBe(stale.gateResult.pass);
+    expect(stale.gateResult.failures).toEqual([]);
   });
 });

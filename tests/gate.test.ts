@@ -352,6 +352,7 @@ describe('per-check pass on compliant fixture', () => {
       () => import('@/lib/gate/checks').then((m) => m.c12FactConsistency(clean)),
       () => import('@/lib/gate/checks').then((m) => m.c15NewTitlePolicy(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.c16BackendDedup(clean)),
+      () => import('@/lib/gate/checks').then((m) => m.c17Style(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.a1AplusDisclaimer(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.a2AplusBannedTerms(clean, pack, ctx)),
       () => import('@/lib/gate/checks').then((m) => m.a3AplusBrandLeakage(clean)),

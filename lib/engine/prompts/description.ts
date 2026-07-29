@@ -1,11 +1,17 @@
 import type { ListingSnapshot } from '@/lib/types';
 import { snapshotBlock } from './shared';
 
-export function descriptionPrompt(snapshot: ListingSnapshot, hasCompliance: boolean): string {
+export function descriptionPrompt(
+  snapshot: ListingSnapshot,
+  hasCompliance: boolean,
+  styleBlock = '',
+): string {
   const headroom = hasCompliance
     ? '≤1700 chars (the system appends the verbatim FDA disclaimer and needs the headroom)'
     : `≤${2000} chars`;
   return `${snapshotBlock(snapshot)}
+
+${styleBlock}
 
 TASK: Write the product description, ${headroom}.
 - Product name must appear.

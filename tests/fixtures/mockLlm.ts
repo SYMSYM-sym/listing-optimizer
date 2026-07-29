@@ -17,11 +17,11 @@ const responses: Record<string, unknown> = {
   },
   bullets: {
     bullets: [
-      { text: 'DIGESTIVE BALANCE SUPPORT: A 50 Billion CFU blend of 10 strains helps maintain healthy gut flora when everyday eating feels heavy or unpredictable*', useCaseAnchor: 'daily digestive balance', claimBearing: true },
-      { text: 'TRAVEL AND ROUTINE CHANGES: Shelf-stable capsules need no refrigeration, so your routine keeps working through trips, commutes, and busy weeks', useCaseAnchor: 'travel routine', claimBearing: false },
-      { text: 'ONE CAPSULE DAILY: 60 vegetable capsules provide a full two-month supply at one capsule per day, taken with or without food', useCaseAnchor: 'simple daily habit', claimBearing: false },
-      { text: 'QUALITY YOU CAN VERIFY: Third-party tested, Non-GMO and gluten free, manufactured in a cGMP facility in the USA', useCaseAnchor: 'quality verification', claimBearing: false },
-      { text: 'MADE FOR SENSITIVE ROUTINES: Vegan, unflavored and free of major allergens per the label, designed for adults seeking steady digestive comfort support*', useCaseAnchor: 'sensitive users', claimBearing: true },
+      { text: 'Digestive balance support: A 50 Billion CFU blend of 10 strains helps maintain healthy gut flora when everyday eating feels heavy or unpredictable*', useCaseAnchor: 'daily digestive balance', claimBearing: true },
+      { text: 'Travel and routine changes: Shelf-stable capsules need no refrigeration, so your routine keeps working through trips, commutes, and busy weeks', useCaseAnchor: 'travel routine', claimBearing: false },
+      { text: 'One capsule daily: 60 vegetable capsules provide a full two-month supply at one capsule per day, taken with or without food', useCaseAnchor: 'simple daily habit', claimBearing: false },
+      { text: 'Quality you can verify: Third-party tested, Non-GMO and gluten free, manufactured in a cGMP facility in the USA', useCaseAnchor: 'quality verification', claimBearing: false },
+      { text: 'Made for sensitive routines: Vegan, unflavored and free of major allergens per the label, designed for adults seeking steady digestive comfort support*', useCaseAnchor: 'sensitive users', claimBearing: true },
     ],
   },
   description: {

@@ -46,6 +46,54 @@ export interface Rule {
   verifiedAsOf?: string;
 }
 
+/**
+ * Amazon STYLE rules (capitalization/punctuation/symbols/promo terms).
+ * PACK DATA ONLY — gate C17 reads every threshold and list from here so the
+ * gate itself stays category-agnostic and free of hard-coded lexicons.
+ */
+export interface StyleRules {
+  /** Only ALL-CAPS words of at least this length are flagged (keeps mg/IU/CFU safe). */
+  allCapsMinWordLen: number;
+  /** Uppercase tokens that are legitimate even at/above the min length (exact, case-sensitive). */
+  allCapsAllowlist: string[];
+  /** Every bullet must open with a capital letter. */
+  bulletMustStartCapital: boolean;
+  /** Bullets must not end with sentence punctuation. */
+  bulletNoTrailingPunctuation: boolean;
+  /** Trailing markers that are allowed and stripped before the punctuation check (e.g. the '*' claim marker). */
+  bulletTrailingAllowed: string[];
+  /** Characters that count as a trailing-punctuation violation. */
+  bulletTrailingPunctuation: string;
+  /** Symbols banned on every customer surface. */
+  bannedSymbols: string[];
+  /** Characters banned on the title/bullet surfaces listed in `bannedCharsSurfaces`. */
+  bannedChars: string[];
+  /** Surface groups the bannedChars scan applies to ('$'/'?' are legitimate elsewhere). */
+  bannedCharsSurfaces: string[];
+  /** Scan customer copy for ASINs. */
+  noAsinInCopy: boolean;
+  /** ASIN detection pattern (source string, compiled by the gate). */
+  asinPattern: string;
+  /** Promotional/ranking terms banned from title surfaces. */
+  titleTermBans: string[];
+  /** Surface groups the titleTermBans scan applies to. */
+  titleTermBanSurfaces: string[];
+  /** Scan customer copy for emoji. */
+  emojiCheck: boolean;
+  /** Emoji detection pattern (unicode ranges; compiled with the 'u' flag). */
+  emojiPattern: string;
+  /**
+   * The ONLY HTML tags Amazon still honours in the description field.
+   * Everything else (<p>, <b>, <ul>, ...) has been deprecated since July 2021
+   * and can suppress the listing or render as raw text.
+   */
+  descriptionAllowedHtml: string[];
+  /** Belt-and-braces UTF-8 BYTE cap on the description (enforced alongside descriptionMax chars). */
+  descriptionMaxBytes: number;
+  /** HTML tag detection pattern (source string, compiled by the gate). */
+  htmlTagPattern: string;
+}
+
 export interface RuleSet {
   titleMaxLegacy: number; // 200
   title75Max: number; // 75
@@ -65,6 +113,12 @@ export interface RuleSet {
   aplusComparisonMinRows: number;
   /** Phrasing cues that count as a who-it's-for statement (gate A9). */
   whoItsForCues: string[];
+  /** Amazon STYLE rules — the data behind gate C17. */
+  style: StyleRules;
+  /** ISO date the rule snapshot was last re-verified against live policy. */
+  verifiedAsOf: string;
+  /** Non-blocking staleness horizon in days for `verifiedAsOf`. */
+  staleAfterDays: number;
   rules: Rule[];
 }
 
@@ -270,6 +324,13 @@ export interface Audit {
   gaps: AuditGap[];
   gateResult: GateResult;
   verified: boolean; // === gateResult.pass
+  /**
+   * NON-BLOCKING signal: the pack's rule snapshot is older than
+   * rules.staleAfterDays. Never a gate failure and never affects `verified`.
+   */
+  rulesStale: boolean;
+  /** Human-readable staleness notice, present only when `rulesStale` is true. */
+  rulesStaleNotice?: string;
 }
 
 // ---------------------------------------------------------------------------
