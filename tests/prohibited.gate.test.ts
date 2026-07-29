@@ -101,3 +101,21 @@ describe('C18 — Amazon prohibited detail-page content', () => {
     expect(c18ProhibitedContent(listing({ description: 'Only $19.95' }), disarmed)).toEqual([]);
   });
 });
+
+describe('C18 — full surface coverage (Q&A + image plan)', () => {
+  it('catches a price hidden in a Q&A answer', () => {
+    const bad = listing({
+      qa: [{ q: 'How much is it?', a: 'It is priced at 39 dollars and 95 cents.', claimBearing: false }],
+    });
+    const f = c18ProhibitedContent(bad, pack);
+    expect(f.some((x) => x.field.startsWith('qa['))).toBe(true);
+  });
+
+  it('catches a URL hidden in an image-plan note', () => {
+    const bad = listing({
+      imagePlan: [{ slot: 1, purpose: 'main', spec: 'white bg', notes: 'Add www.brand.com to the badge' }],
+    });
+    const f = c18ProhibitedContent(bad, pack);
+    expect(f.some((x) => x.field.startsWith('imagePlan['))).toBe(true);
+  });
+});

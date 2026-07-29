@@ -42,6 +42,15 @@ export function styleSurfaces(l: OptimizedListing): StyleSurface[] {
   for (const [field, text] of aplusSurfaces(l.aplusContent)) {
     out.push({ field, group: 'aplus', text });
   }
+  // Q&A and the image plan are customer-visible too — style rules apply there
+  // as well (brain/02: rules apply on EVERY surface, not just the main fields).
+  (l.qa ?? []).forEach((item, i) => {
+    out.push({ field: `qa[${i}].q`, group: 'qa', text: item.q });
+    out.push({ field: `qa[${i}].a`, group: 'qa', text: item.a });
+  });
+  (l.imagePlan ?? []).forEach((slot, i) => {
+    out.push({ field: `imagePlan[${i}].notes`, group: 'images', text: slot.notes });
+  });
   return out;
 }
 

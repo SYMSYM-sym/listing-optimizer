@@ -39,6 +39,17 @@ export function c18ProhibitedContent(
   if (want.has('backendSearchTerms')) {
     surfaces.push({ field: 'backendSearchTerms', text: listing.backendSearchTerms });
   }
+  if (want.has('qa')) {
+    (listing.qa ?? []).forEach((item, i) => {
+      surfaces.push({ field: `qa[${i}].q`, text: item.q });
+      surfaces.push({ field: `qa[${i}].a`, text: item.a });
+    });
+  }
+  if (want.has('imagePlan')) {
+    (listing.imagePlan ?? []).forEach((slot, i) => {
+      surfaces.push({ field: `imagePlan[${i}].notes`, text: slot.notes });
+    });
+  }
   if (want.has('aplus') && listing.aplusContent) {
     const a = listing.aplusContent;
     a.modules.forEach((m) =>

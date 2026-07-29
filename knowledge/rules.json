@@ -283,6 +283,8 @@
       "bullets",
       "description",
       "backendSearchTerms",
+      "qa",
+      "imagePlan",
       "aplus"
     ]
   }

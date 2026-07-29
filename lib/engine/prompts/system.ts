@@ -7,7 +7,6 @@ export function buildSystemPrompt(pack: KnowledgePack, facts: Facts): string {
   const cp = pack.compliancePack;
   const principleLines = pack.principles
     .filter((p) => p.scorable)
-    .slice(0, 8)
     .map((p) => `- [${p.id}] ${p.text}`)
     .join('\n');
 
@@ -16,7 +15,7 @@ export function buildSystemPrompt(pack: KnowledgePack, facts: Facts): string {
 COMPLIANCE (structure/function claims ONLY — this is load-bearing):
 - NEVER claim to diagnose, treat, cure, prevent, or mitigate any disease or symptom.
 - Banned verbs as product claims: ${cp.diseaseVerbs.join(', ')}.
-- NEVER use disease/condition nouns anywhere (examples: ${cp.coreDiseaseNouns.slice(0, 12).join(', ')}, and any condition name). Reframe as a structure/function state ("supports healthy [system] function", "[parameter] balance").
+- NEVER use disease/condition nouns anywhere (examples: ${cp.coreDiseaseNouns.slice(0, 40).join(', ')}, and any condition name). Reframe as a structure/function state ("supports healthy [system] function", "[parameter] balance").
 - Banned marketing phrases: ${cp.superlativeBans.join(', ')}. No star-rating or review-count claims. No price in copy.
 - Do NOT write the FDA disclaimer anywhere — the system inserts the verbatim constant itself. Claim-bearing bullets end with a trailing "*" marker only.
 - If an allergen is present, declare it exactly as "Contains: [Allergen]" consistently; never write "No Known Allergens" when one is present.`
