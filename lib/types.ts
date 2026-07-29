@@ -94,6 +94,14 @@ export interface StyleRules {
   htmlTagPattern: string;
 }
 
+/** Prohibited detail-page content patterns (pack data, read by gate check C18). */
+export interface ProhibitedContentRules {
+  /** [regexSource, humanLabel] pairs. */
+  patterns: [string, string][];
+  /** Which surfaces to scan. */
+  surfaces: string[];
+}
+
 export interface RuleSet {
   titleMaxLegacy: number; // 200
   title75Max: number; // 75
@@ -115,6 +123,8 @@ export interface RuleSet {
   whoItsForCues: string[];
   /** Amazon STYLE rules — the data behind gate C17. */
   style: StyleRules;
+  /** Amazon-prohibited detail-page content (price/availability/condition/contact). Pack data. */
+  prohibitedContent?: ProhibitedContentRules;
   /** ISO date the rule snapshot was last re-verified against live policy. */
   verifiedAsOf: string;
   /** Non-blocking staleness horizon in days for `verifiedAsOf`. */

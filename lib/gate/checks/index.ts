@@ -41,3 +41,4 @@ export {
   a8AplusProhibitedMarketing,
   a9AplusComparisonAndAudience,
 } from './a-aplus';
+export { c18ProhibitedContent } from './c-prohibited';

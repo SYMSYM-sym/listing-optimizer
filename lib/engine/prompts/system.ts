@@ -1,5 +1,5 @@
 import type { Facts, KnowledgePack } from '@/lib/types';
-import { styleRulesBlock } from './shared';
+import { prohibitedContentBlock, styleRulesBlock } from './shared';
 
 /** Shared system preamble — identical across groups for prompt caching. */
 export function buildSystemPrompt(pack: KnowledgePack, facts: Facts): string {
@@ -45,6 +45,7 @@ ${JSON.stringify(facts, null, 2)}
 ${compliance}
 
 ${styleRulesBlock(r.style)}
+${prohibitedContentBlock(r.prohibitedContent)}
 
 STRUCTURE:
 - Product name comes FIRST in both titles; the primary keyword immediately after it (never displace the name).

@@ -1,4 +1,4 @@
-import type { ListingSnapshot, StyleRules } from '@/lib/types';
+import type { ListingSnapshot, ProhibitedContentRules, StyleRules } from '@/lib/types';
 
 export function snapshotBlock(snapshot: ListingSnapshot): string {
   return `CURRENT LISTING (source data — improve, don't copy mistakes):
@@ -42,4 +42,19 @@ export function styleRulesBlock(style: StyleRules): string {
       .join('/')}, and the export adds it for you. Keep the description under ${style.descriptionMaxBytes} UTF-8 bytes.`,
   );
   return `STYLE + FORMATTING (deterministically checked \u2014 fix the copy, never the rule):\n${lines.join('\n')}`;
+}
+
+/**
+ * Prohibited detail-page content instructions rendered FROM PACK DATA
+ * (`rules.prohibitedContent`) — prevention at generation time. The gate's C18
+ * independently verifies afterwards (worker != checker).
+ */
+export function prohibitedContentBlock(rules: ProhibitedContentRules | undefined): string {
+  if (!rules || rules.patterns.length === 0) return '';
+  const labels = Array.from(new Set(rules.patterns.map(([, label]) => label)));
+  return [
+    'AMAZON PROHIBITED CONTENT — never include any of the following anywhere in the listing:',
+    `- ${labels.join('\n- ')}`,
+    '- This includes prices written as symbols ($19.95) AND spelled out ("thirty nine dollars and ninety five cents"). Never state, imply or reference the product price, discounts, shipping offers, stock/availability, item condition, or any email, URL or phone number.',
+  ].join('\n');
 }
