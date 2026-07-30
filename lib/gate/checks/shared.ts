@@ -160,6 +160,22 @@ export function aplusFactSurfaces(a: AplusContent): [string, string][] {
 }
 
 /**
+ * The disclaimer strings a CONTENT scan must never read as copy: the canonical
+ * constant plus every accepted variant.
+ *
+ * Scope note (the field used to be called `auditAcceptDisclaimers`, which
+ * implied audit-only): the variants are subtracted from GENERATED surfaces too
+ * (C6/C17/C18/C19/C21). That is safe because subtracting a variant only exempts
+ * required legal text from a content scan — it never satisfies the disclaimer
+ * REQUIREMENT. C5 and A1 still compare `fdaDisclaimer` and the description
+ * against `cp.disclaimer` verbatim, so generated output written with the
+ * singular CFR variant still hard-fails.
+ */
+export function disclaimerVariantsOf(cp: CompliancePack): string[] {
+  return [cp.disclaimer, ...(cp.acceptedDisclaimerVariants ?? [])].filter(Boolean);
+}
+
+/**
  * Negation settings for the DISEASE-TERM path (C6/A2).
  *
  * Suppression requires POSITIVE evidence that the cue negates THAT term: the
@@ -228,7 +244,7 @@ export function scanSurfacesForBanned(
   actionPairedNouns: string[] = [],
 ): Failure[] {
   const out: Failure[] = [];
-  const disclaimers = [cp.disclaimer, ...(cp.auditAcceptDisclaimers ?? [])].filter(Boolean);
+  const disclaimers = disclaimerVariantsOf(cp);
   const neg = diseaseNegationOptions(cp);
   const actionVerbs = diseaseActionVerbs(cp);
   for (const [field, textRaw] of surfaces) {
@@ -498,11 +514,14 @@ function nonAttributingWords(units: UnitRules): Set<string> {
  * failures) — the whole joint / sleep / multivitamin / prenatal segment.
  *
  * COVERAGE, stated plainly: this is an ADJACENCY rule, not an ingredient
- * lexicon. A conflicting figure that is written with a content word in front of
- * it ("Maximum-strength Turmeric 2000 mg" against a 500 mg canonical fact) is
- * NOT reported. Unattributed figures — the ones that read as the product's
- * headline potency ("a 90 Billion CFU blend", "now with 25 billion CFU") — are
- * still measured against the canonical fact exactly as before.
+ * lexicon — it decides only whether a figure LOOKS attributed. Being attributed
+ * is no longer enough to be accepted: an attributed figure is exempt from the
+ * `facts.potency` comparison only when the same number+unit is actually
+ * DECLARED in the pack's ingredient attributes (see `declaredFigures`), so
+ * "Maximum-strength Turmeric 2000 mg" against a 500 mg canonical fact is
+ * reported unless 2000 mg appears in the ingredient breakdown. Unattributed
+ * figures — the ones that read as the product's headline potency ("a 90 Billion
+ * CFU blend") — are measured against the canonical fact exactly as before.
  */
 function isAttributed(text: string, index: number, units: UnitRules): boolean {
   let i = index - 1;
@@ -531,6 +550,29 @@ function isSupplyClaim(text: string, n: UnitNumber, units: UnitRules): boolean {
   return cues.some((cue) => cue.trim() && window.includes(cue.trim().toLowerCase()));
 }
 
+/**
+ * Every number+unit DECLARED in the pack's ingredient attributes
+ * (`compliancePack.ingredientAttributeKeys` — pack data, so the gate names no
+ * attribute key).
+ *
+ * `null` when the pack declares no ingredient attributes at all: there is then
+ * nothing to verify an attributed figure against, and the previous behaviour
+ * (attributed figures skipped) is kept rather than blocking every
+ * multi-ingredient formula. The manifest requires the key list on any
+ * compliance-bearing pack for exactly that reason.
+ */
+export function declaredFigures(
+  l: OptimizedListing,
+  keys: string[] | undefined,
+  units: UnitRules,
+): UnitNumber[] | null {
+  const list = (keys ?? []).map((k) => k.trim()).filter(Boolean);
+  if (list.length === 0) return null;
+  const attrs = l.attributes ?? {};
+  const text = list.map((k) => normalize(attrs[k] ?? '')).join(' ; ');
+  return extractUnitNumbers(text, units);
+}
+
 function parsePotencyFact(potency: string | undefined, units: UnitRules): UnitNumber | null {
   if (!potency) return null;
   const nums = extractUnitNumbers(potency, units).filter((n) => n.dimension === 'potency');
@@ -542,9 +584,20 @@ export function factConsistencyOver(
   l: OptimizedListing,
   units: UnitRules,
   checkId: string,
+  ingredientAttributeKeys?: string[],
 ): Failure[] {
   const { familyOf } = compileUnits(units);
   const family = (unit: string): string => familyOf.get(unit) ?? unit;
+  const declared = declaredFigures(l, ingredientAttributeKeys, units);
+  /**
+   * An attributed figure is EXEMPT only when it is genuinely declared: the same
+   * number, in the same unit family, in one of the ingredient attributes. When
+   * the pack declares no ingredient attributes (`declared === null`) there is
+   * nothing to check against, so attribution alone exempts as it did before.
+   */
+  const isDeclared = (n: UnitNumber): boolean =>
+    declared === null ||
+    declared.some((d) => d.value === n.value && family(d.unit) === family(n.unit));
   const out: Failure[] = [];
   const facts = l.facts ?? {};
   const potencyFact = parsePotencyFact(facts.potency, units);
@@ -568,8 +621,9 @@ export function factConsistencyOver(
           n.dimension === 'potency' &&
           family(n.unit) === family(potencyFact.unit) &&
           // A figure attributed to a named ingredient is that INGREDIENT's
-          // potency, not the product's headline potency — see `isAttributed`.
-          !isAttributed(text, n.index, units),
+          // potency, not the product's headline potency — but only if the
+          // ingredient breakdown actually declares it (see `isDeclared`).
+          !(isAttributed(text, n.index, units) && isDeclared(n)),
       );
       for (const n of sameUnit) {
         if (n.value !== potencyFact.value) {

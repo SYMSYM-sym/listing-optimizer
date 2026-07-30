@@ -37,7 +37,10 @@ export function diff(
       ['description', current.description],
       ...(current.bullets ?? []).map((b, i) => [`bullets[${i}]`, b ?? ''] as [string, string]),
     ];
-    const disclaimers = [cp.disclaimer, ...(cp.auditAcceptDisclaimers ?? [])].map(normalize);
+    // The accepted VARIANTS matter most here — this is the current-listing
+    // audit path, where a seller's copy legitimately carries the CFR singular
+    // form. See `disclaimerVariantsOf` for the full (wider) scope of the field.
+    const disclaimers = [cp.disclaimer, ...(cp.acceptedDisclaimerVariants ?? [])].map(normalize);
     for (const [field, textRaw] of surfaces) {
       const text = subtractDisclaimers(normalize(textRaw), disclaimers);
       for (const m of scanTerms(text, nouns)) {

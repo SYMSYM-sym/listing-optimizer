@@ -2,8 +2,45 @@ import type {
   ListingSnapshot,
   ProhibitedContentRules,
   ProhibitedMarketingRules,
+  SemanticDrugClaims,
   StyleRules,
 } from '@/lib/types';
+
+/**
+ * SEMANTIC drug-claim instructions rendered FROM PACK DATA
+ * (`compliancePack.semanticDrugClaims`) — the prevention half of gate C21.
+ *
+ * C21 fails a claim SHAPE, not a vocabulary, so listing the disease nouns is
+ * not enough: the generator has to be shown the shapes as well, or it is failed
+ * on a rule it was never told about. Renders the pack's lists; authors none.
+ */
+export function semanticClaimBlock(sdc: SemanticDrugClaims | undefined): string {
+  if (!sdc) return '';
+  const lines: string[] = [];
+  if ((sdc.pathologicalActionVerbs ?? []).length > 0 && (sdc.anatomicalTargets ?? []).length > 0) {
+    lines.push(
+      `- NEVER write an action verb (${sdc.pathologicalActionVerbs.join(', ')}) acting on a body structure (${[...sdc.anatomicalTargets, ...(sdc.determinerScopedTargets ?? [])].join(', ')}). "Shrinks the lump", "clears the plaque", "melts the growth" are drug claims even though they name no disease.`,
+    );
+  }
+  if ((sdc.replacementCues ?? []).length > 0 && (sdc.medicalDeviceOrTherapyNouns ?? []).length > 0) {
+    lines.push(
+      `- NEVER say the product replaces, ends the need for, or lets the reader stop a medical therapy or device (${sdc.medicalDeviceOrTherapyNouns.join(', ')}). Banned phrasings include: ${sdc.replacementCues.join(', ')}.`,
+    );
+  }
+  if ((sdc.functionRestorationVerbs ?? []).length > 0 && (sdc.lostFunctionNouns ?? []).length > 0) {
+    lines.push(
+      `- NEVER claim to give back a lost bodily function (${sdc.lostFunctionNouns.join(', ')}) with verbs such as ${sdc.functionRestorationVerbs.join(', ')}.`,
+    );
+  }
+  if ((sdc.patterns ?? []).length > 0) {
+    const labels = [...new Set(sdc.patterns.map((row) => row[1]).filter(Boolean))];
+    if (labels.length > 0) {
+      lines.push(`- NEVER write any of: ${labels.join('; ')}.`);
+    }
+  }
+  if (lines.length === 0) return '';
+  return `SEMANTIC DRUG CLAIMS (deterministically checked by C21 — a claim needs no disease word to be illegal):\n${lines.join('\n')}`;
+}
 
 export function snapshotBlock(snapshot: ListingSnapshot): string {
   return `CURRENT LISTING (source data — improve, don't copy mistakes):

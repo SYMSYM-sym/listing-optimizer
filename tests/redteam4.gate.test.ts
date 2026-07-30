@@ -114,6 +114,33 @@ const EMPTIERS: Record<string, (p: KnowledgePack) => void> = {
   'compliancePack.disclaimer': (p) => {
     p.compliancePack!.disclaimer = '';
   },
+  'compliancePack.actionPairedNouns': (p) => {
+    p.compliancePack!.actionPairedNouns = [];
+  },
+  'compliancePack.ingredientAttributeKeys': (p) => {
+    p.compliancePack!.ingredientAttributeKeys = [];
+  },
+  'compliancePack.semanticDrugClaims.pathologicalActionVerbs': (p) => {
+    p.compliancePack!.semanticDrugClaims!.pathologicalActionVerbs = [];
+  },
+  'compliancePack.semanticDrugClaims.anatomicalTargets': (p) => {
+    p.compliancePack!.semanticDrugClaims!.anatomicalTargets = [];
+  },
+  'compliancePack.semanticDrugClaims.replacementCues': (p) => {
+    p.compliancePack!.semanticDrugClaims!.replacementCues = [];
+  },
+  'compliancePack.semanticDrugClaims.medicalDeviceOrTherapyNouns': (p) => {
+    p.compliancePack!.semanticDrugClaims!.medicalDeviceOrTherapyNouns = [];
+  },
+  'compliancePack.semanticDrugClaims.functionRestorationVerbs': (p) => {
+    p.compliancePack!.semanticDrugClaims!.functionRestorationVerbs = [];
+  },
+  'compliancePack.semanticDrugClaims.lostFunctionNouns': (p) => {
+    p.compliancePack!.semanticDrugClaims!.lostFunctionNouns = [];
+  },
+  'compliancePack.semanticDrugClaims.patterns': (p) => {
+    p.compliancePack!.semanticDrugClaims!.patterns = [];
+  },
   'rules.style': (p) => {
     p.rules.style = { ...p.rules.style, bannedSymbols: [], bannedChars: [], titleTermBans: [] };
   },
@@ -137,7 +164,7 @@ const EMPTIERS: Record<string, (p: KnowledgePack) => void> = {
 describe('FIX 1 — emptying ANY required pack piece is BLOCKING, never a silent pass', () => {
   it('the emptier table covers exactly the declared manifest', () => {
     expect(Object.keys(EMPTIERS).sort()).toEqual([...requiredPackPieceIds].sort());
-    expect(requiredPackPieceIds.length).toBeGreaterThanOrEqual(14);
+    expect(requiredPackPieceIds.length).toBeGreaterThanOrEqual(23);
   });
 
   it.each(requiredPackPieceIds)('emptying %s raises a blocking PACK failure', (id) => {
@@ -158,6 +185,27 @@ describe('FIX 1 — emptying ANY required pack piece is BLOCKING, never a silent
    * lexicon whose emptying used to disarm its check.
    */
   const PROVEN: [string, string, (l: OptimizedListing) => void][] = [
+    [
+      'compliancePack.actionPairedNouns',
+      'Cures menopause in eight weeks',
+      (l) => {
+        l.bullets[1] = 'Cures menopause in eight weeks*';
+      },
+    ],
+    [
+      'compliancePack.semanticDrugClaims.pathologicalActionVerbs',
+      'Shrinks the lump in your breast',
+      (l) => {
+        l.bullets[1] = 'Shrinks the lump in your breast*';
+      },
+    ],
+    [
+      'compliancePack.semanticDrugClaims.replacementCues',
+      'so you can throw away your inhaler',
+      (l) => {
+        l.bullets[1] = 'Daily support so you can throw away your inhaler*';
+      },
+    ],
     [
       'rules.prohibitedContent.patterns',
       'Order online for 39 dollars and 95 cents at www.brandx.com',

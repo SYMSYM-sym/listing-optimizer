@@ -40,6 +40,31 @@ function matchMarkers(routing: Routing, category: string, title: string, attrTex
   return categoryHit(routing, category, attrText) || titleHit(routing.titleMarkers, title);
 }
 
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const KEYWORD_RE_CACHE = new Map<string, RegExp>();
+
+/**
+ * WORD-BOUNDARY keyword match.
+ *
+ * Raw `includes()` matched keywords mid-word, so the attribute value
+ * "Dietary Supplement" matched the subcategory keyword `men` (inside
+ * "supple-MEN-t") and "formula" matched `mula`. Subcategories only ORDER the
+ * prompt now that the gate scans the whole union, so the old behaviour
+ * over-matched in the SAFE direction — but an over-matched subcategory still
+ * pushes the wrong terms to the front of the injected list, so it is fixed
+ * rather than merely documented. Boundaries are letter/digit-based (not `\b`)
+ * so keywords containing hyphens or spaces still anchor correctly.
+ */
+function keywordRe(term: string): RegExp {
+  let re = KEYWORD_RE_CACHE.get(term);
+  if (!re) {
+    re = new RegExp(`(?<![a-z0-9])${escapeRe(term).replace(/\s+/g, '\\s+')}(?![a-z0-9])`, 'i');
+    KEYWORD_RE_CACHE.set(term, re);
+  }
+  return re;
+}
+
 function detectSubcategories(
   packId: 'supplements' | 'cosmetics',
   title: string,
@@ -50,7 +75,10 @@ function detectSubcategories(
   const keywords = pack.compliancePack?.subcategoryKeywords ?? {};
   const haystack = `${title} ${attrText}`;
   const subcategories = Object.entries(keywords)
-    .filter(([sub, terms]) => sub !== fallback && terms.some((t) => haystack.includes(t.toLowerCase())))
+    .filter(
+      ([sub, terms]) =>
+        sub !== fallback && terms.some((t) => t.trim() && keywordRe(t.trim().toLowerCase()).test(haystack)),
+    )
     .map(([sub]) => sub);
   return subcategories.length > 0 ? subcategories : [fallback];
 }

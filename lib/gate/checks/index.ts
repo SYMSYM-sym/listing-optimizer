@@ -14,6 +14,8 @@ export {
 export type { PackPiece } from './pack';
 export {
   CONCAT_MIN_TERM_LEN,
+  declaredFigures,
+  disclaimerVariantsOf,
   extractUnitNumbers,
   diseaseNegationOptions,
   factsComplianceSurfaces,
@@ -45,6 +47,7 @@ export {
   c12FactConsistency,
 } from './c-quality';
 
+export { c21SemanticDrugClaims } from './c-semantic';
 export { c17Style, styleSurfaces, allCapsOffenders } from './c-style';
 export { c20Structure } from './c-structure';
 

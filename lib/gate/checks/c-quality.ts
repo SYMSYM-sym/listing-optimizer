@@ -183,5 +183,14 @@ export function c12FactConsistency(l: OptimizedListing, pack: KnowledgePack): Fa
     ...aplusFactSurfaces(l.aplusContent),
     ...attributeComplianceSurfaces(l),
   ];
-  return factConsistencyOver(surfaces, l, pack.rules.units, 'C12');
+  // The ingredient-attribute keys are PACK DATA: a potency figure attributed to
+  // a named ingredient is accepted only when the ingredient breakdown actually
+  // declares that number+unit.
+  return factConsistencyOver(
+    surfaces,
+    l,
+    pack.rules.units,
+    'C12',
+    pack.compliancePack?.ingredientAttributeKeys,
+  );
 }

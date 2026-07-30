@@ -97,6 +97,26 @@
       "UTI",
       "ZMA"
     ],
+    "allCapsRunExempt": [
+      "BRCGS",
+      "BSCG",
+      "FDA",
+      "GMP",
+      "GRAS",
+      "HACCP",
+      "HPLC",
+      "IFOS",
+      "IGEN",
+      "ISO",
+      "NPA",
+      "NSF",
+      "OTC",
+      "SQF",
+      "TGA",
+      "UPC",
+      "USDA",
+      "USP"
+    ],
     "bulletMustStartCapital": true,
     "bulletNoTrailingPunctuation": true,
     "bulletTrailingAllowed": [

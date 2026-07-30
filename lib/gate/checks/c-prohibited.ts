@@ -1,5 +1,5 @@
 import type { CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
-import { CONCAT_MIN_TERM_LEN } from './shared';
+import { CONCAT_MIN_TERM_LEN, disclaimerVariantsOf } from './shared';
 import {
   compatibilityVariant,
   deobfuscatedVariants,
@@ -141,9 +141,14 @@ function patternRe(source: string): RegExp {
   return re;
 }
 
+/**
+ * Required legal text is never scanned as copy. Delegates to the ONE documented
+ * definition of that set (`disclaimerVariantsOf`), which also explains why the
+ * accepted VARIANTS are subtracted from generated surfaces and why that cannot
+ * satisfy the C5/A1 disclaimer requirement.
+ */
 function disclaimersOf(cp: CompliancePack | null | undefined): string[] {
-  if (!cp) return [];
-  return [cp.disclaimer, ...(cp.auditAcceptDisclaimers ?? [])].filter(Boolean);
+  return cp ? disclaimerVariantsOf(cp) : [];
 }
 
 /**

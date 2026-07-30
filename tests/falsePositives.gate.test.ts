@@ -277,7 +277,11 @@ describe('U3 — routing no longer hijacks ordinary products', () => {
   });
 });
 
-/** U4 — a multi-ingredient formula may state more than one figure. */
+/**
+ * U4 — a multi-ingredient formula may state more than one figure, PROVIDED the
+ * ingredient breakdown actually declares those figures. Attribution alone is no
+ * longer a free pass (see the attributed-but-undeclared case below).
+ */
 describe('U4 — C12 no longer treats every potency figure as the headline potency', () => {
   const c12On = (l: OptimizedListing, field: string): Failure[] =>
     runGate(l, pack, ctx).failures.filter((f) => f.checkId === 'C12' && f.field === field);
@@ -287,10 +291,29 @@ describe('U4 — C12 no longer treats every potency figure as the headline poten
     'Melatonin 3 mg, L-Theanine 200 mg and Magnesium Glycinate 100 mg',
     'Vitamin D3 2000 IU, B12 500 mcg and Zinc 15 mg in one daily formula',
     'Folate 400 mcg with Iron 27 mg and Choline 55 mg for prenatal routines',
-  ])('the attributed stack "%s" produces NO C12 failure', (copy) => {
+  ])('the attributed stack "%s" produces NO C12 failure when the ingredients declare it', (copy) => {
     const l = mut((x) => {
       x.facts.potency = '1500 mg';
+      x.attributes.active_ingredients = copy;
       x.bullets[1] = `Formulated with ${copy}*`;
+    });
+    expect(c12On(l, 'bullets[1]')).toEqual([]);
+  });
+
+  it('an ATTRIBUTED figure that the ingredients never declare still FAILS', () => {
+    const l = mut((x) => {
+      x.facts.potency = '500 mg';
+      x.attributes.active_ingredients = 'Turmeric 500 mg';
+      x.bullets[1] = 'Maximum-strength Turmeric 2000 mg in every batch*';
+    });
+    expect(c12On(l, 'bullets[1]').length).toBeGreaterThan(0);
+  });
+
+  it('the SAME attributed figure passes once the ingredients declare it', () => {
+    const l = mut((x) => {
+      x.facts.potency = '500 mg';
+      x.attributes.active_ingredients = 'Turmeric 500 mg, Black Pepper Extract 2000 mg';
+      x.bullets[1] = 'Maximum-strength Black Pepper Extract 2000 mg in every batch*';
     });
     expect(c12On(l, 'bullets[1]')).toEqual([]);
   });
@@ -358,6 +381,11 @@ describe('U6 — C17 ALL-CAPS rules no longer fail ordinary sentence case', () =
     'Made under a BRCGS certified programme',
     'Verified by IGEN for non-GMO status',
     'IFOS, BSCG, HACCP, SQF, BRCGS and IGEN audited every year',
+    // R4 — the same list written WITHOUT commas. Every token is a
+    // certification mark (`rules.style.allCapsRunExempt`), so however many of
+    // them sit together it is a list, not shouting.
+    'IFOS BSCG HACCP SQF audited every year',
+    'Certified IFOS BSCG HACCP SQF BRCGS IGEN NSF USP GMP',
   ])('"%s" produces NO C17 failure', (copy) => {
     const l = mut((x) => { x.bullets[1] = `${copy}*`; });
     expect(c17On(l, 'bullets[1]')).toEqual([]);

@@ -1,6 +1,6 @@
 import type { Failure, KnowledgePack, OptimizedListing, StyleRules } from '@/lib/types';
 import { compatibilityVariant, decodeEntities, normalize, subtractDisclaimers, utf8Bytes } from '../util';
-import { aplusSurfaces, fail } from './shared';
+import { aplusSurfaces, disclaimerVariantsOf, fail } from './shared';
 
 /**
  * C17 — style/formatting gate (capitalization, punctuation, symbols, promo terms,
@@ -12,6 +12,24 @@ import { aplusSurfaces, fail } from './shared';
  * <br> markup and is capped in UTF-8 BYTES as well as characters.
  * Every threshold, list and pattern is PACK DATA (`pack.rules.style`) — this
  * module hard-codes no lexicon, so it stays category-agnostic.
+ *
+ * SCOPE — what "every surface" means here, stated exactly (it is the surface
+ * set `styleSurfaces()` returns, nothing wider):
+ *   title, title75, itemHighlights, every bullet, description, every A+ text
+ *   field (module headline/body/subcopy, comparison label/ours/typical, FAQ
+ *   q/a), every Q&A q/a, every image-plan purpose/spec/notes, every attribute
+ *   VALUE, backendSearchTerms, and every STRING-valued `facts.*` entry.
+ * NOT scanned, deliberately: the code-inserted disclaimer constants
+ * (`listing.fdaDisclaimer`, `aplusContent.fdaDisclaimer` — verbatim required
+ * text, and the constant is additionally subtracted from every other surface),
+ * numeric `facts.*` values (a number carries no markup or symbol), and the
+ * three internal/derived strings that are never published on their own:
+ * `productName` (published only inside the titles, which ARE scanned),
+ * `primaryKeyword` and `bulletAnchors`.
+ * The ALWAYS-ON rules (ALL-CAPS, symbols, emoji, ASIN, HTML markup) run on that
+ * whole set. The banned-CHARACTER and promo-TERM rules are narrower still: they
+ * run only on the surface groups the pack names in `bannedCharsSurfaces` /
+ * `titleTermBanSurfaces`.
  *
  * Pure and side-effect free: it REPORTS, it never mutates the listing.
  */
@@ -46,7 +64,8 @@ export function styleSurfaces(l: OptimizedListing): StyleSurface[] {
     out.push({ field, group: 'aplus', text });
   }
   // Q&A and the image plan are customer-visible too — style rules apply there
-  // as well (brain/02: rules apply on EVERY surface, not just the main fields).
+  // as well (brain/02: rules apply on every published surface, not just the
+  // main fields). See the module header for the exact scanned set.
   (l.qa ?? []).forEach((item, i) => {
     out.push({ field: `qa[${i}].q`, group: 'qa', text: s(item?.q) });
     out.push({ field: `qa[${i}].a`, group: 'qa', text: s(item?.a) });
@@ -87,18 +106,40 @@ export function styleSurfaces(l: OptimizedListing): StyleSurface[] {
  * therefore expanded into its own word tokens as well as kept verbatim.
  */
 const ALLOWLIST_CACHE = new WeakMap<StyleRules, Set<string>>();
+const RUN_EXEMPT_CACHE = new WeakMap<StyleRules, Set<string>>();
 
-function expandedAllowlist(style: StyleRules): Set<string> {
-  const cached = ALLOWLIST_CACHE.get(style);
-  if (cached) return cached;
+function expandEntries(entries: string[]): Set<string> {
   const out = new Set<string>();
-  for (const entry of style.allCapsAllowlist ?? []) {
+  for (const entry of entries) {
     const e = entry.trim();
     if (!e) continue;
     out.add(e);
     for (const token of e.match(WORD_RE) ?? []) out.add(token);
   }
+  return out;
+}
+
+function expandedAllowlist(style: StyleRules): Set<string> {
+  const cached = ALLOWLIST_CACHE.get(style);
+  if (cached) return cached;
+  const out = expandEntries(style.allCapsAllowlist ?? []);
   ALLOWLIST_CACHE.set(style, out);
+  return out;
+}
+
+/**
+ * The RUN-EXEMPT subset of the allowlist (`style.allCapsRunExempt`, pack data).
+ *
+ * Tokens that cannot read as emphasis however many of them sit together —
+ * certification and standards marks. An unpunctuated run of them
+ * ("IFOS BSCG HACCP SQF") is a certification list, not shouting, and the
+ * previous `min + 1` rule flagged it from the fourth token on.
+ */
+function runExempt(style: StyleRules): Set<string> {
+  const cached = RUN_EXEMPT_CACHE.get(style);
+  if (cached) return cached;
+  const out = expandEntries(style.allCapsRunExempt ?? []);
+  RUN_EXEMPT_CACHE.set(style, out);
   return out;
 }
 
@@ -135,30 +176,50 @@ const isAllCaps = (word: string): boolean =>
  *
  * The per-word rule alone let "NEW BIG WOW gut support" through (every word is
  * under the minimum length). Shouting is a property of the RUN, not of one
- * word, so a run is reported whatever the token lengths are — but RUN-NEUTRAL
- * tokens (allow-listed acronyms and digit-bearing tokens like `D3`/`B12`) are
- * skipped, because a measurement list is not emphasis.
+ * word, so a run is reported whatever the token lengths are — with two
+ * exemptions, stated exactly:
+ *   - RUN-NEUTRAL tokens (digit-bearing designators like `D3`/`B12`) are
+ *     skipped entirely: they neither count as a member nor break the run,
+ *     because a measurement list is not emphasis;
+ *   - allow-listed acronyms DO count as members, but a run made only of them
+ *     needs `allCapsRunMin + 1` members, and a run made only of RUN-EXEMPT
+ *     certification marks is never reported at all (see `segmentRuns`).
  */
 export function allCapsRuns(text: string, style: StyleRules): string[][] {
   const min = style.allCapsRunMin;
   if (!min || min < 2) return [];
   const allow = expandedAllowlist(style);
+  const exempt = runExempt(style);
   const runs: string[][] = [];
   for (const segment of text.split(RUN_BREAK_RE)) {
-    runs.push(...segmentRuns(segment, min, allow));
+    runs.push(...segmentRuns(segment, min, allow, exempt));
   }
   return runs;
 }
 
-function segmentRuns(text: string, min: number, allow: Set<string>): string[][] {
+function segmentRuns(
+  text: string,
+  min: number,
+  allow: Set<string>,
+  exempt: Set<string>,
+): string[][] {
   const runs: string[][] = [];
   let current: string[] = [];
-  // A run made ENTIRELY of allow-listed acronyms needs one MORE member than the
-  // pack minimum before it reads as emphasis. That is the line between an
-  // ingredient list ("DHA EPA ALA trio") and acronyms used AS shouting
-  // ("SAME NON USA GABA blend"). A run with even one non-allow-listed member is
-  // measured against the pack minimum unchanged, so "NEW BIG WOW" still fails.
+  // THREE tiers, in order:
+  //  1. a run whose every member is RUN-EXEMPT (`style.allCapsRunExempt` —
+  //     certification/standards marks) is never emphasis at any length, so an
+  //     unpunctuated "IFOS BSCG HACCP SQF" is not reported;
+  //  2. a run that is entirely allow-listed but not entirely run-exempt needs
+  //     one MORE member than the pack minimum — the line between an ingredient
+  //     list ("DHA EPA ALA trio") and acronyms used AS shouting
+  //     ("SAME NON USA GABA blend", four allow-listed tokens, still fails);
+  //  3. a run with even one non-allow-listed member is measured against the
+  //     pack minimum unchanged, so "NEW BIG WOW" still fails.
   const flush = (): void => {
+    if (current.length > 0 && current.every((w) => exempt.has(w))) {
+      current = [];
+      return;
+    }
     const min2 = current.every((w) => allow.has(w)) ? min + 1 : min;
     if (current.length >= min2) runs.push(current);
     current = [];
@@ -219,9 +280,7 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   // Never scan the category disclaimer constant itself — it is code-inserted
   // verbatim and must not be reported as a style violation.
   const cp = pack.compliancePack;
-  const disclaimers = cp
-    ? [cp.disclaimer, ...(cp.auditAcceptDisclaimers ?? [])].filter(Boolean).map(normalize)
-    : [];
+  const disclaimers = cp ? disclaimerVariantsOf(cp).map(normalize) : [];
   const clean = (raw: string): string =>
     subtractDisclaimers(normalize(raw), disclaimers).replace(/\s+/g, ' ').trim();
 
@@ -250,7 +309,7 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
           CHECK_ID,
           surface.field,
           runs.map((r) => r.join(' ')).join(' | '),
-          `Rewrite in sentence case — ${style.allCapsRunMin}+ consecutive ALL-CAPS words read as shouting (allow-listed acronyms and digit-bearing tokens are not counted)`,
+          `Rewrite in sentence case — ${style.allCapsRunMin}+ consecutive ALL-CAPS words read as shouting (digit-bearing tokens are skipped; a run of only allow-listed acronyms needs ${style.allCapsRunMin + 1}, and a run of only certification marks is never flagged)`,
         ),
       );
     }
@@ -266,7 +325,7 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
       );
     }
 
-    // 4 — banned symbols + emoji (every surface)
+    // 4 — banned symbols + emoji (ALWAYS ON: every surface in `styleSurfaces`)
     const symbolHits = style.bannedSymbols.filter((sym) => text.includes(sym));
     if (symbolHits.length > 0) {
       out.push(
@@ -314,11 +373,14 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
     }
   }
 
-  // 8 — markup is prohibited on EVERY surface, not just the description.
+  // 8 — markup is prohibited on every surface in `styleSurfaces` (backend and
+  // the facts block included since round 6), not just the description.
   // Amazon deprecated description HTML in July 2021, and a <b>/<ul>/<li> in a
   // BULLET or an A+ body renders raw or suppresses the listing exactly the same
   // way. Each surface is scanned RAW *and* entity-decoded, so `&lt;p&gt;` — which
-  // Amazon un-escapes on render — cannot hide the tag either.
+  // Amazon un-escapes on render — cannot hide the tag either. NOTE this loop
+  // reads `surface.text` RAW rather than `clean(...)`: the disclaimer constant
+  // carries no markup, so nothing is subtracted here.
   const allowedHtml = new Set(style.descriptionAllowedHtml.map((t) => t.toLowerCase()));
   if (style.htmlTagPattern) {
     for (const surface of styleSurfaces(l)) {

@@ -1,15 +1,41 @@
 import type { Facts, KnowledgePack } from '@/lib/types';
 import { promptDiseaseNouns } from '@/lib/gate/checks/pack';
-import { prohibitedContentBlock, prohibitedMarketingBlock, styleRulesBlock } from './shared';
+import {
+  prohibitedContentBlock,
+  prohibitedMarketingBlock,
+  semanticClaimBlock,
+  styleRulesBlock,
+} from './shared';
 
 /**
  * NO cap on the injected disease-noun list — deliberately.
  *
- * The generator must be told EVERY term the gate will fail it on (prevention
- * layer). The old 250-term ceiling silently dropped ~440 of the 687 enforced
- * terms, so the model was blind to two thirds of the lexicon and only found out
- * via repair rounds. `tests/redteam3.gate.test.ts` asserts the injected set is a
+ * The old 250-term ceiling silently dropped ~440 of the 687 enforced terms, so
+ * the model was blind to two thirds of the lexicon and only found out via
+ * repair rounds. `tests/redteam3.gate.test.ts` asserts the injected set is a
  * SUPERSET of the gate-enforced set, so re-introducing truncation fails CI.
+ *
+ * WHAT THIS PROMPT DOES AND DOES NOT COVER (precise, not aspirational — the
+ * earlier wording claimed "EVERY term the gate will fail it on", which was not
+ * true of several lexicons):
+ *
+ *  INJECTED IN FULL: the cross-pack disease/drug noun union including the
+ *  action-paired tier (C6/A2), the banned verb list, `superlativeBans` (C19/A8),
+ *  the pack's own compliance/system prompt rules, the ALLERGEN rules with their
+ *  exact `canonicalString` values (C9/A7), the style rules and their allowlist
+ *  (C17), the prohibited detail-page content and prohibited marketing LABELS
+ *  (C18/C19) and — since round 7 — the semantic drug-claim shapes (C21).
+ *
+ *  NOT INJECTED, and why: the C18/C19 REGEXES themselves (only their
+ *  human-readable labels are shown — a regex is not an instruction);
+ *  `fictionPhrases` (C11), which are per-run known-false descriptors supplied
+ *  by the caller rather than a fixed lexicon; the negation/benign-context and
+ *  false-positive-reducer lists (`negationMetaPhrases`, `benignContextPhrases`,
+ *  `allergenCompoundExclusions`, `safeContextPhrases`), which only ever make
+ *  the gate more permissive; and the C12 unit machinery beyond the canonical
+ *  facts block above. A generated listing can therefore still be failed by C11
+ *  or by a C18/C19 pattern whose label it misread — which is exactly what the
+ *  repair loop exists for.
  */
 
 /**
@@ -55,6 +81,9 @@ ${(cp.allergenRules ?? [])
 - The same declaration must also appear in at least one bullet and in the description, phrased with "${af.declarationVerb}" plus the allergen class or source.
 - Never write ${(cp.noAllergenPhrases ?? []).map((x) => `"${x}"`).join(' / ')} when a declarable allergen is present.`
       : '';
+  // The SEMANTIC claim shapes (C21). A claim needs no disease word to be
+  // illegal, so the noun list above is not sufficient prevention on its own.
+  const semanticBlock = semanticClaimBlock(cp?.semanticDrugClaims);
   const compliance = cp
     ? `
 COMPLIANCE (structure/function claims ONLY — this is load-bearing):
@@ -63,6 +92,7 @@ ${complianceLines}
 - NEVER use disease/condition nouns anywhere. The deterministic gate scans for ALL of these on EVERY surface: ${activeNouns.join(', ')} — plus any other condition name. Reframe as a structure/function state ("supports healthy [system] function", "[parameter] balance").
 - Banned marketing phrases: ${cp.superlativeBans.join(', ')}.
 ${packLines}
+${semanticBlock}
 ${allergenLines}`
     : `
 No category compliance module is active. Write factual, non-medical copy. No superlatives, no price, no review claims. Do not write any disclaimer text.`;

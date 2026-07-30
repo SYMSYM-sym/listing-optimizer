@@ -56,12 +56,26 @@ export interface StyleRules {
   allCapsMinWordLen: number;
   /** Uppercase tokens that are legitimate even at/above the min length (exact, case-sensitive). */
   allCapsAllowlist: string[];
+  /**
+   * Allow-listed tokens that can NEVER read as emphasis, however many of them
+   * sit together (certification / standards marks). A run made entirely of
+   * these is not a shouting run at any length — `IFOS BSCG HACCP SQF` written
+   * without commas is a certification list, not shouting. Every OTHER
+   * all-allow-listed run still needs `allCapsRunMin + 1` members, which is what
+   * keeps `SAME NON USA GABA blend` failing.
+   */
+  allCapsRunExempt?: string[];
   /** Every bullet must open with a capital letter. */
   bulletMustStartCapital: boolean;
   /**
    * A RUN of this many consecutive ALL-CAPS word tokens counts as shouting
-   * regardless of word length, and the acronym allowlist is NOT honoured inside
-   * such a run (gate C17, FIX D).
+   * regardless of word length (gate C17).
+   *
+   * The allowlist IS honoured inside a run, in two graded ways: a run made
+   * entirely of allow-listed acronyms needs `allCapsRunMin + 1` members before
+   * it is reported, and a run made entirely of `allCapsRunExempt` certification
+   * marks is never reported at any length. A run containing even one
+   * non-allow-listed token is measured against this number unchanged.
    */
   allCapsRunMin: number;
   /** Bullets must not end with sentence punctuation. */
@@ -248,14 +262,74 @@ export interface PromptRules {
   aplus?: string[];
 }
 
+/**
+ * PACK DATA behind gate C21 (semantic drug claims).
+ *
+ * Three PROXIMITY rules are compiled from these lists at load time, plus the
+ * literal `patterns`:
+ *  1. a `pathologicalActionVerbs` verb followed within `proximityWindow`
+ *     characters by an `anatomicalTargets` term (or a `determinerScopedTargets`
+ *     term that a determiner points at) — "shrinks the lump", "melts the growth";
+ *  2. a `replacementCues` cue followed within the same window by a
+ *     `medicalDeviceOrTherapyNouns` noun — "throw away your inhaler",
+ *     "ends the need for dialysis";
+ *  3. a `functionRestorationVerbs` verb followed within the same window by a
+ *     `lostFunctionNouns` noun — "restores sight to failing eyes".
+ *
+ * `safeContextPhrases` are blanked out of the surface BEFORE any of the above
+ * runs, so genuine safety copy ("do not stop taking your medication", "not a
+ * substitute for prescription medication") is never reported.
+ *
+ * COVERAGE, stated plainly: C21 scans the NORMALIZED surface text only. The
+ * de-obfuscation / doubled-letter / separator-split passes belong to C6 and are
+ * NOT applied here, so `shr1nks the lump` is caught by neither. C21 widens the
+ * claim SHAPES that are caught, not the obfuscations.
+ */
+export interface SemanticDrugClaims {
+  /** Max characters between the end of a verb/cue match and the start of its noun. */
+  proximityWindow: number;
+  /** Device/therapy nouns whose REPLACEMENT is a drug claim. */
+  medicalDeviceOrTherapyNouns: string[];
+  /** Cues that announce replacing/abandoning a therapy. */
+  replacementCues: string[];
+  /** Body structures that only a drug or a device acts on. */
+  anatomicalTargets: string[];
+  /** Targets that are ordinary English unless a determiner points at one instance. */
+  determinerScopedTargets: string[];
+  /** Verbs that describe acting ON a pathology. */
+  pathologicalActionVerbs: string[];
+  /** Functions whose RESTORATION is a drug claim ("restores sight"). */
+  lostFunctionNouns: string[];
+  /** Verbs that describe giving a lost function back. */
+  functionRestorationVerbs: string[];
+  /** Spans in which a cue/verb is SAFETY copy; blanked before the scan. */
+  safeContextPhrases: string[];
+  /**
+   * Literal patterns as `[regexSource, humanLabel]` rows. Typed as `string[][]`
+   * (not a tuple) so the shipped JSON assigns without a double cast; the gate
+   * reads `[0]`/`[1]` defensively and skips a row with an empty source.
+   */
+  patterns: string[][];
+}
+
 export interface CompliancePack {
   /** Verbatim FDA disclaimer constant (21 CFR 101.93). */
   disclaimer: string;
   /**
-   * Additional variants accepted ONLY when auditing the CURRENT listing
-   * (e.g. the CFR singular form). Generated output must match `disclaimer` exactly.
+   * Disclaimer VARIANTS (e.g. the CFR singular form) accepted in place of
+   * `disclaimer` wherever a scan must not read required legal text as copy.
+   *
+   * SCOPE, stated precisely: these are subtracted from the scanned text on the
+   * CURRENT-LISTING audit path (`lib/audit/diff.ts`) AND from generated output
+   * in C6/C17/C18/C19 — the old name `auditAcceptDisclaimers` implied an
+   * audit-only scope the field never had. That is safe because they are only
+   * ever used to EXEMPT the disclaimer sentence from a content scan, never to
+   * satisfy the disclaimer requirement itself: C5 and A1 compare
+   * `fdaDisclaimer` and the description against `disclaimer` VERBATIM, so
+   * generated output that carries a variant instead still hard-fails
+   * (`tests/redteam7.gate.test.ts` asserts both directions).
    */
-  auditAcceptDisclaimers: string[];
+  acceptedDisclaimerVariants: string[];
   /** Drug/action verbs always banned as product claims. */
   diseaseVerbs: string[];
   /**
@@ -299,6 +373,21 @@ export interface CompliancePack {
    * "prevents colds during cold and flu season" still fails. Pack data.
    */
   benignContextPhrases?: string[];
+  /**
+   * Attribute keys carrying the per-ingredient breakdown (C12).
+   *
+   * A potency figure ATTRIBUTED to a named ingredient is accepted only when the
+   * same number+unit also appears in one of these attributes; an attributed
+   * figure that appears in none of them is still measured against
+   * `facts.potency`. Pack data — the gate names no attribute key.
+   */
+  ingredientAttributeKeys?: string[];
+  /**
+   * SEMANTIC drug-claim heuristics (gate C21) — see `SemanticDrugClaims`.
+   * A drug claim needs neither a disease noun nor a banned verb, so this tier
+   * catches the claim SHAPE instead of its vocabulary.
+   */
+  semanticDrugClaims?: SemanticDrugClaims;
   /** Subcategory label -> that subcategory's disease/infection nouns (non-empty). */
   diseaseNounsBySubcategory: Record<string, string[]>;
   allergenRules: AllergenRule[];

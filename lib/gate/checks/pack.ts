@@ -1,7 +1,7 @@
 import type { CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { inflectAll, normalize, scanTerms, subtractDisclaimers, termRegex } from '../util';
 import type { GateContext } from './types';
-import { allGeneratedSurfaces, diseaseNegationOptions, fail } from './shared';
+import { allGeneratedSurfaces, disclaimerVariantsOf, diseaseNegationOptions, fail } from './shared';
 
 const UNION_CACHE = new WeakMap<CompliancePack, string[]>();
 const ACTION_VERB_CACHE = new WeakMap<CompliancePack, string[]>();
@@ -159,11 +159,26 @@ const nonEmptyPairs = (v: unknown): boolean =>
  * Coverage note (deliberately precise, not aspirational): this manifest
  * asserts PRESENCE and NON-EMPTINESS of the pieces below. It does NOT validate
  * their contents — a pack that ships one junk disease noun still passes the
- * manifest. Optional pack data that only WIDENS a check
- * (`diseaseActionVerbRoots`, `negationMetaPhrases`, `fictionPhrases`,
- * `auditAcceptDisclaimers`, `subcategoryKeywords`, `prescriptionDrugNames`) is
- * intentionally NOT required, because an empty value there is a legitimate
- * configuration rather than a disarmed check.
+ * manifest.
+ *
+ * The membership TEST is one question: does emptying this piece DISARM a check
+ * (fail-open)? If yes it is required. Two classes are therefore deliberately
+ * NOT required:
+ *
+ *  (a) data that only WIDENS a check — `diseaseActionVerbRoots`,
+ *      `negationMetaPhrases`, `fictionPhrases`, `acceptedDisclaimerVariants`,
+ *      `subcategoryKeywords`, `prescriptionDrugNames`,
+ *      `semanticDrugClaims.determinerScopedTargets` (rule 1 stays armed on the
+ *      plain target list without it). An empty value is a legitimate
+ *      configuration, not a disarmed check;
+ *
+ *  (b) FALSE-POSITIVE REDUCERS — `allergenCompoundExclusions`,
+ *      `benignContextPhrases`, `semanticDrugClaims.safeContextPhrases` and
+ *      `rules.style.allCapsRunExempt`. Emptying one of these makes the gate
+ *      STRICTER, not weaker: the failure mode is over-blocking lawful copy, and
+ *      over-blocking is caught by `tests/falsePositives.gate.test.ts`, not by a
+ *      fail-closed PACK rule. Requiring them here would report a pack that is
+ *      merely blunt as a pack that is unsafe, which is the wrong signal.
  */
 export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
   {
@@ -207,6 +222,53 @@ export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
     id: 'compliancePack.noAllergenPhrases',
     disarms: 'the banned allergen-absence phrasing check (C9)',
     present: (_p, cp) => nonEmptyList(cp.noAllergenPhrases),
+  },
+  {
+    id: 'compliancePack.actionPairedNouns',
+    disarms: 'the therapeutic-action tier of C6/A2 (e.g. "cures menopause")',
+    present: (_p, cp) => nonEmptyList(cp.actionPairedNouns),
+  },
+  {
+    id: 'compliancePack.ingredientAttributeKeys',
+    disarms:
+      'the ATTRIBUTED-figure half of C12 — without the keys an attributed potency figure can never be verified against the ingredient breakdown, so every attributed conflict is accepted',
+    present: (_p, cp) => nonEmptyList(cp.ingredientAttributeKeys),
+  },
+  {
+    id: 'compliancePack.semanticDrugClaims.pathologicalActionVerbs',
+    disarms: 'the pathological-action half of C21 ("shrinks the lump")',
+    present: (_p, cp) => nonEmptyList(cp.semanticDrugClaims?.pathologicalActionVerbs),
+  },
+  {
+    id: 'compliancePack.semanticDrugClaims.anatomicalTargets',
+    disarms: 'the body-structure target list C21 pairs its action verbs with',
+    present: (_p, cp) => nonEmptyList(cp.semanticDrugClaims?.anatomicalTargets),
+  },
+  {
+    id: 'compliancePack.semanticDrugClaims.replacementCues',
+    disarms: 'the therapy-replacement half of C21 ("throw away your inhaler")',
+    present: (_p, cp) => nonEmptyList(cp.semanticDrugClaims?.replacementCues),
+  },
+  {
+    id: 'compliancePack.semanticDrugClaims.medicalDeviceOrTherapyNouns',
+    disarms: 'the device/therapy list C21 pairs its replacement cues with',
+    present: (_p, cp) => nonEmptyList(cp.semanticDrugClaims?.medicalDeviceOrTherapyNouns),
+  },
+  {
+    id: 'compliancePack.semanticDrugClaims.functionRestorationVerbs',
+    disarms: 'the function-restoration half of C21 ("restores sight")',
+    present: (_p, cp) => nonEmptyList(cp.semanticDrugClaims?.functionRestorationVerbs),
+  },
+  {
+    id: 'compliancePack.semanticDrugClaims.lostFunctionNouns',
+    disarms: 'the lost-function list C21 pairs its restoration verbs with',
+    present: (_p, cp) => nonEmptyList(cp.semanticDrugClaims?.lostFunctionNouns),
+  },
+  {
+    id: 'compliancePack.semanticDrugClaims.patterns',
+    disarms:
+      'the literal-pattern tier of C21 (physician-withdrawal, stop-your-medication and ICD diagnosis codes)',
+    present: (_p, cp) => nonEmptyPairs(cp.semanticDrugClaims?.patterns),
   },
   {
     id: 'compliancePack.disclaimer',
@@ -309,9 +371,7 @@ function crossCheckHits(pack: KnowledgePack, hay: string): { term: string; conte
   for (const cp of pack.crossCheckCompliancePacks ?? []) {
     const nouns = allDiseaseNouns(cp);
     if (nouns.length === 0) continue;
-    const disclaimers = [cp.disclaimer, ...(cp.auditAcceptDisclaimers ?? [])]
-      .filter(Boolean)
-      .map(normalize);
+    const disclaimers = disclaimerVariantsOf(cp).map(normalize);
     const m = scanTerms(subtractDisclaimers(hay, disclaimers), nouns, diseaseNegationOptions(cp))[0];
     if (m) out.push({ term: m.term, context: m.context });
   }
