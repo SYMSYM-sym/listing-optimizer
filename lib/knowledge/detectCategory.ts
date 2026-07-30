@@ -53,11 +53,11 @@ export function detectCategory(snapshot: ListingSnapshot): CategoryDetection {
   const title = snapshot.title.toLowerCase();
   const attrText = Object.values(snapshot.attributes).join(' ').toLowerCase();
 
-  const isSupplement =
-    matchMarkers(routingSupplements, category, title, attrText) ||
-    attrText.includes('supplement');
-
-  if (isSupplement) {
+  // 100% pack data: the hard-coded `attrText.includes('supplement')` that used
+  // to sit here is now the routing marker 'supplement' in
+  // knowledge/routing.supplements.json, which `matchMarkers` already tests
+  // against BOTH the category string and the attribute text.
+  if (matchMarkers(routingSupplements, category, title, attrText)) {
     return {
       packId: 'supplements',
       subcategories: detectSubcategories(

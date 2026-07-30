@@ -75,6 +75,45 @@ const LOOKALIKES: Record<string, string> = {
   z: '\u1d22\u01b6\u0290',
 };
 
+/**
+ * SMALL-CAPITAL letters (`ᴄᴀɴᴄᴇʀ`), keyed by their ASCII twin.
+ *
+ * These are ordinary Unicode letters with NO compatibility decomposition, so
+ * neither NFKC nor the combining-mark strip touches them — `ᴄᴀɴᴄᴇʀ` was a
+ * different string from `cancer` to every scan. The sweep covers the Latin
+ * small-capital block U+1D00-U+1D23 plus the small capitals that live outside
+ * it (U+0262 ɢ, U+026A ɪ, U+0274 ɴ, U+0280 ʀ, U+0299 ʙ, U+028F ʏ, U+029C ʜ,
+ * U+029F ʟ) and U+01A6 Ʀ.
+ *
+ * DELIBERATELY NOT MAPPED: U+1D26-U+1D2B are Greek/Cyrillic small capitals and
+ * U+1D24/U+1D25 are phonetic symbols with no Latin twin — mapping them onto
+ * Latin letters would be a guess, not a fold.
+ */
+const SMALL_CAPITALS: Record<string, string> = {
+  a: '\u1d00\u1d01\u1d02',
+  b: '\u1d03\u0299',
+  c: '\u1d04',
+  d: '\u1d05\u1d06',
+  e: '\u1d07\u1d08',
+  g: '\u0262',
+  h: '\u029c',
+  i: '\u026a\u1d09',
+  j: '\u1d0a',
+  k: '\u1d0b',
+  l: '\u1d0c\u029f',
+  m: '\u1d0d\u1d1f',
+  n: '\u1d0e\u0274',
+  o: '\u1d0f\u1d10\u1d11\u1d12\u1d13\u1d14\u1d15\u1d16\u1d17',
+  p: '\u1d18\u1d29',
+  r: '\u1d19\u1d1a\u0280\u01a6',
+  t: '\u1d1b',
+  u: '\u1d1c\u1d1d\u1d1e',
+  v: '\u1d20',
+  w: '\u1d21',
+  y: '\u028f',
+  z: '\u1d22\u1d23',
+};
+
 /** Digit look-alikes (Cyrillic З reads as 3). */
 const DIGIT_LOOKALIKES: Record<string, string> = {
   '3': '\u0417\u0437',
@@ -87,11 +126,13 @@ function buildConfusables(): Record<string, string> {
     if (from.charCodeAt(0) < 128) return; // never remap ASCII
     if (map[from] === undefined) map[from] = to;
   };
-  for (const [ascii, chars] of Object.entries(LOOKALIKES)) {
-    for (const ch of chars) {
-      add(ch, ascii);
-      const upper = ch.toUpperCase();
-      if (upper.length === 1) add(upper, ascii.toUpperCase());
+  for (const table of [LOOKALIKES, SMALL_CAPITALS]) {
+    for (const [ascii, chars] of Object.entries(table)) {
+      for (const ch of chars) {
+        add(ch, ascii);
+        const upper = ch.toUpperCase();
+        if (upper.length === 1) add(upper, ascii.toUpperCase());
+      }
     }
   }
   for (const [digit, chars] of Object.entries(DIGIT_LOOKALIKES)) {
@@ -122,8 +163,9 @@ const CONFUSABLES: Record<string, string> = buildConfusables();
  * NOT covered (deliberately): ordinary whitespace and printable separators —
  * those are handled by `collapseSeparators` / `stripSeparators`, not here.
  */
-const INVISIBLE_RE =
-  /[\u00AD\u034F\u061C\u115F\u1160\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\u3164\uFE00-\uFE0F\uFEFF]/g;
+const INVISIBLE_CLASS =
+  '\\u00AD\\u034F\\u061C\\u115F\\u1160\\u180B-\\u180E\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\u3164\\uFE00-\\uFE0F\\uFEFF';
+const INVISIBLE_RE = new RegExp(`[${INVISIBLE_CLASS}]`, 'g');
 
 /**
  * Every codepoint `INVISIBLE_RE` strips, as single-character strings.
@@ -147,12 +189,18 @@ export const INVISIBLE_CHARS: string[] = (() => {
 const COMBINING_RE = /[\u0300-\u036F\u1AB0-\u1AFF\u20D0-\u20F0\uFE20-\uFE2F]/g;
 
 /**
- * Per-character NFKC fold, restricted to folds that yield exactly ONE letter or
- * digit (fullwidth `ｃ`, math-bold, circled digits, ...).
+ * Per-character NFKC fold, restricted to folds whose result is made up ENTIRELY
+ * of letters/digits (fullwidth `ｃ`, math-bold, circled digits, the ligatures
+ * `ﬁ`/`ﬂ`/`ﬃ`, the squared unit `㎎`, roman numerals).
+ *
+ * The length-1 restriction this replaces let every LIGATURE through: U+FB01 `ﬁ`
+ * NFKC-folds to the TWO characters "fi", so `ﬁbromyalgia` and `inﬂammation`
+ * were kept verbatim and evaded the term scan. Multi-character results are now
+ * accepted as long as every resulting character is alphanumeric.
  *
  * Whole-string NFKC would also rewrite meaningful SYMBOLS into ASCII letter
  * pairs, which would silently blind the pack-driven banned-symbol scan — so the
- * fold is deliberately limited to single alphanumeric results.
+ * fold is still limited to purely alphanumeric results.
  */
 function foldCompatibility(text: string): string {
   let out = '';
@@ -167,7 +215,16 @@ function foldCompatibility(text: string): string {
       continue;
     }
     const nfkc = ch.normalize('NFKC');
-    out += nfkc.length === 1 && /[\p{L}\p{N}]/u.test(nfkc) ? nfkc : ch;
+    if (nfkc === ch || !/^[\p{L}\p{N}]+$/u.test(nfkc)) {
+      out += ch;
+      continue;
+    }
+    // A MULTI-character fold is accepted only when the SOURCE is itself a
+    // letter/digit. Without that guard the SYMBOLS the style gate must still
+    // see would dissolve into letters — U+2122 NFKC-folds to two ASCII
+    // letters, which would blind the pack-driven banned-symbol scan
+    // completely.
+    out += nfkc.length === 1 || /[\p{L}\p{N}]/u.test(ch) ? nfkc : ch;
   }
   return out;
 }
@@ -210,7 +267,13 @@ function normalizeUncached(text: string): string {
   // Q&A answer) must produce a FAILURE downstream, never a TypeError that
   // escapes runGate — a thrown gate is a fail-OPEN for the caller.
   const src = typeof text === 'string' ? text : text == null ? '' : String(text);
-  let t = decodeEntities(src.replace(INVISIBLE_RE, ''));
+  // ORDER MATTERS. Stripping invisibles BEFORE decoding entities meant
+  // `can&#8203;cer` materialised a zero-width space AFTER the only pass that
+  // removes them (and `39 doll&#8203;ars` defeated C18 the same way). Decode
+  // first, strip, then decode+strip once more so an entity that was itself
+  // split by an invisible character (`&am&#8203;p;`) also resolves.
+  let t = decodeEntities(src).replace(INVISIBLE_RE, '');
+  t = decodeEntities(t).replace(INVISIBLE_RE, '');
   // NFD first so an accent becomes a separate combining mark, then drop the
   // marks: `cańcer` and `cañcer` both fold onto `cancer`.
   t = t.normalize('NFD').replace(COMBINING_RE, '');
@@ -256,7 +319,7 @@ export function collapseSeparators(text: string): string {
  *
  * It is ADDITIVE: the primary surface text is never rewritten.
  */
-const SEPARATOR_STRIP_RE = /[\s.\-–—―−·*/,|'‘’_~+:;]+/g;
+const SEPARATOR_STRIP_RE = new RegExp(`[\\s.\\-\u2013\u2014\u2015\u2212\u00b7*/,|'\u2018\u2019_~+:;${INVISIBLE_CLASS}]+`, 'g');
 
 export interface StrippedText {
   /** The text with every separator removed. */
@@ -270,6 +333,10 @@ const SEPARATOR_CHARS = new Set([
   ' ', '\t', '\n', '\r', '\f', '\v', '\u00a0',
   '.', '-', '\u2013', '\u2014', '\u2015', '\u2212', '\u00b7',
   '*', '/', ',', '|', "'", '\u2018', '\u2019', '_', '~', '+', ':', ';',
+  // Invisible/format characters are separators for THIS pass too, so a
+  // zero-width space glued into a word cannot survive into the concatenated
+  // surface when the caller hands over text that was never normalized.
+  ...INVISIBLE_CHARS,
 ]);
 
 const WHITESPACE_RE = /\s/;
@@ -297,14 +364,19 @@ interface CompiledConcat {
 const CONCAT_CACHE = new WeakMap<string[], Map<number, CompiledConcat | null>>();
 
 /**
- * Build the boundary-FREE alternation for the concatenated pass.
+ * Build the alternation for the concatenated pass.
  *
- * There are no word boundaries left in a concatenated surface, so matching is
- * plain substring matching — which is exactly why a MINIMUM LENGTH is enforced:
- * gluing a whole surface together can create accidental substrings, and short
- * terms (2-4 chars) are the ones that collide. Terms shorter than `minLen`
- * are therefore NOT covered by this pass; they remain covered by the ordinary
- * word-boundary scan on the untouched text.
+ * There are no word boundaries left INSIDE a concatenated surface, so the match
+ * itself is plain substring matching; the boundaries are re-imposed afterwards
+ * against the ORIGINAL text (see `scanConcatenated`), which is what stops the
+ * accidental substrings this pass used to manufacture
+ * (`routine and` -> `routineand` -> contains `tinea`).
+ *
+ * A minimum term length is still enforced, but only as a cheap cost/benefit
+ * filter — with token anchoring in place it can be low enough to cover
+ * `g out` -> `gout` and `ib s` -> `ibs`. Terms shorter than `minLen` are NOT
+ * covered by this pass; they remain covered by the ordinary word-boundary scan
+ * on the untouched text.
  */
 function compileConcatTerms(terms: string[], minLen: number): CompiledConcat | null {
   let byLen = CONCAT_CACHE.get(terms);
@@ -329,13 +401,32 @@ function compileConcatTerms(terms: string[], minLen: number): CompiledConcat | n
     .sort((a, b) => b.length - a.length)
     .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     .join('|');
-  const compiled: CompiledConcat = { re: new RegExp(`(?:${source})`, 'gi'), canonical };
+  // Trailing plural is part of the match so `tum ors` still anchors on the
+  // token END (see `scanConcatenated`) instead of stopping one char short.
+  const compiled: CompiledConcat = { re: new RegExp(`(?:${source})(?:e?s)?`, 'gi'), canonical };
   byLen.set(minLen, compiled);
   return compiled;
 }
 
+/** True when `ch` is a Latin letter — the same guard `termRegex` uses. */
+const isLetter = (ch: string | undefined): boolean => ch !== undefined && /[A-Za-z]/.test(ch);
+
 /**
  * Scan the separator-stripped variant of `text` for separator-stripped `terms`.
+ *
+ * TOKEN ANCHORING. A match is kept only when, IN THE ORIGINAL TEXT, the
+ * character before its first character and the character after its last
+ * character are not letters. That is exactly the word-boundary rule the
+ * ordinary scan uses, evaluated on the un-glued text, and it is what separates
+ * the two directions this pass has to get right:
+ *   - `g out` -> `gout`  : preceded by a space, followed by a space  => KEPT
+ *   - `ib s`  -> `ibs`   : ditto                                     => KEPT
+ *   - `routine and` -> `routineand` contains `tinea`, but that match starts
+ *     after the `u` of "routine"                                     => DROPPED
+ *   - `utility` contains `uti`, but that match ends before the `l`    => DROPPED
+ * Consequence (stated plainly): a split INSIDE a longer word — `cancerous`
+ * written as `cancer ous` — is not reported by this pass, the same way
+ * `cancerous` is not reported by the ordinary scan.
  *
  * Matches are mapped back to their index in the ORIGINAL text so the negation
  * guard and the reported context still see real clause structure — stripping
@@ -362,10 +453,19 @@ export function scanConcatenated(
       continue;
     }
     const originalIndex = map[m.index] ?? 0;
+    const lastIndex = map[m.index + m[0].length - 1] ?? originalIndex;
+    // Token anchoring, evaluated on the ORIGINAL (un-glued) text.
+    if (isLetter(text[originalIndex - 1])) continue;
+    if (isLetter(text[lastIndex + 1])) continue;
     if (hasNegationContext(text, originalIndex, neg)) continue;
-    const endIndex = (map[m.index + m[0].length - 1] ?? originalIndex) + 1;
+    const endIndex = lastIndex + 1;
+    const key = m[0].toLowerCase();
     out.push({
-      term: compiled.canonical.get(m[0].toLowerCase()) ?? m[0],
+      term:
+        compiled.canonical.get(key) ??
+        compiled.canonical.get(key.replace(/es$/, '')) ??
+        compiled.canonical.get(key.replace(/s$/, '')) ??
+        m[0],
       index: originalIndex,
       context: text.slice(Math.max(0, originalIndex - 40), endIndex + 40),
     });
@@ -438,18 +538,43 @@ export function doubleCollapsedVariants(text: string): string[] {
 
 const COLLAPSED_TERMS_CACHE = new WeakMap<string[], string[]>();
 
-/** `terms` with repeated letters collapsed, cached on the array instance. */
+/**
+ * Minimum length of a COLLAPSED term for it to take part in the doubled-letter
+ * pass.
+ *
+ * `collapseDoubles('Add')` is `'Ad'` and the TERMS are collapsed too, so the
+ * 3-letter noun `add` became the 2-letter fragment `ad` and matched the verb
+ * "add" in every piece of ordinary copy ("Simply add water", "Add one chew to
+ * your routine"). Short collapsed forms carry no signal and all of the
+ * collisions, so they are excluded from this pass; they stay fully covered by
+ * the ordinary word-boundary scan on the untouched text.
+ */
+export const DOUBLE_COLLAPSE_MIN_TERM_LEN = 5;
+
+/**
+ * `terms` with repeated letters collapsed, cached on the array instance.
+ * Terms whose collapsed form is shorter than `DOUBLE_COLLAPSE_MIN_TERM_LEN`
+ * are dropped — see the constant above.
+ */
 export function collapseDoublesTerms(terms: string[]): string[] {
   const cached = COLLAPSED_TERMS_CACHE.get(terms);
   if (cached) return cached;
-  const collapsed = [...new Set(terms.map(collapseDoubles))];
+  const collapsed = [
+    ...new Set(
+      terms
+        .map(collapseDoubles)
+        .filter((t) => t.trim().length >= DOUBLE_COLLAPSE_MIN_TERM_LEN),
+    ),
+  ];
   COLLAPSED_TERMS_CACHE.set(terms, collapsed);
   return collapsed;
 }
 
-// Per brain/04: "never", "banned", "do not", "there is no", "avoid", "not"
-// (kept close to spec — broader cues over-suppress real violations).
-const NEGATION_CUES = [
+/**
+ * LEGACY cue set (A8 / potency phrasing) — the original ~90-char proximity
+ * guard, unchanged.
+ */
+const LEGACY_NEGATION_CUES = [
   'never',
   'banned',
   'do not',
@@ -458,6 +583,32 @@ const NEGATION_CUES = [
   'avoid',
   'not ',
   'no ', // "No disease language" / "makes no claims about …"
+  'cannot',
+  'must not',
+  'prohibited',
+];
+
+/**
+ * STRICT cue set (the DISEASE path, C6/A2).
+ *
+ * The bare cues `no `, `not `, `never` and `avoid` are DELIBERATELY ABSENT:
+ * placed in front of a disease noun they do not negate the claim, they ARE the
+ * claim — "Avoid diabetes", "No more arthritis pain", "Never depression again",
+ * "No cancer worries" are all prevention claims, and every one of them used to
+ * be suppressed by its own cue. Genuine disclaimers do not rely on a bare cue:
+ * they are matched by the pack's `negationMetaPhrases` ("not intended to
+ * diagnose, treat, cure, or prevent any disease"), which is positive evidence
+ * and is checked first.
+ *
+ * What remains here are cues that cannot themselves be read as a claim about a
+ * disease ("banned", "prohibited", "cannot", "must not", "do not", "there is
+ * no") — e.g. an internal note saying "disease words are banned".
+ */
+const STRICT_NEGATION_CUES = [
+  'banned',
+  'do not',
+  "don't",
+  'there is no',
   'cannot',
   'must not',
   'prohibited',
@@ -517,6 +668,14 @@ export interface NegationOptions {
    * disease"). Pack data (`compliancePack.diseaseVerbs`).
    */
   metaGapVerbs?: string[];
+  /**
+   * Pack-driven BENIGN SPANS (`compliancePack.benignContextPhrases`): fixed
+   * retail phrases in which a disease word is a calendar/seasonal reference
+   * rather than a claim ("cold and flu season"). A match INSIDE such a span is
+   * suppressed — unless a therapeutic-action verb sits in the same clause in
+   * front of it, so "prevents colds during cold and flu season" still fails.
+   */
+  benignPhrases?: string[];
 }
 
 /** True when any of `terms` occurs in `text` on a word boundary. */
@@ -572,6 +731,40 @@ function metaPhraseSuppresses(
 }
 
 /**
+ * BENIGN-SPAN suppression: the match sits INSIDE a pack benign phrase and no
+ * therapeutic-action verb precedes that phrase within the same clause.
+ *
+ * Scope note: this suppresses ONLY matches whose index falls inside the phrase
+ * span itself. A disease word elsewhere in the same sentence is untouched.
+ */
+function benignPhraseSuppresses(
+  lower: string,
+  matchIndex: number,
+  phrases: string[],
+  blockingVerbs: string[],
+): boolean {
+  for (const raw of phrases) {
+    const phrase = raw.trim().toLowerCase();
+    if (!phrase) continue;
+    let from = 0;
+    for (;;) {
+      const start = lower.indexOf(phrase, from);
+      if (start < 0) break;
+      from = start + 1;
+      if (matchIndex < start || matchIndex >= start + phrase.length) continue;
+      // A therapeutic-action verb in the clause leading up to the phrase turns
+      // it back into a claim — "prevents colds during cold and flu season".
+      const lead = lower.slice(Math.max(0, start - LEGACY_WINDOW_CHARS), start);
+      const clauseParts = lead.split(CLAUSE_BOUNDARY_RE);
+      const sameClause = clauseParts[clauseParts.length - 1] ?? '';
+      if (blockingVerbs.length > 0 && containsTerm(sameClause, blockingVerbs)) continue;
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * True when the term at `matchIndex` is actually NEGATED by its context.
  *
  * Default (`legacy`) keeps the original ~90-char proximity rule. `strict` mode
@@ -588,7 +781,7 @@ export function hasNegationContext(
   if ((opts.mode ?? 'legacy') === 'legacy') {
     const windowStart = Math.max(0, matchIndex - (opts.windowChars ?? LEGACY_WINDOW_CHARS));
     const preceding = lower.slice(windowStart, matchIndex);
-    return NEGATION_CUES.some((cue) => preceding.includes(cue));
+    return LEGACY_NEGATION_CUES.some((cue) => preceding.includes(cue));
   }
 
   const blockingVerbs = opts.blockingVerbs ?? [];
@@ -599,12 +792,16 @@ export function hasNegationContext(
   ) {
     return true;
   }
+  const benign = opts.benignPhrases ?? [];
+  if (benign.length > 0 && benignPhraseSuppresses(lower, matchIndex, benign, blockingVerbs)) {
+    return true;
+  }
 
   // POSITIVE EVIDENCE ONLY: a cue must sit right on top of the term.
   const windowStart = Math.max(0, matchIndex - (opts.windowChars ?? STRICT_WINDOW_CHARS));
   const preceding = lower.slice(windowStart, matchIndex);
   let cueEnd = -1;
-  for (const cue of NEGATION_CUES) {
+  for (const cue of STRICT_NEGATION_CUES) {
     const i = preceding.lastIndexOf(cue);
     if (i >= 0) cueEnd = Math.max(cueEnd, i + cue.length);
   }

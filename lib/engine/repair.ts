@@ -92,7 +92,17 @@ export async function runRepairLoop(
       const line = `[${failure.checkId}] ${failure.field}: ${failure.context} → FIX: ${failure.fix}`;
       failureContext[g] = failureContext[g] ? `${failureContext[g]}\n${line}` : line;
     }
-    if (groups.size === 0) break; // nothing regenerable owns the failures
+    if (groups.size === 0) {
+      // Nothing regenerable owns ANY of the remaining failures. That is a
+      // legitimate terminal state (a PACK failure has no owning generator),
+      // but it used to exit the loop silently — so the run looked like it had
+      // simply converged. Say so.
+      logServer('repair.no_owner_exit', {
+        iteration: iterations,
+        failures: gateResult.failures.map((f) => `${f.checkId}:${f.field}`),
+      });
+      break;
+    }
     logServer('repair.round', {
       iteration: iterations,
       groups: [...groups],

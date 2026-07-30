@@ -53,7 +53,14 @@ export function loadPack(id: PackId): KnowledgePack {
   return {
     id: 'generic',
     // The generic pack is the ONLY pack that may legitimately ship without a
-    // compliance module; the suspicion lexicon is its fail-closed backstop.
+    // compliance module. Two independent backstops guard it: the suspicion
+    // lexicon (vocabulary heuristic) and the regulated packs' disease/drug
+    // lexicons (`crossCheckCompliancePacks`), which make a generic-routed
+    // listing that names a disease fail CLOSED.
+    crossCheckCompliancePacks: [
+      complianceJson as CompliancePack,
+      cosmeticsComplianceJson as CompliancePack,
+    ],
     requiresCompliance: false,
     rules,
     compliancePack: null,

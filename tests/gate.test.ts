@@ -121,9 +121,23 @@ describe('C-series fail fixtures (exact checkId + field)', () => {
     const combo = mut((x) => { x.description = x.description.replace('Who it is for:', 'It can treat candida issues. Who it is for:'); });
     expect(idsOf(combo)).toContain('C6');
   });
-  it('C6 negation guard: prohibiting a term is not a violation', () => {
-    const l = mut((x) => { x.description = x.description.replace('Who it is for:', 'This product is not a treatment and makes no claims about diabetes. Who it is for:'); });
+  /**
+   * ROUND-5 REVISION of the negation guard.
+   *
+   * Suppression on the DISEASE path now requires POSITIVE evidence — a pack
+   * `negationMetaPhrase` — never a bare "no"/"not"/"never"/"avoid" cue, because
+   * those in front of a disease noun do not negate a claim, they ARE one
+   * ("Avoid diabetes", "No more arthritis pain"). The verbatim disclaimer is
+   * still exempt (it is subtracted AND is a meta-phrase); free-form "makes no
+   * claims about diabetes" is not, and now correctly fails.
+   */
+  it('C6 negation guard: the verbatim disclaimer wording is not a violation', () => {
+    const l = mut((x) => { x.description = x.description.replace('Who it is for:', `${pack.compliancePack!.disclaimer} Who it is for:`); });
     expect(idsOf(l).filter((id) => id === 'C6')).toEqual([]);
+  });
+  it('C6 negation guard: a bare "no" no longer launders a disease mention', () => {
+    const l = mut((x) => { x.description = x.description.replace('Who it is for:', 'This product is not a treatment and makes no claims about diabetes. Who it is for:'); });
+    expect(idsOf(l)).toContain('C6');
   });
   it('C7 backend-only manufacturer leaking into a bullet', () => {
     const l = mut((x) => { x.bullets[1] = `Made by BrandX Labs LLC with care in the USA`; });
@@ -298,21 +312,40 @@ describe('PACK fail-closed', () => {
     const r = runGate(clean, generic, { subcategories: [], snapshotText: snapshot.title });
     expect(r.failures.some((y) => y.checkId === 'PACK')).toBe(true);
   });
+  /**
+   * OVER-BLOCKING GUARD. The suspicion haystack is now the WHOLE generated
+   * listing (round-5 fix 1a), so the fixture has to be a genuinely clean
+   * non-regulated listing — every surface, not just the four fields the old
+   * haystack read. If it is, no PACK failure may appear.
+   */
   it('generic pack + genuinely non-regulated product → no PACK failure', () => {
     const generic = loadPack('generic');
     const tongs = mut((x) => {
       x.title = 'SteelPro Kitchen Tongs 12-Inch Stainless';
       x.title75 = 'SteelPro Kitchen Tongs 12-Inch';
       x.productName = 'SteelPro Kitchen Tongs';
-      x.description = 'SteelPro Kitchen Tongs are stainless utensils for daily cooking.';
-      x.bullets = ['Sturdy build for daily flipping and serving tasks', 'b', 'c', 'd', 'e'];
+      x.description = 'SteelPro Kitchen Tongs are stainless utensils for everyday cooking.';
+      x.bullets = ['Sturdy build for flipping and turning hot food', 'b', 'c', 'd', 'e'];
       x.backendSearchTerms = 'pinzas cocina asador grill utensilio acero';
       x.itemHighlights = 'Locking design dishwasher safe utensil set piece';
       x.facts = {};
       x.attributes = {};
+      x.fdaDisclaimer = '';
+      x.qa = [{ q: 'How long are they?', a: 'Twelve inches end to end.', claimBearing: false }];
+      x.imagePlan = [
+        { slot: 1, purpose: 'main image', spec: 'white background', notes: 'no overlay text' },
+      ];
+      x.aplusContent = {
+        fdaDisclaimer: '',
+        modules: [
+          { id: 'hero', headline: 'SteelPro Kitchen Tongs', body: 'Stainless steel utensils built to last.', claimBearing: false },
+        ],
+        comparison: { rows: [{ label: 'Material', ours: 'Stainless steel', typical: 'Coated plastic' }] },
+        faq: [{ q: 'Dishwasher safe?', a: 'Yes, top rack.', claimBearing: false }],
+      };
     });
     const r = runGate(tongs, generic, { subcategories: [], snapshotText: tongs.title });
-    expect(r.failures.some((y) => y.checkId === 'PACK')).toBe(false);
+    expect(r.failures.filter((y) => y.checkId === 'PACK')).toEqual([]);
   });
 });
 

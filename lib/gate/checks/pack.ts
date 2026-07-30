@@ -1,7 +1,7 @@
 import type { CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
-import { inflectAll, normalize } from '../util';
+import { inflectAll, normalize, scanTerms, subtractDisclaimers, termRegex } from '../util';
 import type { GateContext } from './types';
-import { fail } from './shared';
+import { allGeneratedSurfaces, diseaseNegationOptions, fail } from './shared';
 
 const UNION_CACHE = new WeakMap<CompliancePack, string[]>();
 const ACTION_VERB_CACHE = new WeakMap<CompliancePack, string[]>();
@@ -230,17 +230,51 @@ const disarmedBy = (ids: string[]): string =>
     .join('; ');
 
 /**
+ * The REGULATED-CATEGORY cross-check lexicon.
+ *
+ * A pack with no compliance module switches off C5/C6/C9/C10/C11/A1/A2 (they
+ * all early-return on `!cp`). The suspicion lexicon alone is a vocabulary
+ * heuristic, so this second, independent backstop asks a blunter question: does
+ * the generated listing name a DISEASE or a PRESCRIPTION DRUG at all?
+ *
+ * The lexicons come off `pack.crossCheckCompliancePacks` — PACK DATA assembled
+ * in knowledge/, so this module still names no category. It is a safety
+ * cross-check, not a routing decision: a product routed to a pack with no
+ * compliance module can never come back `verified` while making drug claims.
+ */
+function crossCheckHits(pack: KnowledgePack, hay: string): { term: string; context: string }[] {
+  const out: { term: string; context: string }[] = [];
+  for (const cp of pack.crossCheckCompliancePacks ?? []) {
+    const nouns = allDiseaseNouns(cp);
+    if (nouns.length === 0) continue;
+    const disclaimers = [cp.disclaimer, ...(cp.auditAcceptDisclaimers ?? [])]
+      .filter(Boolean)
+      .map(normalize);
+    const m = scanTerms(subtractDisclaimers(hay, disclaimers), nouns, diseaseNegationOptions(cp))[0];
+    if (m) out.push({ term: m.term, context: m.context });
+  }
+  return out;
+}
+
+/**
  * FAIL-CLOSED rule.
  *
- * Three layers:
+ * Four layers:
  *  1. A pack that DECLARES it needs a compliance module but ships none is
  *     blocking (`requiresCompliance`), whatever the copy says.
  *  2. Every required pack piece must be present and non-empty — see the
  *     manifest above. Emptying one now NAMES itself in a blocking failure
  *     instead of silently switching its check off.
  *  3. A pack with no compliance module and no declared requirement still fails
- *     closed when the snapshot smells like a regulated category
- *     (`suspicionLexicon`).
+ *     closed when the LISTING smells like a regulated category
+ *     (`suspicionLexicon`). The haystack is the ENTIRE generated listing —
+ *     title/bullets/description/backend/Q&A/image plan/attributes/facts/A+ —
+ *     plus the snapshot text. It used to be `snapshotText + title +
+ *     description` only, so a listing whose BULLETS, A+ modules, Q&A or
+ *     attributes carried the regulated vocabulary was invisible to it.
+ *  4. Belt and braces: a pack with no compliance module that nonetheless
+ *     mentions a disease or a prescription drug ANYWHERE in the listing is
+ *     blocking, whatever its vocabulary looks like (see `crossCheckLexicon`).
  */
 export function packFailClosed(
   l: OptimizedListing,
@@ -259,19 +293,36 @@ export function packFailClosed(
         ),
       ];
     }
-    const hay = normalize(`${ctx.snapshotText ?? ''} ${l.title ?? ''} ${l.description ?? ''}`).toLowerCase();
-    const hit = (pack.suspicionLexicon ?? []).find((t) => hay.includes(t.toLowerCase()));
+    const out: Failure[] = [];
+    const hay = normalize(
+      [ctx.snapshotText ?? '', ...allGeneratedSurfaces(l).map(([, text]) => text)].join(' \n '),
+    );
+    // WORD BOUNDARIES, not substrings: the lexicon carries short forms ('ct',
+    // 'mg', 'iu') that as raw substrings would match 'produ-ct', 'i-m-age' and
+    // 'premi-u-m' and block every listing on earth.
+    const hit = (pack.suspicionLexicon ?? []).find((t) => t.trim() && termRegex(t).test(hay));
     if (hit) {
-      return [
+      out.push(
         fail(
           'PACK',
           'compliance',
-          `pack '${pack.id}' has no compliance module but product matches suspicion term '${hit}'`,
+          `pack '${pack.id}' has no compliance module but listing matches suspicion term '${hit}'`,
           'compliance pack incomplete for this category — route to a pack with a compliance module before trusting a pass',
         ),
-      ];
+      );
     }
-    return [];
+    const cross = crossCheckHits(pack, hay)[0];
+    if (cross) {
+      out.push(
+        fail(
+          'PACK',
+          'compliance',
+          `pack '${pack.id}' has no compliance module but listing contains the disease/drug term '${cross.term}': ${cross.context}`,
+          'compliance pack incomplete for this category — a listing that names a disease or a prescription drug must be routed to a pack with a compliance module before trusting a pass',
+        ),
+      );
+    }
+    return out;
   }
 
   const missing = missingPackPieces(pack);

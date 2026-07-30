@@ -129,7 +129,6 @@
     "cardiomyopathy",
     "alzheimer",
     "multiple sclerosis",
-    "als",
     "amyotrophic lateral sclerosis",
     "muscular dystrophy",
     "cerebral palsy",
@@ -251,10 +250,6 @@
     "lung cancer",
     "t2d",
     "t1d",
-    "oa",
-    "ra",
-    "chf",
-    "ms",
     "afib",
     "the big c",
     "brain fog",
@@ -297,6 +292,12 @@
     "is not a drug",
     "is not a medicine",
     "not a substitute for medical advice"
+  ],
+  "_benignContextPhrasesComment": "Fixed retail phrases in which a disease word is a CALENDAR reference, not a claim. A disease-term match INSIDE one of these spans is suppressed; a therapeutic-action verb in the same clause in front of the phrase re-arms it (\"prevents colds during cold and flu season\" still fails).",
+  "benignContextPhrases": [
+    "cold and flu season",
+    "flu season",
+    "allergy season"
   ],
   "diseaseNounsBySubcategory": {
     "probiotic": [
@@ -352,8 +353,7 @@
       "norovirus",
       "intestinal parasites",
       "giardia",
-      "celiac disease",
-      "bloating"
+      "celiac disease"
     ],
     "digestive": [
       "ibs",
@@ -407,7 +407,6 @@
       "inflammatory bowel disease",
       "ibd",
       "dysbiosis",
-      "bloating",
       "chronic bloating"
     ],
     "joint": [
@@ -521,7 +520,6 @@
       "sinusitis",
       "strep",
       "rsv",
-      "mono",
       "mononucleosis",
       "sepsis",
       "colds",
@@ -605,7 +603,6 @@
       "cognitive decline",
       "traumatic brain injury",
       "concussion",
-      "add",
       "alzheimer's disease",
       "alzheimers disease",
       "vascular dementia",
@@ -1032,11 +1029,9 @@
     ],
     "general": [
       "anemia",
-      "fatigue",
       "malnutrition",
       "vitamin deficiency disease",
       "chronic fatigue syndrome",
-      "inflammation",
       "chronic pain",
       "wellness disorder",
       "nutrient deficiency",

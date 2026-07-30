@@ -143,7 +143,8 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const disclaimers = cp
     ? [cp.disclaimer, ...(cp.auditAcceptDisclaimers ?? [])].filter(Boolean).map(normalize)
     : [];
-  const clean = (raw: string): string => subtractDisclaimers(normalize(raw), disclaimers);
+  const clean = (raw: string): string =>
+    subtractDisclaimers(normalize(raw), disclaimers).replace(/\s+/g, ' ').trim();
 
   const bannedCharsGroups = new Set(style.bannedCharsSurfaces);
   const titleBanGroups = new Set(style.titleTermBanSurfaces);
@@ -260,7 +261,16 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
     }
   }
 
-  // 9 — description UTF-8 BYTE cap (belt-and-braces alongside the char cap)
+  // 9 — description UTF-8 BYTE backstop.
+  //
+  // Amazon's documented description limit is 2000 CHARACTERS, and that cap is
+  // the authoritative one — it is enforced by C4 against `rules.descriptionMax`.
+  // A byte cap set to the SAME number silently made the real limit ~1000
+  // characters for accented or non-English copy (é/ü are 2 bytes, CJK 3), which
+  // is over-blocking, not enforcement. `descriptionMaxBytes` is therefore raised
+  // to 4x the character cap — the worst case for UTF-8 — so it can no longer
+  // fire on any string that already satisfies the character cap. It survives
+  // purely as a payload/backstop guard against something absurd being pasted in.
   const descBytes = utf8Bytes(l.description ?? '');
   if (descBytes > style.descriptionMaxBytes) {
     out.push(
@@ -273,9 +283,13 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
     );
   }
 
-  // 2 + 3 — bullet-only capitalization and trailing punctuation
+  // 2 + 3 — bullet-only capitalization and trailing punctuation.
+  // The verbatim disclaimer is SUBTRACTED first, exactly like every other rule
+  // in this check: a claim-bearing bullet that carries the required disclaimer
+  // ends with the disclaimer's own full stop and used to fail the
+  // trailing-punctuation rule for text the gate itself demands be there.
   (l.bullets ?? []).forEach((raw, i) => {
-    const text = normalize(raw);
+    const text = clean(raw);
     if (!text) return;
     if (style.bulletMustStartCapital) {
       const first = text[0] ?? '';

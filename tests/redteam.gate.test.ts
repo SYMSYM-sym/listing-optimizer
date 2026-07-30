@@ -253,9 +253,21 @@ describe('FIX 4 — previously missing condition terms are now caught', () => {
     expect(failures(l, womens).some((y) => y.checkId === 'C6' && y.field === 'bullets[0]')).toBe(true);
   });
 
-  it('"bloating" is caught for a digestive product', () => {
-    const l = mut((x) => { x.bullets[0] = 'Daily support that bloating*'; });
+  /**
+   * ROUND-5 REVISION. Bare "bloating" was removed from the lexicon: it is a
+   * SYMPTOM word, and "helps with occasional bloating" is exactly the
+   * structure/function phrasing DSHEA permits — blocking it made the tool
+   * unusable on ordinary digestive copy. The DISEASE compound is what is
+   * enforced.
+   */
+  it('"chronic bloating" is caught for a digestive product', () => {
+    const l = mut((x) => { x.bullets[0] = 'Daily support that chronic bloating*'; });
     expect(failures(l).some((y) => y.checkId === 'C6' && y.field === 'bullets[0]')).toBe(true);
+  });
+
+  it('bare "occasional bloating" is NOT a violation (round-5 false-positive fix)', () => {
+    const l = mut((x) => { x.bullets[0] = 'Helps reduce occasional bloating and gas*'; });
+    expect(failures(l).filter((y) => y.checkId === 'C6' && y.field === 'bullets[0]')).toEqual([]);
   });
 
   it('every subcategory disease-noun list stays non-empty (fail-closed contract)', () => {

@@ -273,6 +273,14 @@ export interface CompliancePack {
    * Pack data — the negation guard holds no lexicon of its own.
    */
   negationMetaPhrases?: string[];
+  /**
+   * BENIGN SPANS: fixed retail phrases in which a disease word is a
+   * calendar/seasonal reference rather than a claim ("cold and flu season").
+   * A match INSIDE one of these spans is suppressed, UNLESS a
+   * therapeutic-action verb sits in the same clause in front of it — so
+   * "prevents colds during cold and flu season" still fails. Pack data.
+   */
+  benignContextPhrases?: string[];
   /** Subcategory label -> that subcategory's disease/infection nouns (non-empty). */
   diseaseNounsBySubcategory: Record<string, string[]>;
   allergenRules: AllergenRule[];
@@ -317,6 +325,15 @@ export interface Principle {
 
 export interface KnowledgePack {
   id: string; // 'supplements' | 'generic' | future packs
+  /**
+   * SAFETY CROSS-CHECK for a pack that ships NO compliance module.
+   *
+   * Such a pack switches off C5/C6/C9/C10/C11/A1/A2 wholesale, so the gate
+   * additionally asks whether the generated listing names a disease or a
+   * prescription drug AT ALL, using the regulated packs' lexicons. Assembled in
+   * `loadPack` (knowledge/), so the gate itself still names no category.
+   */
+  crossCheckCompliancePacks?: CompliancePack[];
   rules: RuleSet;
   /**
    * TRUE for every category that is regulated enough to need a compliance

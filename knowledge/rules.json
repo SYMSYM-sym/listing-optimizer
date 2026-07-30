@@ -145,7 +145,7 @@
     "descriptionAllowedHtml": [
       "br"
     ],
-    "descriptionMaxBytes": 2000,
+    "descriptionMaxBytes": 8000,
     "htmlTagPattern": "<\\s*/?\\s*([A-Za-z][A-Za-z0-9]*)\\b[^>]*>"
   },
   "rules": [
@@ -332,7 +332,8 @@
       "qa",
       "imagePlan",
       "attributes",
-      "aplus"
+      "aplus",
+      "facts"
     ]
   },
   "prohibitedMarketing": {
@@ -457,7 +458,8 @@
       "qa",
       "imagePlan",
       "attributes",
-      "aplus"
+      "aplus",
+      "facts"
     ]
   },
   "units": {

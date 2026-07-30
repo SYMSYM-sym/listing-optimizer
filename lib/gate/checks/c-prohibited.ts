@@ -47,6 +47,18 @@ function collectSurfaces(listing: OptimizedListing, want: Set<string>): ScanSurf
       surfaces.push({ field: `imagePlan[${i}].notes`, text: s(slot?.notes) });
     });
   }
+  // Canonical FACTS are echoed verbatim into every repair prompt and into the
+  // export, so a price/URL/marketing claim parked in one used to reach the
+  // generator with neither C18 nor C19 ever reading it.
+  // `facts.price` is exempted BY KEY (it legitimately holds the standard
+  // price); every other fact string is scanned.
+  if (want.has('facts')) {
+    for (const [key, value] of Object.entries(listing.facts ?? {})) {
+      if (key === 'price') continue;
+      const text = s(value);
+      if (text.trim()) surfaces.push({ field: `facts.${key}`, text });
+    }
+  }
   // Attribute VALUES render in the customer-facing detail table.
   if (want.has('attributes')) {
     for (const [key, value] of Object.entries(listing.attributes ?? {})) {
@@ -202,9 +214,8 @@ export function c19ProhibitedMarketing(
 
   const out: Failure[] = [];
   // Superlative bans are de-obfuscated the same way, and additionally scanned
-  // in the separator-STRIPPED variant when the phrase is long enough that a
-  // concatenated surface cannot produce it by accident (same threshold as the
-  // disease-term concatenated pass).
+  // in the separator-STRIPPED variant (same threshold and the same token
+  // anchoring as the disease-term concatenated pass).
   for (const { field, text } of surfaces) {
     const clean = subtractDisclaimers(normalize(text ?? ''), disclaimers);
     if (!clean) continue;

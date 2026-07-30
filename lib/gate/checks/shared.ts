@@ -38,9 +38,15 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' 
 
 /**
  * Minimum term length for the separator-STRIPPED pass (see `scanConcatenated`).
- * Below this, concatenating a surface produces accidental substring hits.
+ *
+ * It used to be 5 because that pass matched plain substrings, so anything
+ * shorter collided with ordinary copy. `scanConcatenated` now anchors every
+ * match on TOKEN boundaries taken from the original text, which removes the
+ * collisions independently of length, so the threshold is 3 — enough to cover
+ * `g out` -> `gout` and `ib s` -> `ibs`. Terms of 1-2 characters stay out of
+ * this pass (they are covered by the ordinary word-boundary scan).
  */
-export const CONCAT_MIN_TERM_LEN = 5;
+export const CONCAT_MIN_TERM_LEN = 3;
 
 /** Customer-surface set used by C6–C12 (buyer-facing copy). */
 export function customerSurfaces(l: OptimizedListing): [string, string][] {
@@ -72,9 +78,10 @@ export function customerSurfaces(l: OptimizedListing): [string, string][] {
  * a fact string used to reach the generator without any check ever reading it.
  * Only STRING values are scanned (numbers cannot carry a claim).
  *
- * Scanned by the disease/drug path (C6) ONLY — deliberately NOT by C18/C19:
- * `facts.price` legitimately holds the standard price, which C18 would
- * (correctly, for customer copy) report as a prohibited price statement.
+ * C18/C19 scan `facts.*` too (see `collectSurfaces` in c-prohibited.ts), with
+ * `facts.price` exempted BY KEY — it legitimately holds the standard price,
+ * which C18 would otherwise, and correctly for customer copy, report as a
+ * prohibited price statement.
  */
 export function factsComplianceSurfaces(l: OptimizedListing): [string, string][] {
   const out: [string, string][] = [];
@@ -97,6 +104,25 @@ export function attributeComplianceSurfaces(l: OptimizedListing): [string, strin
     out.push([`attributes.${key}`, str(value)]);
   }
   return out;
+}
+
+/**
+ * EVERY generated surface, in one list: customer copy (title/bullets/
+ * description/backend/Q&A/image plan), attribute values, canonical facts and
+ * every A+ text field.
+ *
+ * Used by the fail-closed suspicion + cross-pack backstop in `packFailClosed`,
+ * which previously scanned only `snapshotText + title + description` — so a
+ * listing whose BULLETS, A+ modules, Q&A or attributes were full of claims was
+ * invisible to it.
+ */
+export function allGeneratedSurfaces(l: OptimizedListing): [string, string][] {
+  return [
+    ...customerSurfaces(l),
+    ...attributeComplianceSurfaces(l),
+    ...factsComplianceSurfaces(l),
+    ...aplusSurfaces(l.aplusContent),
+  ];
 }
 
 /** Every A+ text field (headlines, bodies, subcopy, comparison cells, FAQ q/a). */
@@ -151,6 +177,7 @@ export function diseaseNegationOptions(cp: CompliancePack): NegationOptions {
     blockingVerbs: diseaseActionVerbs(cp),
     metaGapVerbs: cp.diseaseVerbs,
     metaPhrases: cp.negationMetaPhrases ?? [],
+    benignPhrases: cp.benignContextPhrases ?? [],
   };
 }
 
@@ -170,6 +197,8 @@ export function scanSurfacesForBanned(
     // scan ever being weakened (the untouched text is always variant #1).
     // The doubled-letter pass compares collapsed text against a COLLAPSED term
     // list, so terms that legitimately carry a double letter still match.
+    // Collapsed terms shorter than DOUBLE_COLLAPSE_MIN_TERM_LEN are dropped
+    // from that pass — see `collapseDoublesTerms`.
     const passes: { variants: string[]; nouns: string[]; verbs: string[] }[] = [
       { variants: deobfuscatedVariants(text), nouns, verbs: cp.diseaseVerbs },
       {
@@ -182,13 +211,13 @@ export function scanSurfacesForBanned(
 
     // PARTIAL-SPLIT pass (additive, third variant family): every intra-word
     // separator is removed from the surface AND from the term list, so
-    // `c ancer`, `ca ncer`, `can-cer` and `cance r` are all caught — splits
-    // `collapseSeparators` cannot rebuild because they leave a multi-letter
-    // fragment. Only terms of >= CONCAT_MIN_TERM_LEN characters participate:
-    // gluing a whole surface together can manufacture accidental substrings,
-    // and the short terms are the ones that collide. Terms shorter than that
-    // are NOT covered by this pass (they stay covered by the ordinary
-    // word-boundary scan above). Disease VERBS are not scanned here either.
+    // `c ancer`, `ca ncer`, `can-cer`, `cance r`, `g out` and `ib s` are all
+    // caught — splits `collapseSeparators` cannot rebuild because they leave a
+    // multi-letter fragment. `scanConcatenated` re-imposes word boundaries from
+    // the ORIGINAL text, so gluing a surface together no longer manufactures
+    // accidental matches. Terms of 1-2 characters still stay out of this pass
+    // (they remain covered by the ordinary word-boundary scan above), and
+    // disease VERBS are not scanned here either.
     for (const m of scanConcatenated(text, nouns, CONCAT_MIN_TERM_LEN, neg)) {
       if (seen.has(`n:${m.term}`)) continue;
       seen.add(`n:${m.term}`);

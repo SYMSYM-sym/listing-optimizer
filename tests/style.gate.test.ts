@@ -263,7 +263,10 @@ describe('C17 is category-agnostic and pack-driven', () => {
       expect.arrayContaining(['free shipping', 'best seller', 'bestseller', 'top rated', '#1', 'cheapest', 'on sale', 'hot deal', 'clearance']),
     );
     expect(style.descriptionAllowedHtml).toEqual(['br']);
-    expect(style.descriptionMaxBytes).toBe(2000);
+    // Round 5: the CHARACTER cap (rules.descriptionMax = 2000, enforced by C4)
+    // is authoritative. The byte cap is a 4x backstop so accented/non-English
+    // copy that satisfies the documented character limit cannot be blocked.
+    expect(style.descriptionMaxBytes).toBe(4 * 2000);
   });
 
   it('emptying the pack lists disarms the check — nothing is hard-coded in the gate', () => {

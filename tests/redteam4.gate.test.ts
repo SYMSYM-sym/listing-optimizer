@@ -331,10 +331,11 @@ describe('FIX 4 — a digit no longer buys immunity', () => {
 
   /**
    * The letters-only boundary must still prevent a term matching INSIDE a
-   * longer word on the primary (untouched) text. Asserted on `termRegex`
-   * directly, because the separator-STRIPPED pass (FIX 2) is substring-based
-   * by construction and WILL report `cancerous` — that is a deliberate
-   * trade-off of concatenated matching, not a boundary regression.
+   * longer word on the primary (untouched) text.
+   *
+   * Round-5 update: the separator-STRIPPED pass is no longer substring-based —
+   * it anchors every match on token boundaries taken from the ORIGINAL text —
+   * so it no longer reports `cancerous` either.
    */
   it.each(['cancerous', 'oncancer', 'precancerously', 'diabetesish'])(
     '"%s" is not a word-boundary match for its embedded term',
@@ -352,8 +353,24 @@ describe('FIX 4 — a digit no longer buys immunity', () => {
 // FIX 5 — lexicon gaps (abbreviations, colloquialisms, science, drugs)
 // ===========================================================================
 
+/**
+ * SUPERSEDED BY ROUND 5 (see tests/falsePositives.gate.test.ts).
+ *
+ * Round 4 added the abbreviations `oa`, `ra`, `chf`, `ms`, `als` (and `add`,
+ * `mono`) to the lexicon. Round 5 showed they cannot be matched
+ * case-insensitively without destroying ordinary copy — `500 ms`, `Ms Jones`,
+ * `an MS in food science`, `an OA member`, `RA levels`, `a CHF payment option`,
+ * `ALS testing`, `Simply add water`, `mono ingredient formula`. They are
+ * removed; their UNAMBIGUOUS long forms below are what is enforced instead.
+ */
+const REMOVED_AMBIGUOUS_ABBREVIATIONS = ['oa', 'ra', 'chf', 'ms', 'als', 'add', 'mono'];
+const KEPT_LONG_FORMS = [
+  'osteoarthritis', 'rheumatoid arthritis', 'congestive heart failure',
+  'multiple sclerosis', 'amyotrophic lateral sclerosis', 'adhd', 'mononucleosis',
+];
+
 const NEW_TERMS = [
-  't2d', 't1d', 'oa', 'ra', 'chf', 'ms', 'als', 'afib',
+  't2d', 't1d', 'afib',
   'the big c', 'brain fog', 'man boobs', 'gynecomastia', 'leaky gut',
   'adrenal fatigue', 'sugar disease',
   'neoplasia', 'carcinogenesis', 'oncogenesis',
@@ -362,6 +379,24 @@ const NEW_TERMS = [
 describe('FIX 5 — every added term is enforced', () => {
   it.each(NEW_TERMS)('"%s" is in the enforced union', (term) => {
     expect(allDiseaseNouns(cp).map((t) => t.toLowerCase())).toContain(term);
+  });
+
+  it.each(REMOVED_AMBIGUOUS_ABBREVIATIONS)(
+    'the ambiguous abbreviation "%s" is NO LONGER in the union (round-5 decision)',
+    (term) => {
+      expect(allDiseaseNouns(cp).map((t) => t.toLowerCase())).not.toContain(term);
+    },
+  );
+
+  it.each(KEPT_LONG_FORMS)('the unambiguous long form "%s" IS still enforced', (term) => {
+    expect(allDiseaseNouns(cp).map((t) => t.toLowerCase())).toContain(term);
+  });
+
+  it.each(KEPT_LONG_FORMS)('"%s" fails C6 in a bullet', (term) => {
+    const l = mut((x) => {
+      x.bullets[1] = `Daily support for ${term} in adults every day`;
+    });
+    expect(c6On(l, 'bullets[1]').length).toBeGreaterThan(0);
   });
 
   it.each(NEW_TERMS)('"%s" fails C6 in a bullet', (term) => {
@@ -655,7 +690,9 @@ describe('MONEY SHOT — the auditor\'s full payload now FAILS with verified ===
     expect(hits.length).toBeGreaterThan(0);
   });
 
-  const TERMS = ['ozempic', 'xanax', 'brain fog', 't2d', 'oa', 'the big c', 'carcinogenesis', 'neoplasia', 'cancer'];
+  // 'oa' was dropped from this list in round 5 — see
+  // REMOVED_AMBIGUOUS_ABBREVIATIONS above. Every other term still reports.
+  const TERMS = ['ozempic', 'xanax', 'brain fog', 't2d', 'the big c', 'carcinogenesis', 'neoplasia', 'cancer'];
   it.each(TERMS)('the banned term "%s" is reported', (term) => {
     const reported = failures(build())
       .filter((f) => f.checkId === 'C6' || f.checkId === 'A2')
