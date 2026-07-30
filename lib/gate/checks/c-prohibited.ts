@@ -1,11 +1,9 @@
 import type { CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { CONCAT_MIN_TERM_LEN, disclaimerVariantsOf } from './shared';
 import {
-  compatibilityVariant,
-  deobfuscatedVariants,
   normalize,
+  obfuscationVariants,
   scanConcatenated,
-  stripSeparators,
   subtractDisclaimers,
   termRegex,
   type NegationOptions,
@@ -100,26 +98,14 @@ function collectSurfaces(listing: OptimizedListing, want: Set<string>): ScanSurf
  * and marketing patterns. They now share the disease scan's ADDITIVE variant
  * set — the untouched text is always variant #1, so nothing is weakened.
  *
- * Coverage note: the separator-STRIPPED variant is included as well, but the
- * pack patterns are written with `\s`/word boundaries, so most of them cannot
- * match a fully concatenated string. It is there for the patterns that can
- * (bare domains, symbol+digit), not as a general guarantee.
+ * The set itself lives in `util.obfuscationVariants` (one definition, also used
+ * by C21). Coverage note: the separator-STRIPPED variant is included as well,
+ * but the pack patterns are written with `\s`/word boundaries, so most of them
+ * cannot match a fully concatenated string. It is there for the patterns that
+ * can (bare domains, symbol+digit), not as a general guarantee.
  */
 function scanVariants(clean: string): string[] {
-  const variants = new Set<string>(deobfuscatedVariants(clean));
-  const { stripped } = stripSeparators(clean);
-  if (stripped) variants.add(stripped);
-  // COMPATIBILITY-PUNCTUATION variant: `normalize` deliberately leaves
-  // fullwidth/CJK punctuation alone (folding it would dissolve the symbols the
-  // style gate must still see), which let `＄24.99`, `50％ off`, `care＠brandx。com`
-  // and `555・123・4567` walk past every pattern here. Added as an EXTRA variant
-  // only — variant #1 is still the untouched text.
-  const compat = compatibilityVariant(clean);
-  if (compat !== clean) {
-    variants.add(compat);
-    for (const v of deobfuscatedVariants(compat)) variants.add(v);
-  }
-  return [...variants];
+  return obfuscationVariants(clean).all;
 }
 
 /**

@@ -152,6 +152,18 @@ const nonEmptyList = (v: unknown): boolean => Array.isArray(v) && v.filter((x) =
 const nonEmptyString = (v: unknown): boolean => typeof v === 'string' && v.trim().length > 0;
 const nonEmptyPairs = (v: unknown): boolean =>
   Array.isArray(v) && v.some((row) => Array.isArray(row) && nonEmptyString(row[0]));
+/**
+ * A C21 target list. An entry is either a bare term or a CONTEXT-QUALIFIED
+ * object (`SemanticTarget`) — `nonEmptyList` alone would accept `[{ term: '' }]`
+ * because `String({})` is not blank, so the term itself is what is checked.
+ */
+const nonEmptyTargets = (v: unknown): boolean =>
+  Array.isArray(v) &&
+  v.some((entry) =>
+    typeof entry === 'string'
+      ? nonEmptyString(entry)
+      : nonEmptyString((entry as { term?: unknown } | null)?.term),
+  );
 
 /**
  * REQUIRED pieces for a pack that carries a compliance module.
@@ -242,7 +254,7 @@ export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
   {
     id: 'compliancePack.semanticDrugClaims.anatomicalTargets',
     disarms: 'the body-structure target list C21 pairs its action verbs with',
-    present: (_p, cp) => nonEmptyList(cp.semanticDrugClaims?.anatomicalTargets),
+    present: (_p, cp) => nonEmptyTargets(cp.semanticDrugClaims?.anatomicalTargets),
   },
   {
     id: 'compliancePack.semanticDrugClaims.replacementCues',

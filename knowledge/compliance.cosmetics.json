@@ -445,7 +445,7 @@
     "ingredients"
   ],
   "semanticDrugClaims": {
-    "_comment": "SEMANTIC DRUG-CLAIM heuristics (gate C21). A drug claim does not need a disease noun or a banned verb: 'shrinks the lump in your breast', 'ends the need for dialysis' and 'so you can throw away your inhaler' contain none of either. Three PROXIMITY rules are compiled from these lists at load time (pathological verb near an anatomical target; a replacement cue near a therapy/device noun; a restoration verb near a lost-function noun), plus the literal `patterns` below. Everything here is PACK DATA — lib/gate compiles it and holds no term of its own. `safeContextPhrases` are blanked out first so genuine SAFETY copy ('do not stop taking your medication', 'not a substitute for prescription medication') is never reported. NOTE on 'plaque': it is a DETERMINER-SCOPED target, not a plain one, on BOTH packs. 'helps remove plaque' and 'fights plaque buildup' are ordinary lawful oral-care copy, so the bare word cannot be made safe; 'clears the plaque out of your arteries' still fails because a determiner points at one instance of it. Residual, stated plainly: 'removes the plaque from your teeth' is reported by C21 even though it is lawful oral-care phrasing.",
+    "_comment": "SEMANTIC DRUG-CLAIM heuristics (gate C21). A drug claim does not need a disease noun or a banned verb: 'shrinks the lump in your breast', 'ends the need for dialysis' and 'so you can throw away your inhaler' contain none of either. Three PROXIMITY rules are compiled from these lists at load time (pathological verb near an anatomical target; a replacement cue near a therapy/device noun; a restoration verb near a lost-function noun), plus the literal `patterns` below. Everything here is PACK DATA — lib/gate compiles it and holds no term of its own. The scan runs over the SAME additive de-obfuscation variant set the prohibited-content scans use (homoglyph/small-caps fold, leetspeak, doubled letters, separator collapse and the separator-stripped variant), so `shr1nks the lump` and `sh rinks the lump` fail too. `safeContextPhrases` are blanked out first so genuine SAFETY copy ('do not stop taking your medication', 'not a substitute for prescription medication') is never reported. CONTEXT-QUALIFIED TARGETS: a target entry may be an object with `requiresContext` (the term counts only when one of those words is within the proximity window) or `benignContext` (the term is cleared when one of those words is). That is how 'plaque' distinguishes 'clears the plaque out of your arteries' (a drug claim) from 'removes the plaque from your teeth' (lawful oral care), and how 'the growth' distinguishes a tumour from 'restores the growth of your hair'. Plain strings stay unconditional targets.",
     "proximityWindow": 40,
     "medicalDeviceOrTherapyNouns": [
       "inhaler",
@@ -586,17 +586,131 @@
       "kidney stones",
       "gallstone",
       "gallstones",
-      "arterial plaque"
+      "arterial plaque",
+      {
+        "term": "plaque",
+        "requiresContext": [
+          "artery",
+          "arteries",
+          "arterial",
+          "heart",
+          "cardiovascular",
+          "coronary",
+          "carotid",
+          "brain",
+          "blood vessel",
+          "blood vessels",
+          "vascular",
+          "circulation",
+          "bloodstream"
+        ]
+      },
+      {
+        "term": "plaques",
+        "requiresContext": [
+          "artery",
+          "arteries",
+          "arterial",
+          "heart",
+          "cardiovascular",
+          "coronary",
+          "carotid",
+          "brain",
+          "blood vessel",
+          "blood vessels",
+          "vascular",
+          "circulation",
+          "bloodstream"
+        ]
+      }
     ],
     "determinerScopedTargets": [
-      "growth",
-      "growths",
-      "mass",
+      {
+        "term": "growth",
+        "benignContext": [
+          "hair",
+          "nail",
+          "nails",
+          "lash",
+          "lashes",
+          "brow",
+          "brows",
+          "beard",
+          "scalp",
+          "muscle",
+          "muscles",
+          "plant"
+        ]
+      },
+      {
+        "term": "growths",
+        "benignContext": [
+          "hair",
+          "nail",
+          "nails",
+          "lash",
+          "lashes",
+          "brow",
+          "brows",
+          "beard",
+          "scalp",
+          "muscle",
+          "muscles",
+          "plant"
+        ]
+      },
+      {
+        "term": "mass",
+        "benignContext": [
+          "muscle",
+          "muscles",
+          "lean",
+          "bone",
+          "body",
+          "index"
+        ]
+      },
       "masses",
-      "stone",
-      "stones",
-      "plaque",
-      "plaques"
+      {
+        "term": "stone",
+        "benignContext": [
+          "fruit",
+          "fruits",
+          "cherry",
+          "cherries",
+          "peach",
+          "peaches",
+          "olive",
+          "olives",
+          "avocado",
+          "avocados",
+          "mango",
+          "mangoes",
+          "date",
+          "dates",
+          "ground"
+        ]
+      },
+      {
+        "term": "stones",
+        "benignContext": [
+          "fruit",
+          "fruits",
+          "cherry",
+          "cherries",
+          "peach",
+          "peaches",
+          "olive",
+          "olives",
+          "avocado",
+          "avocados",
+          "mango",
+          "mangoes",
+          "date",
+          "dates",
+          "ground"
+        ]
+      }
     ],
     "pathologicalActionVerbs": [
       "shrink",

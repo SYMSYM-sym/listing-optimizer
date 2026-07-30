@@ -3,6 +3,7 @@ import type {
   ProhibitedContentRules,
   ProhibitedMarketingRules,
   SemanticDrugClaims,
+  SemanticTargetEntry,
   StyleRules,
 } from '@/lib/types';
 
@@ -14,12 +15,25 @@ import type {
  * not enough: the generator has to be shown the shapes as well, or it is failed
  * on a rule it was never told about. Renders the pack's lists; authors none.
  */
+
+/**
+ * A target list entry may be a bare term or a CONTEXT-QUALIFIED object
+ * (`SemanticTarget`). The generator is shown the TERM either way: the context
+ * qualification narrows when the gate reports, and telling the model "plaque is
+ * fine as long as you do not mention arteries" would invite exactly the
+ * sentence the gate exists to stop.
+ */
+const targetTerm = (entry: SemanticTargetEntry): string =>
+  typeof entry === 'string' ? entry : String(entry?.term ?? '');
+
+const targetTerms = (entries: SemanticTargetEntry[] | undefined): string[] =>
+  (entries ?? []).map(targetTerm).filter((t) => t.trim() !== '');
 export function semanticClaimBlock(sdc: SemanticDrugClaims | undefined): string {
   if (!sdc) return '';
   const lines: string[] = [];
   if ((sdc.pathologicalActionVerbs ?? []).length > 0 && (sdc.anatomicalTargets ?? []).length > 0) {
     lines.push(
-      `- NEVER write an action verb (${sdc.pathologicalActionVerbs.join(', ')}) acting on a body structure (${[...sdc.anatomicalTargets, ...(sdc.determinerScopedTargets ?? [])].join(', ')}). "Shrinks the lump", "clears the plaque", "melts the growth" are drug claims even though they name no disease.`,
+      `- NEVER write an action verb (${sdc.pathologicalActionVerbs.join(', ')}) acting on a body structure (${[...targetTerms(sdc.anatomicalTargets), ...targetTerms(sdc.determinerScopedTargets)].join(', ')}). "Shrinks the lump", "clears the plaque", "melts the growth" are drug claims even though they name no disease.`,
     );
   }
   if ((sdc.replacementCues ?? []).length > 0 && (sdc.medicalDeviceOrTherapyNouns ?? []).length > 0) {

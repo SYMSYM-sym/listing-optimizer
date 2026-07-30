@@ -83,11 +83,16 @@ const LOOKALIKES: Record<string, string> = {
  * different string from `cancer` to every scan. The sweep covers the Latin
  * small-capital block U+1D00-U+1D23 plus the small capitals that live outside
  * it (U+0262 ɢ, U+026A ɪ, U+0274 ɴ, U+0280 ʀ, U+0299 ʙ, U+028F ʏ, U+029C ʜ,
- * U+029F ʟ) and U+01A6 Ʀ.
+ * U+029F ʟ), U+01A6 Ʀ and the LATIN-EXTENDED-D small capitals U+A730 ꜰ,
+ * U+A731 ꜱ and U+A7AF ꞯ.
+ *
+ * The last three were missing, and ꜱ is the one that mattered: it is the
+ * plural `s` of almost every payload, so `ᴅɪꜱꜱᴏʟᴠᴇꜱ` survived the fold as a
+ * different string from `dissolves`.
  *
  * DELIBERATELY NOT MAPPED: U+1D26-U+1D2B are Greek/Cyrillic small capitals and
  * U+1D24/U+1D25 are phonetic symbols with no Latin twin — mapping them onto
- * Latin letters would be a guess, not a fold.
+ * Latin letters would be a guess, not a fold. Unicode has no small-capital X.
  */
 const SMALL_CAPITALS: Record<string, string> = {
   a: '\u1d00\u1d01\u1d02',
@@ -95,6 +100,7 @@ const SMALL_CAPITALS: Record<string, string> = {
   c: '\u1d04',
   d: '\u1d05\u1d06',
   e: '\u1d07\u1d08',
+  f: '\ua730',
   g: '\u0262',
   h: '\u029c',
   i: '\u026a\u1d09',
@@ -105,7 +111,9 @@ const SMALL_CAPITALS: Record<string, string> = {
   n: '\u1d0e\u0274',
   o: '\u1d0f\u1d10\u1d11\u1d12\u1d13\u1d14\u1d15\u1d16\u1d17',
   p: '\u1d18\u1d29',
+  q: '\ua7af',
   r: '\u1d19\u1d1a\u0280\u01a6',
+  s: '\ua731',
   t: '\u1d1b',
   u: '\u1d1c\u1d1d\u1d1e',
   v: '\u1d20',
@@ -441,7 +449,30 @@ function compileConcatTerms(terms: string[], minLen: number): CompiledConcat | n
 }
 
 /** True when `ch` is a Latin letter — the same guard `termRegex` uses. */
-const isLetter = (ch: string | undefined): boolean => ch !== undefined && /[A-Za-z]/.test(ch);
+export const isLetter = (ch: string | undefined): boolean =>
+  ch !== undefined && /[A-Za-z]/.test(ch);
+
+/**
+ * TOKEN ANCHORING for a match found in a separator-STRIPPED variant.
+ *
+ * `stripSeparators` returns a map from stripped index back to the index in the
+ * ORIGINAL text. A match is only real when, in that original text, the
+ * character before its first character and the character after its last are
+ * not letters — which is what keeps `sh rinks` (a split token) while rejecting
+ * `clumps` -> `lump` (a fragment of a longer word). Extracted from
+ * `scanConcatenated` so every stripped-variant scan anchors identically.
+ */
+export function concatAnchored(
+  original: string,
+  map: number[],
+  start: number,
+  end: number,
+): boolean {
+  const first = map[start];
+  const last = map[end - 1];
+  if (first === undefined || last === undefined) return false;
+  return !isLetter(original[first - 1]) && !isLetter(original[last + 1]);
+}
 
 /**
  * Scan the separator-stripped variant of `text` for separator-stripped `terms`.
@@ -609,6 +640,54 @@ export function doubleCollapsedVariants(text: string): string[] {
   return memoized(DOUBLE_COLLAPSED_CACHE, text, () => [
     ...new Set(deobfuscatedVariants(text).map(collapseDoubles)),
   ]);
+}
+
+/**
+ * THE de-obfuscation variant set every pattern/shape scan runs over, split by
+ * what each class preserves. ONE definition, shared by C18/C19 (which want the
+ * flat list) and C21 (which compiles a different rule set per class because
+ * word boundaries mean nothing in a concatenated string).
+ *
+ *  - `spaced`   — variants that keep word separation: the untouched text, the
+ *                 separator-COLLAPSED form, both leetspeak readings and the
+ *                 compatibility-punctuation fold. Word boundaries still hold.
+ *  - `stripped` — the separator-STRIPPED form plus its index map back into
+ *                 `clean`, so a match can be TOKEN-ANCHORED (`concatAnchored`).
+ *  - `all`      — `spaced` then `stripped`, i.e. the flat set the pattern
+ *                 scans have always used, in the order they have always used.
+ *
+ * The untouched text is always first: every class is ADDITIVE and none of them
+ * ever replaces the surface other checks read.
+ */
+export interface ObfuscationVariants {
+  spaced: string[];
+  stripped: StrippedText | null;
+  all: string[];
+}
+
+const OBFUSCATION_CACHE = new Map<string, ObfuscationVariants>();
+
+export function obfuscationVariants(clean: string): ObfuscationVariants {
+  return memoized(OBFUSCATION_CACHE, clean, () => {
+    const spaced = new Set<string>(deobfuscatedVariants(clean));
+    const all = new Set<string>(spaced);
+    const strippedText = stripSeparators(clean);
+    const stripped = strippedText.stripped ? strippedText : null;
+    if (stripped) all.add(stripped.stripped);
+    // COMPATIBILITY-PUNCTUATION variant: `normalize` deliberately leaves
+    // fullwidth/CJK punctuation alone (folding it would dissolve the symbols
+    // the style gate must still see), which let `＄24.99`, `50％ off`,
+    // `care＠brandx。com` and `555・123・4567` walk past every pattern. Added as
+    // an EXTRA variant only — variant #1 is still the untouched text.
+    const compat = compatibilityVariant(clean);
+    if (compat !== clean) {
+      for (const v of [compat, ...deobfuscatedVariants(compat)]) {
+        spaced.add(v);
+        all.add(v);
+      }
+    }
+    return { spaced: [...spaced], stripped, all: [...all] };
+  });
 }
 
 const COLLAPSED_TERMS_CACHE = new WeakMap<string[], string[]>();

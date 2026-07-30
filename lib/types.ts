@@ -280,11 +280,37 @@ export interface PromptRules {
  * runs, so genuine safety copy ("do not stop taking your medication", "not a
  * substitute for prescription medication") is never reported.
  *
- * COVERAGE, stated plainly: C21 scans the NORMALIZED surface text only. The
- * de-obfuscation / doubled-letter / separator-split passes belong to C6 and are
- * NOT applied here, so `shr1nks the lump` is caught by neither. C21 widens the
- * claim SHAPES that are caught, not the obfuscations.
+ * COVERAGE, stated plainly: C21 runs over the SAME additive de-obfuscation
+ * variant set the prohibited-content scans use (confusable/homoglyph fold,
+ * both leetspeak readings, separator collapse, the doubled-letter pass and the
+ * separator-STRIPPED variant), so `shr1nks the lump` and `sh rinks the lump`
+ * are caught. The untouched text is always variant #1.
  */
+
+/**
+ * A target term that is only a body structure IN CONTEXT.
+ *
+ * Some target nouns are ordinary English in one domain and a pathology in
+ * another — the same word can head lawful copy and a drug claim. A plain
+ * string stays an unconditional target; this object form adds ONE of two
+ * qualifications (both may be given, both are pack data):
+ *
+ *  - `requiresContext` — the term counts ONLY when one of these words appears
+ *    within the proximity window either side of it. Use when the LAWFUL sense
+ *    is the common one and the pathological sense always names its system.
+ *  - `benignContext` — the term is CLEARED when one of these words appears in
+ *    that window. Use when the pathological sense is the default and the
+ *    lawful senses are a short, closed list of qualifiers.
+ */
+export interface SemanticTarget {
+  term: string;
+  requiresContext?: string[];
+  benignContext?: string[];
+}
+
+/** A target list entry: a bare term, or a context-qualified one. */
+export type SemanticTargetEntry = string | SemanticTarget;
+
 export interface SemanticDrugClaims {
   /** Max characters between the end of a verb/cue match and the start of its noun. */
   proximityWindow: number;
@@ -293,9 +319,9 @@ export interface SemanticDrugClaims {
   /** Cues that announce replacing/abandoning a therapy. */
   replacementCues: string[];
   /** Body structures that only a drug or a device acts on. */
-  anatomicalTargets: string[];
+  anatomicalTargets: SemanticTargetEntry[];
   /** Targets that are ordinary English unless a determiner points at one instance. */
-  determinerScopedTargets: string[];
+  determinerScopedTargets: SemanticTargetEntry[];
   /** Verbs that describe acting ON a pathology. */
   pathologicalActionVerbs: string[];
   /** Functions whose RESTORATION is a drug claim ("restores sight"). */

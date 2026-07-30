@@ -84,7 +84,9 @@ const LEGITIMATE: string[] = [
  */
 const SAFETY_COPY: string[] = [
   'Do not stop taking your medication without speaking to a professional',
+  'do not stop taking your medication without talking to a doctor',
   'This is not a substitute for prescription medication',
+  'this is not a substitute for prescription medication',
   'Consult your doctor before starting any new routine',
 ];
 
@@ -193,28 +195,169 @@ describe('R1 — determiner-scoped targets', () => {
     const l = mut((x) => { x.bullets[1] = `${text}*`; });
     expect(onField(l, 'bullets[1]').some((f) => f.checkId === 'C21')).toBe(true);
   });
+});
+
+/**
+ * CONTEXT-QUALIFIED TARGETS — the fix for the plaque over-block.
+ *
+ * Some target nouns head a drug claim in one domain and ordinary lawful copy in
+ * another. `plaque` was the worst case: it was determiner-scoped, which kept the
+ * bare noun clean but still reported "removes the plaque from your teeth" — a
+ * lawful oral-care sentence. It is now a PLAIN target carrying a
+ * `requiresContext` list in pack data, so it counts only when an anatomical /
+ * systemic context word sits inside the proximity window. That closes the
+ * over-block AND closes a hole the determiner scoping left open ("removes
+ * plaque from your arteries" has no determiner and used to pass).
+ *
+ * Both directions are asserted for every qualified target, because a shape
+ * heuristic pinned in one direction only is one tuning session away from
+ * becoming a wall: over-blocking lawful copy is a defect of exactly the same
+ * severity as letting a drug claim through.
+ */
+const QUALIFIED_CLEAN: [string, string][] = [
+  // 'plaque' — lawful oral care. The over-block this round removed.
+  ['plaque', 'Removes the plaque from your teeth'],
+  ['plaque', 'Helps reduce plaque and supports healthy gums'],
+  ['plaque', 'Fights plaque between brushings'],
+  ['plaque', 'Helps remove plaque with regular brushing'],
+  ['plaque', 'Removes plaque with regular brushing'],
+  ['plaque', 'Dissolves plaque on tooth enamel'],
+  // 'stone' — the fruit, not the kidney.
+  ['stone', 'Removes the stone from each cherry'],
+  ['stone', 'Dissolves the stone fruit blend into your smoothie'],
+  // 'growth' — hair and nails, not a tumour.
+  ['growth', 'Restores the growth of your hair'],
+  ['growth', 'Rebuilds the growth of healthy nails'],
+  ['growth', 'Restores the natural growth cycle of your lashes'],
+  // 'mass' — lean body mass, not a lesion.
+  ['mass', 'Restores the muscle mass you lost'],
+  ['mass', 'Rebuilds your muscle mass after training'],
+];
+
+const QUALIFIED_BLOCKED: [string, string][] = [
+  ['plaque', 'Clears the plaque out of your arteries'],
+  ['plaque', 'Dissolves arterial plaque in weeks'],
+  ['plaque', 'Melts the plaque from your blood vessels'],
+  ['plaque', 'Removes plaque from your arteries'],
+  ['stone', 'Dissolves the stone in a fortnight'],
+  ['stone', 'Breaks up the stone in your kidney'],
+  ['growth', 'Melts the growth away in weeks'],
+  ['growth', 'Shrinks the growth in your breast'],
+  ['growth', 'Clears the growth from your skin'],
+  ['mass', 'Rebuilds the mass in your legs'],
+];
+
+describe('R2 — context-qualified targets, both directions', () => {
+  it.each(QUALIFIED_CLEAN)('[%s] lawful copy "%s" is clean on every surface', (_term, text) => {
+    for (const [field, plant] of SURFACES) {
+      const l = mut((x) => plant(x, text));
+      expect(onField(l, field), field).toEqual([]);
+    }
+  });
+
+  it.each(QUALIFIED_BLOCKED)('[%s] the drug-claim form "%s" fails C21', (_term, text) => {
+    const l = mut((x) => { x.bullets[1] = `${text}*`; });
+    expect(onField(l, 'bullets[1]').some((f) => f.checkId === 'C21')).toBe(true);
+  });
+
+  it('every qualified target is pinned in BOTH directions', () => {
+    const clean = new Set(QUALIFIED_CLEAN.map(([t]) => t));
+    const blocked = new Set(QUALIFIED_BLOCKED.map(([t]) => t));
+    expect([...clean].sort()).toEqual([...blocked].sort());
+  });
 
   /**
-   * 'plaque' is the one term that could not be made safe as a PLAIN target:
-   * "helps remove plaque" is ordinary lawful oral-care copy. It is
-   * determiner-scoped on every pack instead, which keeps the bare form clean
-   * and still fails the arterial claim. The residual is asserted, not hidden.
+   * The targets that were CHECKED and deliberately left unqualified: they have
+   * no lawful non-pathological sense in listing copy, so adding a context list
+   * would only create a bypass.
    */
   it.each([
-    'Helps remove plaque with regular brushing',
-    'Removes plaque with regular brushing',
-  ])('bare-noun oral-care copy "%s" is clean', (text) => {
+    'Removes the clot from your leg',
+    'Clears the cyst away',
+    'Removes the lesion in days',
+  ])('unconditional target: "%s" fails C21 with no context word present', (text) => {
     const l = mut((x) => { x.bullets[1] = `${text}*`; });
+    expect(onField(l, 'bullets[1]').some((f) => f.checkId === 'C21')).toBe(true);
+  });
+});
+
+/**
+ * R3 — OBFUSCATION. C21 used to scan the normalized surface text only, so every
+ * de-obfuscation pass C6 has run for rounds walked straight past it: `shr1nks
+ * the lump`, `sh rinks the lump`, `cl3ars the plaque out of your arteries` and
+ * `ᴋɪʟʟꜱ the bad cells` evaded BOTH checks. C21 now runs over the same ADDITIVE
+ * variant set (`util.obfuscationVariants` + the doubled-letter pass).
+ *
+ * The obfuscators below are written the way an evader would use them — a
+ * mechanical transform of the payload — not tuned to the folds.
+ */
+const LEET_MAP: Record<string, string> = { e: '3', o: '0', a: '4', s: '5', t: '7' };
+const HOMOGLYPH_MAP: Record<string, string> = {
+  a: 'а', c: 'с', e: 'е', o: 'о', p: 'р', s: 'ѕ',
+  y: 'у', x: 'х', i: 'і',
+};
+const SMALL_CAP_MAP: Record<string, string> = {
+  a: 'ᴀ', b: 'ʙ', c: 'ᴄ', d: 'ᴅ', e: 'ᴇ', f: 'ꜰ',
+  g: 'ɢ', h: 'ʜ', i: 'ɪ', j: 'ᴊ', k: 'ᴋ', l: 'ʟ',
+  m: 'ᴍ', n: 'ɴ', o: 'ᴏ', p: 'ᴘ', q: 'ꞯ', r: 'ʀ',
+  s: 'ꜱ', t: 'ᴛ', u: 'ᴜ', v: 'ᴠ', w: 'ᴡ', y: 'ʏ',
+  z: 'ᴢ',
+};
+
+const mapChars = (text: string, table: Record<string, string>): string =>
+  [...text].map((ch) => table[ch.toLowerCase()] ?? ch).join('');
+
+const OBFUSCATIONS: [string, (s: string) => string][] = [
+  ['leetspeak', (s) => s.replace(/[eoast]/g, (ch) => LEET_MAP[ch]!)],
+  ['doubled letters', (s) => s.replace(/\b([A-Za-z])/g, '$1$1')],
+  // Splits the first token long enough to survive the split — the exact shape
+  // of the `sh rinks the lump` evasion.
+  ['separator split', (s) => s.replace(/\b([A-Za-z]{2})([A-Za-z]{3,})/, '$1 $2')],
+  ['homoglyph', (s) => mapChars(s, HOMOGLYPH_MAP)],
+  ['small caps', (s) => mapChars(s, SMALL_CAP_MAP)],
+];
+
+const OBFUSCATION_CASES: [string, string, string][] = OBFUSCATIONS.flatMap(
+  ([name, fn]) =>
+    [...EVASIONS, ICD_PAYLOAD].map(
+      (payload) => [name, payload, fn(payload)] as [string, string, string],
+    ),
+);
+
+describe('R3 — every payload still fails C21 under every obfuscation', () => {
+  it.each(OBFUSCATION_CASES)('%s: "%s" -> "%s" fails C21', (_name, _payload, obfuscated) => {
+    const l = mut((x) => { x.bullets[1] = `Daily support that ${obfuscated}*`; });
+    expect(onField(l, 'bullets[1]').some((f) => f.checkId === 'C21')).toBe(true);
+  });
+
+  it('covers all eleven payloads times every obfuscation class', () => {
+    expect(OBFUSCATION_CASES).toHaveLength(11 * OBFUSCATIONS.length);
+  });
+
+  it('an obfuscated payload can never come back verified', () => {
+    for (const [, , obfuscated] of OBFUSCATION_CASES) {
+      const l = mut((x) => { x.bullets[1] = `Daily support that ${obfuscated}*`; });
+      expect(runGate(l, pack, ctx).pass, obfuscated).toBe(false);
+    }
+  });
+});
+
+/**
+ * The other half of R3, and the one that decides whether the fix is an
+ * improvement or a wall: the de-obfuscation passes must not manufacture a
+ * finding on lawful copy. Every phrase below is scanned through the SAME
+ * variant set and must stay completely clean.
+ */
+describe('R3 — the variant passes introduce no false positives', () => {
+  it.each([
+    ...LEGITIMATE,
+    ...QUALIFIED_CLEAN.map(([, text]) => text),
+    'do not stop taking your medication without talking to a doctor',
+    'this is not a substitute for prescription medication',
+  ])('"%s" is clean with every variant class armed', (text) => {
+    // Sentence-cased so C17's bullet-capitalisation rule cannot mask the point.
+    const bullet = `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+    const l = mut((x) => { x.bullets[1] = `${bullet}*`; });
     expect(onField(l, 'bullets[1]')).toEqual([]);
-  });
-
-  it('the determiner-pointed arterial form still fails', () => {
-    const l = mut((x) => { x.bullets[1] = 'Clears the plaque out of your arteries*'; });
-    expect(onField(l, 'bullets[1]').some((f) => f.checkId === 'C21')).toBe(true);
-  });
-
-  it('RESIDUAL, asserted so it cannot be forgotten: "removes the plaque" is reported', () => {
-    const l = mut((x) => { x.bullets[1] = 'Removes the plaque from your teeth*'; });
-    expect(onField(l, 'bullets[1]').some((f) => f.checkId === 'C21')).toBe(true);
   });
 });
