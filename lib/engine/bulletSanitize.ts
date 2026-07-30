@@ -6,7 +6,7 @@
 export function sanitizeBullets(bullets: string[], maxChars: number): string[] {
   return bullets.map((raw) => {
     const claimStar = raw.trimEnd().endsWith('*');
-    let body = claimStar ? raw.trimEnd().slice(0, -1).trimEnd() : raw.trim();
+    const body = claimStar ? raw.trimEnd().slice(0, -1).trimEnd() : raw.trim();
     const budget = claimStar ? maxChars - 1 : maxChars;
     if (body.length <= budget) {
       return claimStar ? `${body}*` : body;

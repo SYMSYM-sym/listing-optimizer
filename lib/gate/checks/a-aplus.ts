@@ -9,17 +9,18 @@ export function a1AplusDisclaimer(l: OptimizedListing, pack: KnowledgePack): Fai
   if (!cp) return [];
   const a = l.aplusContent;
   const out: Failure[] = [];
-  if (normalize(a.fdaDisclaimer) !== normalize(cp.disclaimer)) {
-    out.push(fail('A1', 'aplus.fdaDisclaimer', a.fdaDisclaimer.slice(0, 80), 'A+ fdaDisclaimer must equal the canonical constant verbatim'));
+  if (!a) return [fail('A1', 'aplusContent', '(missing)', 'A+ content is missing entirely')];
+  if (normalize(a.fdaDisclaimer ?? '') !== normalize(cp.disclaimer)) {
+    out.push(fail('A1', 'aplus.fdaDisclaimer', normalize(a.fdaDisclaimer ?? '').slice(0, 80), 'A+ fdaDisclaimer must equal the canonical constant verbatim'));
   }
   const want = normalize(cp.disclaimer);
-  for (const m of a.modules) {
-    if (m.claimBearing && !normalize(m.body).includes(want)) {
-      out.push(fail('A1', `aplus.modules[${m.id}]`, 'claim-bearing module missing disclaimer', 'Each claim-bearing A+ module must contain the verbatim disclaimer'));
+  for (const m of a.modules ?? []) {
+    if (m?.claimBearing && !normalize(m.body ?? '').includes(want)) {
+      out.push(fail('A1', `aplus.modules[${m?.id ?? ''}]`, 'claim-bearing module missing disclaimer', 'Each claim-bearing A+ module must contain the verbatim disclaimer'));
     }
   }
-  a.faq.forEach((f, i) => {
-    if (f.claimBearing && !normalize(f.a).includes(want)) {
+  (a.faq ?? []).forEach((f, i) => {
+    if (f?.claimBearing && !normalize(f.a ?? '').includes(want)) {
       out.push(fail('A1', `aplus.faq[${i}]`, 'claim-bearing FAQ answer missing disclaimer', 'Each claim-bearing FAQ answer must contain the verbatim disclaimer'));
     }
   });
@@ -36,9 +37,9 @@ export function a2AplusBannedTerms(l: OptimizedListing, pack: KnowledgePack): Fa
 
 export function a3AplusBrandLeakage(l: OptimizedListing): Failure[] {
   const out: Failure[] = [];
-  const productName = normalize(l.productName).toLowerCase();
+  const productName = normalize(l.productName ?? '').toLowerCase();
   for (const key of ['brand_name', 'manufacturer'] as const) {
-    const value = l.attributes[key];
+    const value = (l.attributes ?? {})[key];
     if (!value) continue;
     const brand = normalize(value).toLowerCase();
     if (!brand || productName.includes(brand)) continue;
@@ -53,12 +54,13 @@ export function a3AplusBrandLeakage(l: OptimizedListing): Failure[] {
 
 export function a4AplusProductName(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const out: Failure[] = [];
-  const name = normalize(l.productName).toLowerCase();
+  const name = normalize(l.productName ?? '').toLowerCase();
   const a = l.aplusContent;
+  if (!a) return [fail('A4', 'aplusContent', '(missing)', 'A+ content is missing entirely')];
   // Module-id cues are PACK DATA (`rules.aplusModuleCues`) — no id literal here.
   const cues = pack.rules.aplusModuleCues;
-  const brandStory = a.modules.find((m) => m.id.includes(cues.brandStory));
-  const hero = a.modules.find((m) => m.id.includes(cues.hero)) ?? a.modules[0];
+  const brandStory = (a.modules ?? []).find((m) => (m?.id ?? '').includes(cues.brandStory));
+  const hero = (a.modules ?? []).find((m) => (m?.id ?? '').includes(cues.hero)) ?? (a.modules ?? [])[0];
   if (!brandStory || !normalize(`${brandStory.headline} ${brandStory.body}`).toLowerCase().includes(name)) {
     out.push(fail('A4', `aplus.modules[${cues.brandStory}]`, brandStory ? 'product name missing' : `no '${cues.brandStory}' module`, `Product name must appear in the '${cues.brandStory}' module`));
   }
@@ -84,7 +86,7 @@ export function a7AplusAllergen(l: OptimizedListing, pack: KnowledgePack): Failu
   const present = presentAllergens(l, cp);
   if (present.length === 0) return [];
   const cue = cp.allergenFields.aplusModuleIdCue;
-  const ingredientsModule = l.aplusContent.modules.find((m) => m.id.includes(cue));
+  const ingredientsModule = (l.aplusContent?.modules ?? []).find((m) => (m?.id ?? '').includes(cue));
   const out: Failure[] = [];
   for (const rule of present) {
     const text = ingredientsModule ? `${ingredientsModule.headline} ${ingredientsModule.body} ${ingredientsModule.subcopy ?? ''}` : '';
@@ -101,6 +103,18 @@ export function a7AplusAllergen(l: OptimizedListing, pack: KnowledgePack): Failu
  * this module holds no literals, so the gate stays category-agnostic. C19
  * applies the same pack lexicon to every non-A+ surface.
  */
+/** Compiled pack patterns cached by source string (see C18/C19 for the rationale). */
+const APLUS_PATTERN_CACHE = new Map<string, RegExp>();
+function aplusPatternRe(source: string): RegExp {
+  let re = APLUS_PATTERN_CACHE.get(source);
+  if (!re) {
+    re = new RegExp(source, 'gi');
+    APLUS_PATTERN_CACHE.set(source, re);
+  }
+  re.lastIndex = 0;
+  return re;
+}
+
 export function a8AplusProhibitedMarketing(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const patterns = pack.rules.prohibitedMarketing?.patterns ?? [];
   if (patterns.length === 0) return [];
@@ -109,7 +123,7 @@ export function a8AplusProhibitedMarketing(l: OptimizedListing, pack: KnowledgeP
     const text = normalize(textRaw);
     for (const [source, label] of patterns) {
       if (!source) continue;
-      const re = new RegExp(source, 'gi');
+      const re = aplusPatternRe(source);
       let m: RegExpExecArray | null;
       while ((m = re.exec(text)) !== null) {
         if (!hasNegationContext(text, m.index)) {
@@ -128,7 +142,7 @@ export function a8AplusProhibitedMarketing(l: OptimizedListing, pack: KnowledgeP
 export function a9AplusComparisonAndAudience(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const out: Failure[] = [];
   const minRows = pack.rules.aplusComparisonMinRows;
-  const rows = l.aplusContent.comparison.rows.length;
+  const rows = (l.aplusContent?.comparison?.rows ?? []).length;
   if (rows < minRows) {
     out.push(
       fail(
@@ -142,8 +156,8 @@ export function a9AplusComparisonAndAudience(l: OptimizedListing, pack: Knowledg
   const cues = pack.rules.whoItsForCues.map((c) => c.toLowerCase());
   const hay = normalize(
     [
-      ...l.aplusContent.modules.map((m) => `${m.id} ${m.headline} ${m.body} ${m.subcopy ?? ''}`),
-      ...l.aplusContent.faq.map((f) => `${f.q} ${f.a}`),
+      ...(l.aplusContent?.modules ?? []).map((m) => `${m?.id ?? ''} ${m?.headline ?? ''} ${m?.body ?? ''} ${m?.subcopy ?? ''}`),
+      ...(l.aplusContent?.faq ?? []).map((f) => `${f?.q ?? ''} ${f?.a ?? ''}`),
     ].join(' '),
   ).toLowerCase();
   const hit = cues.some((c) => hay.includes(c));

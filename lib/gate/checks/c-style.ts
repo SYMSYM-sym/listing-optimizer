@@ -32,12 +32,15 @@ const WORD_RE = /[A-Za-z][A-Za-z0-9]*/g;
 
 /** Customer surfaces + every A+ text field, tagged with their scoping group. */
 export function styleSurfaces(l: OptimizedListing): StyleSurface[] {
+  // Every accessor is null-safe: malformed output must yield FAILURES from the
+  // other checks, never an exception that escapes runGate.
+  const s = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
   const out: StyleSurface[] = [
-    { field: 'title', group: 'title', text: l.title },
-    { field: 'title75', group: 'title75', text: l.title75 },
-    { field: 'itemHighlights', group: 'itemHighlights', text: l.itemHighlights },
-    ...l.bullets.map((b, i) => ({ field: `bullets[${i}]`, group: 'bullets', text: b })),
-    { field: 'description', group: 'description', text: l.description },
+    { field: 'title', group: 'title', text: s(l.title) },
+    { field: 'title75', group: 'title75', text: s(l.title75) },
+    { field: 'itemHighlights', group: 'itemHighlights', text: s(l.itemHighlights) },
+    ...(l.bullets ?? []).map((b, i) => ({ field: `bullets[${i}]`, group: 'bullets', text: s(b) })),
+    { field: 'description', group: 'description', text: s(l.description) },
   ];
   for (const [field, text] of aplusSurfaces(l.aplusContent)) {
     out.push({ field, group: 'aplus', text });
@@ -45,21 +48,21 @@ export function styleSurfaces(l: OptimizedListing): StyleSurface[] {
   // Q&A and the image plan are customer-visible too — style rules apply there
   // as well (brain/02: rules apply on EVERY surface, not just the main fields).
   (l.qa ?? []).forEach((item, i) => {
-    out.push({ field: `qa[${i}].q`, group: 'qa', text: item.q });
-    out.push({ field: `qa[${i}].a`, group: 'qa', text: item.a });
+    out.push({ field: `qa[${i}].q`, group: 'qa', text: s(item?.q) });
+    out.push({ field: `qa[${i}].a`, group: 'qa', text: s(item?.a) });
   });
   // EVERY image-plan text field: purpose and spec render as on-image copy just
   // as often as notes do, so a $ price or an ALL-CAPS banner hides there too.
   (l.imagePlan ?? []).forEach((slot, i) => {
-    out.push({ field: `imagePlan[${i}].purpose`, group: 'images', text: slot.purpose });
-    out.push({ field: `imagePlan[${i}].spec`, group: 'images', text: slot.spec });
-    out.push({ field: `imagePlan[${i}].notes`, group: 'images', text: slot.notes });
+    out.push({ field: `imagePlan[${i}].purpose`, group: 'images', text: s(slot?.purpose) });
+    out.push({ field: `imagePlan[${i}].spec`, group: 'images', text: s(slot?.spec) });
+    out.push({ field: `imagePlan[${i}].notes`, group: 'images', text: s(slot?.notes) });
   });
   // Attribute VALUES are customer-visible (filters, detail table). The pack's
   // surface scoping keeps '$'/'?' bannedChars off this group so legitimate
   // values like '500 mg' or '60 capsules' never false-trip.
   for (const [key, value] of Object.entries(l.attributes ?? {})) {
-    out.push({ field: `attributes.${key}`, group: 'attributes', text: value });
+    out.push({ field: `attributes.${key}`, group: 'attributes', text: s(value) });
   }
   return out;
 }
@@ -138,7 +141,7 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   // verbatim and must not be reported as a style violation.
   const cp = pack.compliancePack;
   const disclaimers = cp
-    ? [cp.disclaimer, ...cp.auditAcceptDisclaimers].filter(Boolean).map(normalize)
+    ? [cp.disclaimer, ...(cp.auditAcceptDisclaimers ?? [])].filter(Boolean).map(normalize)
     : [];
   const clean = (raw: string): string => subtractDisclaimers(normalize(raw), disclaimers);
 
@@ -271,7 +274,7 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   }
 
   // 2 + 3 — bullet-only capitalization and trailing punctuation
-  l.bullets.forEach((raw, i) => {
+  (l.bullets ?? []).forEach((raw, i) => {
     const text = normalize(raw);
     if (!text) return;
     if (style.bulletMustStartCapital) {

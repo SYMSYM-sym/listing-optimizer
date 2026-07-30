@@ -226,6 +226,13 @@ export interface AllergenFields {
 
 /** Category-specific prompt guidance (pack data — the engine holds no lexicon). */
 export interface PromptRules {
+  /**
+   * The COMPLIANCE headline rules rendered at the top of the compliance block
+   * ("never claim to diagnose/treat/cure…", "no star-rating or review-count
+   * claims", "no price in copy"). These used to be hard-coded English
+   * sentences inside `lib/engine/prompts/system.ts`; they are pack data now.
+   */
+  compliance?: string[];
   system?: string[];
   attributes?: string[];
   bullets?: string[];
@@ -253,6 +260,13 @@ export interface CompliancePack {
   diseaseActionVerbRoots?: string[];
   /** Always-on disease/infection nouns scanned for EVERY product in this pack. */
   coreDiseaseNouns: string[];
+  /**
+   * Prescription-drug brand/generic names. Claiming a supplement replaces or
+   * acts like a prescription drug IS a drug claim, so these are scanned by
+   * exactly the same C6/A2 path (and the same de-obfuscation passes) as the
+   * disease nouns.
+   */
+  prescriptionDrugNames?: string[];
   /**
    * Genuine meta-phrases that SHOULD suppress a nearby disease term
    * ("not intended to diagnose, treat, cure, or prevent any disease").
@@ -304,6 +318,14 @@ export interface Principle {
 export interface KnowledgePack {
   id: string; // 'supplements' | 'generic' | future packs
   rules: RuleSet;
+  /**
+   * TRUE for every category that is regulated enough to need a compliance
+   * module. Declared by the pack ASSEMBLER, never inferred by the gate: it is
+   * what turns "compliancePack is null" from a silent no-op into a blocking
+   * PACK failure (a supplements pack whose compliance module went missing must
+   * never return `pass:true`).
+   */
+  requiresCompliance: boolean;
   /** null for packs without a compliance module (e.g. 'generic'). */
   compliancePack: CompliancePack | null;
   attributeSchema: AttributeField[];
@@ -447,11 +469,26 @@ export interface Scorecard {
  * `verified` is EXACTLY gateResult.pass, re-derived server-side by re-running
  * the gate — never trusted from client-carried state.
  */
+/**
+ * PACK-INTEGRITY report surfaced in the audit payload.
+ *
+ * `problems` is non-empty exactly when the gate raised a blocking `PACK`
+ * failure (a missing/empty required pack piece, or a category that needs a
+ * compliance module and has none). It is derived from the gate result, so it
+ * can never disagree with `verified`.
+ */
+export interface PackIntegrity {
+  ok: boolean;
+  problems: string[];
+}
+
 export interface Audit {
   scorecard: Scorecard;
   gaps: AuditGap[];
   gateResult: GateResult;
   verified: boolean; // === gateResult.pass
+  /** Blocking pack-integrity problems (empty + ok:true when the pack is complete). */
+  packIntegrity: PackIntegrity;
   /**
    * NON-BLOCKING signal: the pack's rule snapshot is older than
    * rules.staleAfterDays. Never a gate failure and never affects `verified`.

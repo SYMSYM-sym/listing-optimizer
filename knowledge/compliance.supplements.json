@@ -248,7 +248,42 @@
     "macular edema",
     "hearing loss",
     "pancreatic cancer",
-    "lung cancer"
+    "lung cancer",
+    "t2d",
+    "t1d",
+    "oa",
+    "ra",
+    "chf",
+    "ms",
+    "afib",
+    "the big c",
+    "brain fog",
+    "man boobs",
+    "gynecomastia",
+    "leaky gut",
+    "adrenal fatigue",
+    "sugar disease",
+    "neoplasia",
+    "carcinogenesis",
+    "oncogenesis"
+  ],
+  "_prescriptionDrugNamesComment": "Prescription-drug brand/generic names. Claiming a product replaces or acts like a prescription drug is a DRUG CLAIM, so the gate scans these on the same C6/A2 path (same de-obfuscation passes) as the disease nouns.",
+  "prescriptionDrugNames": [
+    "ozempic",
+    "wegovy",
+    "semaglutide",
+    "viagra",
+    "cialis",
+    "xanax",
+    "adderall",
+    "metformin",
+    "statin",
+    "statins",
+    "prozac",
+    "zoloft",
+    "ambien",
+    "lipitor",
+    "insulin"
   ],
   "negationMetaPhrases": [
     "not intended to diagnose, treat, cure, or prevent any disease",
@@ -1341,6 +1376,13 @@
   ],
   "promptRules": {
     "_comment": "Category-specific generation guidance injected into the prompts. PACK DATA — lib/engine/prompts holds no category lexicon.",
+    "_complianceComment": "The COMPLIANCE headline rules. These used to be hard-coded English sentences inside lib/engine/prompts/system.ts; they are pack data now so the engine carries no category rule text.",
+    "compliance": [
+      "NEVER claim to diagnose, treat, cure, prevent, or mitigate any disease or symptom.",
+      "NEVER claim the product replaces, matches, or acts like a prescription drug.",
+      "No star-rating or review-count claims.",
+      "No price, discount, shipping or availability statement in copy."
+    ],
     "system": [
       "Do NOT write the disclaimer anywhere — the system inserts the verbatim constant itself. Claim-bearing bullets end with a trailing \"*\" marker only.",
       "If an allergen is present, declare it exactly as \"Contains: [Allergen]\" consistently; never write \"No Known Allergens\" when one is present."

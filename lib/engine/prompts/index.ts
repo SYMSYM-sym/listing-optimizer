@@ -13,6 +13,7 @@ import { buildSystemPrompt } from './system';
 import { titlePrompt } from './title';
 
 export { buildSystemPrompt };
+export { prohibitedContentBlock, prohibitedMarketingBlock, styleRulesBlock } from './shared';
 
 /** Per-group prompt builders — rule-injected from the active pack. */
 export function buildGroupPrompts(pack: KnowledgePack, titlePolicy: TitlePolicy = 'dual') {

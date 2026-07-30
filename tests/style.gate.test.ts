@@ -254,7 +254,8 @@ describe('C17 is category-agnostic and pack-driven', () => {
     expect(style.bulletMustStartCapital).toBe(true);
     expect(style.bulletNoTrailingPunctuation).toBe(true);
     expect(style.bulletTrailingAllowed).toEqual(expect.arrayContaining(['*', ')']));
-    expect(style.bannedSymbols).toEqual(['™', '®', '©', '€']);
+    // Trademark/copyright marks PLUS every non-USD currency symbol a price can hide behind.
+    expect(style.bannedSymbols).toEqual(['™', '®', '©', '€', '£', '¥', '₹', '₩', '¢']);
     expect(style.bannedChars).toEqual(['!', '$', '?', '_', '{', '}', '^', '¬', '¦']);
     expect(style.noAsinInCopy).toBe(true);
     expect(style.emojiCheck).toBe(true);

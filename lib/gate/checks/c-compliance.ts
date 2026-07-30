@@ -1,16 +1,22 @@
 import type { Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { normalize } from '../util';
 import { allDiseaseNouns } from './pack';
-import { attributeComplianceSurfaces, customerSurfaces, fail, scanSurfacesForBanned } from './shared';
+import {
+  attributeComplianceSurfaces,
+  customerSurfaces,
+  factsComplianceSurfaces,
+  fail,
+  scanSurfacesForBanned,
+} from './shared';
 
 export function c5Disclaimer(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const cp = pack.compliancePack;
   if (!cp) return [];
   const out: Failure[] = [];
-  if (normalize(l.fdaDisclaimer) !== normalize(cp.disclaimer)) {
-    out.push(fail('C5', 'fdaDisclaimer', l.fdaDisclaimer.slice(0, 80), 'fdaDisclaimer must equal the canonical constant verbatim'));
+  if (normalize(l.fdaDisclaimer ?? '') !== normalize(cp.disclaimer)) {
+    out.push(fail('C5', 'fdaDisclaimer', normalize(l.fdaDisclaimer ?? '').slice(0, 80), 'fdaDisclaimer must equal the canonical constant verbatim'));
   }
-  if (!normalize(l.description).includes(normalize(cp.disclaimer))) {
+  if (!normalize(l.description ?? '').includes(normalize(cp.disclaimer))) {
     out.push(fail('C5', 'description', 'disclaimer missing', 'The exact verbatim disclaimer must appear inside the description'));
   }
   return out;
@@ -29,7 +35,10 @@ export function c6BannedTerms(l: OptimizedListing, pack: KnowledgePack): Failure
   if (!cp) return [];
   const nouns = allDiseaseNouns(cp);
   return scanSurfacesForBanned(
-    [...customerSurfaces(l), ...attributeComplianceSurfaces(l)],
+    // `facts.*` string values are scanned too: they are echoed verbatim into
+    // every repair prompt, so a claim parked there used to ride into the
+    // generator with no check ever reading it.
+    [...customerSurfaces(l), ...attributeComplianceSurfaces(l), ...factsComplianceSurfaces(l)],
     cp,
     nouns,
     'C6',
@@ -38,9 +47,9 @@ export function c6BannedTerms(l: OptimizedListing, pack: KnowledgePack): Failure
 
 export function c7BrandLeakage(l: OptimizedListing): Failure[] {
   const out: Failure[] = [];
-  const productName = normalize(l.productName).toLowerCase();
+  const productName = normalize(l.productName ?? '').toLowerCase();
   for (const key of ['brand_name', 'manufacturer'] as const) {
-    const value = l.attributes[key];
+    const value = (l.attributes ?? {})[key];
     if (!value) continue;
     const brand = normalize(value).toLowerCase();
     if (!brand || productName.includes(brand)) continue;
@@ -49,7 +58,7 @@ export function c7BrandLeakage(l: OptimizedListing): Failure[] {
         out.push(fail('C7', field, `contains backend-only '${value}'`, `Remove the backend-only ${key} string from customer copy`));
       }
     }
-    for (const [attr, av] of Object.entries(l.attributes)) {
+    for (const [attr, av] of Object.entries(l.attributes ?? {})) {
       if (attr === 'brand_name' || attr === 'manufacturer') continue;
       if (normalize(av).toLowerCase().includes(brand)) {
         out.push(fail('C7', `attributes.${attr}`, `contains backend-only '${value}'`, `Remove the backend-only ${key} string from this attribute`));
@@ -61,11 +70,11 @@ export function c7BrandLeakage(l: OptimizedListing): Failure[] {
 
 export function c8ProductNameLead(l: OptimizedListing): Failure[] {
   const out: Failure[] = [];
-  const name = normalize(l.productName);
-  if (!normalize(l.title).startsWith(name)) {
-    out.push(fail('C8', 'title', l.title.slice(0, 60), 'The customer product name must START the title'));
+  const name = normalize(l.productName ?? '');
+  if (!normalize(l.title ?? '').startsWith(name)) {
+    out.push(fail('C8', 'title', normalize(l.title ?? '').slice(0, 60), 'The customer product name must START the title'));
   }
-  if (!normalize(l.description).includes(name)) {
+  if (!normalize(l.description ?? '').includes(name)) {
     out.push(fail('C8', 'description', 'product name missing', 'The product name must appear in the description'));
   }
   return out;

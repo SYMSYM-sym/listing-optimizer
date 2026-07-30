@@ -32,11 +32,19 @@ export function buildAudit(
   const gaps = diff(current, proposed, pack);
   // Advisory only: staleness never enters `verified` and never becomes a failure.
   const staleness = rulesStaleness(pack.rules);
+  // PACK-INTEGRITY is derived from the gate result, so it can never disagree
+  // with `verified`: a missing/empty required pack piece raises a blocking
+  // PACK failure, which makes `gateResult.pass` (and therefore `verified`)
+  // false AND shows up here, named, in the audit payload.
+  const packProblems = gateResult.failures
+    .filter((f) => f.checkId === 'PACK')
+    .map((f) => f.context);
   return {
     scorecard,
     gaps,
     gateResult,
     verified: gateResult.pass,
+    packIntegrity: { ok: packProblems.length === 0, problems: packProblems },
     rulesStale: staleness.stale,
     ...(staleness.notice ? { rulesStaleNotice: staleness.notice } : {}),
   };

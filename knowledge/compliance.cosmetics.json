@@ -202,7 +202,23 @@
     "prostate cancer",
     "breast cancer",
     "colon cancer",
-    "lung cancer"
+    "lung cancer",
+    "the big c",
+    "neoplasia",
+    "carcinogenesis",
+    "oncogenesis",
+    "gynecomastia"
+  ],
+  "_prescriptionDrugNamesComment": "Prescription-drug brand/generic names. Claiming a product replaces or acts like a prescription drug is a DRUG CLAIM, so the gate scans these on the same C6/A2 path (same de-obfuscation passes) as the disease nouns.",
+  "prescriptionDrugNames": [
+    "botox",
+    "retin-a",
+    "tretinoin",
+    "accutane",
+    "isotretinoin",
+    "hydroquinone",
+    "minoxidil",
+    "finasteride"
   ],
   "negationMetaPhrases": [
     "not intended to diagnose, treat, cure, or prevent any disease",
@@ -308,6 +324,13 @@
   ],
   "promptRules": {
     "_comment": "Category-specific generation guidance injected into the prompts.",
+    "_complianceComment": "The COMPLIANCE headline rules. These used to be hard-coded English sentences inside lib/engine/prompts/system.ts; they are pack data now so the engine carries no category rule text.",
+    "compliance": [
+      "NEVER claim to diagnose, treat, cure, prevent, or mitigate any disease, skin condition or symptom — a cosmetic may only describe appearance and feel.",
+      "NEVER claim the product replaces, matches, or acts like a prescription drug or an in-office medical procedure.",
+      "No star-rating or review-count claims.",
+      "No price, discount, shipping or availability statement in copy."
+    ],
     "system": [
       "Do NOT write the disclaimer anywhere — the system inserts the verbatim constant itself. Claim-bearing bullets end with a trailing \"*\" marker only.",
       "If an allergen is present, declare it exactly as \"Contains: [Allergen]\" consistently; never write \"No Known Allergens\" when one is present."

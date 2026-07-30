@@ -385,7 +385,11 @@ describe('repair loop', () => {
     const badBackendLlm: typeof mockLlm = async (req) => {
       const res = await mockLlm(req);
       if (req.user.includes('Backend search terms')) {
-        return JSON.stringify({ backendSearchTerms: 'ä'.repeat(140) });
+        // MANY over-budget tokens (not one 140-char blob): the sanitizer
+        // truncates on word boundaries, so a single giant token would leave
+        // the field EMPTY — which C3 now reports as an unfilled deliverable
+        // rather than silently accepting as "0 bytes, under the cap".
+        return JSON.stringify({ backendSearchTerms: Array.from({ length: 30 }, (_, i) => `ätermö${i}`).join(' ') });
       }
       return res;
     };

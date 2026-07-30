@@ -1,4 +1,9 @@
-import type { ListingSnapshot, ProhibitedContentRules, StyleRules } from '@/lib/types';
+import type {
+  ListingSnapshot,
+  ProhibitedContentRules,
+  ProhibitedMarketingRules,
+  StyleRules,
+} from '@/lib/types';
 
 export function snapshotBlock(snapshot: ListingSnapshot): string {
   return `CURRENT LISTING (source data — improve, don't copy mistakes):
@@ -56,5 +61,23 @@ export function prohibitedContentBlock(rules: ProhibitedContentRules | undefined
     'AMAZON PROHIBITED CONTENT — never include any of the following anywhere in the listing:',
     `- ${labels.join('\n- ')}`,
     '- This includes prices written as symbols ($19.95) AND spelled out ("thirty nine dollars and ninety five cents"). Never state, imply or reference the product price, discounts, shipping offers, stock/availability, item condition, or any email, URL or phone number.',
+  ].join('\n');
+}
+
+/**
+ * Prohibited MARKETING instructions rendered FROM PACK DATA
+ * (`rules.prohibitedMarketing`) — the mirror of `prohibitedContentBlock`.
+ *
+ * C19 enforces this list on every surface, but the generator was never shown
+ * it: only C18's labels were injected. `tests/redteam4.gate.test.ts` asserts
+ * the rendered label set is a SUPERSET of the enforced pattern labels, so a
+ * pattern cannot be added to the pack without the prompt learning about it.
+ */
+export function prohibitedMarketingBlock(rules: ProhibitedMarketingRules | undefined): string {
+  if (!rules || rules.patterns.length === 0) return '';
+  const labels = Array.from(new Set(rules.patterns.map(([, label]) => label)));
+  return [
+    'AMAZON PROHIBITED MARKETING CLAIMS — never include any of the following anywhere in the listing:',
+    `- ${labels.join('\n- ')}`,
   ].join('\n');
 }

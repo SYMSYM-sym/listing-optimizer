@@ -32,6 +32,7 @@ export function loadPack(id: PackId): KnowledgePack {
     return {
       id: 'supplements',
       rules,
+      requiresCompliance: true,
       compliancePack: complianceJson as CompliancePack,
       attributeSchema: attributeSchemaJson as AttributeField[],
       principles,
@@ -42,6 +43,7 @@ export function loadPack(id: PackId): KnowledgePack {
     return {
       id: 'cosmetics',
       rules,
+      requiresCompliance: true,
       compliancePack: cosmeticsComplianceJson as CompliancePack,
       attributeSchema: cosmeticsAttributeSchemaJson as AttributeField[],
       principles,
@@ -50,6 +52,9 @@ export function loadPack(id: PackId): KnowledgePack {
   }
   return {
     id: 'generic',
+    // The generic pack is the ONLY pack that may legitimately ship without a
+    // compliance module; the suspicion lexicon is its fail-closed backstop.
+    requiresCompliance: false,
     rules,
     compliancePack: null,
     attributeSchema: [],

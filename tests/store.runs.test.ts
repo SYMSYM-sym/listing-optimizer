@@ -40,6 +40,7 @@ const audit = {
   scorecard: { total: 80, perPrinciple: [] },
   gaps: [],
   gateResult: { pass: true, failures: [] },
+  packIntegrity: { ok: true, problems: [] },
 } as Audit;
 
 function sampleInput(): SaveRunInput {

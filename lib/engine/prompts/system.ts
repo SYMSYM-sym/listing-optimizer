@@ -1,6 +1,6 @@
 import type { Facts, KnowledgePack } from '@/lib/types';
 import { activeDiseaseNouns } from '@/lib/gate/checks/pack';
-import { prohibitedContentBlock, styleRulesBlock } from './shared';
+import { prohibitedContentBlock, prohibitedMarketingBlock, styleRulesBlock } from './shared';
 
 /**
  * NO cap on the injected disease-noun list — deliberately.
@@ -36,13 +36,16 @@ export function buildSystemPrompt(
   // Category-specific instruction lines are PACK DATA (`compliancePack.promptRules`)
   // — this module renders them, it never authors them.
   const packLines = (cp?.promptRules?.system ?? []).map((line) => `- ${line}`).join('\n');
+  // The COMPLIANCE headline rules are PACK DATA too (`promptRules.compliance`)
+  // — this module renders them, it no longer authors them.
+  const complianceLines = (cp?.promptRules?.compliance ?? []).map((line) => `- ${line}`).join('\n');
   const compliance = cp
     ? `
 COMPLIANCE (structure/function claims ONLY — this is load-bearing):
-- NEVER claim to diagnose, treat, cure, prevent, or mitigate any disease or symptom.
+${complianceLines}
 - Banned verbs as product claims: ${cp.diseaseVerbs.join(', ')}.
 - NEVER use disease/condition nouns anywhere. The deterministic gate scans for ALL of these on EVERY surface: ${activeNouns.join(', ')} — plus any other condition name. Reframe as a structure/function state ("supports healthy [system] function", "[parameter] balance").
-- Banned marketing phrases: ${cp.superlativeBans.join(', ')}. No star-rating or review-count claims. No price in copy.
+- Banned marketing phrases: ${cp.superlativeBans.join(', ')}.
 ${packLines}`
     : `
 No category compliance module is active. Write factual, non-medical copy. No superlatives, no price, no review claims. Do not write any disclaimer text.`;
@@ -73,6 +76,7 @@ ${compliance}
 
 ${styleRulesBlock(r.style)}
 ${prohibitedContentBlock(r.prohibitedContent)}
+${prohibitedMarketingBlock(r.prohibitedMarketing)}
 
 STRUCTURE:
 - Product name comes FIRST in both titles; the primary keyword immediately after it (never displace the name).

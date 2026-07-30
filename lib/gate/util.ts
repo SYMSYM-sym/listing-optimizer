@@ -106,8 +106,42 @@ function buildConfusables(): Record<string, string> {
 
 const CONFUSABLES: Record<string, string> = buildConfusables();
 
-/** Zero-width / invisible formatting characters used to break up scanned words. */
-const INVISIBLE_RE = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g;
+/**
+ * Zero-width / invisible / format characters used to break up scanned words.
+ *
+ * The previous class covered only ZWSP-ZWJ, WORD JOINER, BOM and SOFT HYPHEN,
+ * so LRM/RLM, the Arabic letter mark, the Mongolian separators, the invisible
+ * math operators, the Hangul fillers and the variation selectors all walked
+ * straight through. The class below covers the realistic paste-able set:
+ *   U+00AD soft hyphen, U+034F combining grapheme joiner, U+061C Arabic letter
+ *   mark, U+115F/U+1160 Hangul fillers, U+180B-U+180E Mongolian selectors +
+ *   separator, U+200B-U+200F zero-width + bidi marks, U+202A-U+202E bidi
+ *   embedding/override, U+2060-U+2064 word joiner + invisible operators,
+ *   U+2066-U+2069 bidi isolates, U+3164 Hangul filler, U+FE00-U+FE0F variation
+ *   selectors, U+FEFF BOM.
+ * NOT covered (deliberately): ordinary whitespace and printable separators —
+ * those are handled by `collapseSeparators` / `stripSeparators`, not here.
+ */
+const INVISIBLE_RE =
+  /[\u00AD\u034F\u061C\u115F\u1160\u180B-\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\u3164\uFE00-\uFE0F\uFEFF]/g;
+
+/**
+ * Every codepoint `INVISIBLE_RE` strips, as single-character strings.
+ * Exported so the red-team suite can assert the covered set exhaustively
+ * instead of hand-picking a few examples.
+ */
+export const INVISIBLE_CHARS: string[] = (() => {
+  const ranges: [number, number][] = [
+    [0x00ad, 0x00ad], [0x034f, 0x034f], [0x061c, 0x061c], [0x115f, 0x1160],
+    [0x180b, 0x180e], [0x200b, 0x200f], [0x202a, 0x202e], [0x2060, 0x2064],
+    [0x2066, 0x2069], [0x3164, 0x3164], [0xfe00, 0xfe0f], [0xfeff, 0xfeff],
+  ];
+  const out: string[] = [];
+  for (const [lo, hi] of ranges) {
+    for (let cp = lo; cp <= hi; cp++) out.push(String.fromCodePoint(cp));
+  }
+  return out;
+})();
 
 /** Combining diacritics — `cańcer` is `cancer` plus U+0301 and must fold to it. */
 const COMBINING_RE = /[\u0300-\u036F\u1AB0-\u1AFF\u20D0-\u20F0\uFE20-\uFE2F]/g;
@@ -146,8 +180,37 @@ function foldCompatibility(text: string): string {
  * `а`, a combining accent or a zero-width space inside a banned word evades
  * every check.
  */
+/**
+ * Bounded memo for `normalize` / `deobfuscatedVariants`.
+ *
+ * The same surface string is normalized by a dozen different checks in one
+ * gate run, and `normalize` walks the string codepoint-by-codepoint doing an
+ * NFKC fold. The cache is bounded and cleared wholesale when it fills, so it
+ * cannot grow without limit in a long-running server process.
+ */
+const MEMO_LIMIT = 4000;
+function memoized<T>(cache: Map<string, T>, key: string, compute: () => T): T {
+  const hit = cache.get(key);
+  if (hit !== undefined) return hit;
+  const value = compute();
+  if (cache.size >= MEMO_LIMIT) cache.clear();
+  cache.set(key, value);
+  return value;
+}
+
+const NORMALIZE_CACHE = new Map<string, string>();
+
 export function normalize(text: string): string {
-  let t = decodeEntities(text.replace(INVISIBLE_RE, ''));
+  const key = typeof text === 'string' ? text : text == null ? '' : String(text);
+  return memoized(NORMALIZE_CACHE, key, () => normalizeUncached(key));
+}
+
+function normalizeUncached(text: string): string {
+  // Defensive coercion: malformed model output (a `null` bullet, a missing
+  // Q&A answer) must produce a FAILURE downstream, never a TypeError that
+  // escapes runGate — a thrown gate is a fail-OPEN for the caller.
+  const src = typeof text === 'string' ? text : text == null ? '' : String(text);
+  let t = decodeEntities(src.replace(INVISIBLE_RE, ''));
   // NFD first so an accent becomes a separate combining mark, then drop the
   // marks: `cańcer` and `cañcer` both fold onto `cancer`.
   t = t.normalize('NFD').replace(COMBINING_RE, '');
@@ -182,6 +245,135 @@ export function collapseSeparators(text: string): string {
 }
 
 /**
+ * PARTIAL-SPLIT obfuscation (`c ancer`, `ca ncer`, `can-cer`, `can.cer`,
+ * `can'cer`, `cance r`).
+ *
+ * `collapseSeparators` only rebuilds runs of SINGLE letters, so ANY split that
+ * leaves a multi-letter fragment walked straight through it. This pass removes
+ * EVERY intra-word separator/whitespace character instead, producing one long
+ * concatenated string that is scanned against a term list stripped the same
+ * way (see `scanConcatenated`).
+ *
+ * It is ADDITIVE: the primary surface text is never rewritten.
+ */
+const SEPARATOR_STRIP_RE = /[\s.\-–—―−·*/,|'‘’_~+:;]+/g;
+
+export interface StrippedText {
+  /** The text with every separator removed. */
+  stripped: string;
+  /** `map[i]` is the index in the ORIGINAL text of `stripped[i]`. */
+  map: number[];
+}
+
+/** The same character set as `SEPARATOR_STRIP_RE`, as a Set for per-char work. */
+const SEPARATOR_CHARS = new Set([
+  ' ', '\t', '\n', '\r', '\f', '\v', '\u00a0',
+  '.', '-', '\u2013', '\u2014', '\u2015', '\u2212', '\u00b7',
+  '*', '/', ',', '|', "'", '\u2018', '\u2019', '_', '~', '+', ':', ';',
+]);
+
+const WHITESPACE_RE = /\s/;
+
+/** Remove every intra-word separator, keeping an index map back to the source. */
+export function stripSeparators(text: string): StrippedText {
+  const out: string[] = [];
+  const map: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    // Set first (fast path), then the full \s class so the two stay in sync
+    // with SEPARATOR_STRIP_RE for exotic whitespace.
+    if (SEPARATOR_CHARS.has(ch) || WHITESPACE_RE.test(ch)) continue;
+    out.push(ch);
+    map.push(i);
+  }
+  return { stripped: out.join(''), map };
+}
+
+interface CompiledConcat {
+  re: RegExp;
+  canonical: Map<string, string>;
+}
+
+const CONCAT_CACHE = new WeakMap<string[], Map<number, CompiledConcat | null>>();
+
+/**
+ * Build the boundary-FREE alternation for the concatenated pass.
+ *
+ * There are no word boundaries left in a concatenated surface, so matching is
+ * plain substring matching — which is exactly why a MINIMUM LENGTH is enforced:
+ * gluing a whole surface together can create accidental substrings, and short
+ * terms (2-4 chars) are the ones that collide. Terms shorter than `minLen`
+ * are therefore NOT covered by this pass; they remain covered by the ordinary
+ * word-boundary scan on the untouched text.
+ */
+function compileConcatTerms(terms: string[], minLen: number): CompiledConcat | null {
+  let byLen = CONCAT_CACHE.get(terms);
+  if (!byLen) {
+    byLen = new Map();
+    CONCAT_CACHE.set(terms, byLen);
+  }
+  const hit = byLen.get(minLen);
+  if (hit !== undefined) return hit;
+
+  const canonical = new Map<string, string>();
+  for (const term of terms) {
+    const stripped = term.replace(SEPARATOR_STRIP_RE, '').toLowerCase();
+    if (stripped.length < minLen) continue;
+    if (!canonical.has(stripped)) canonical.set(stripped, term.trim());
+  }
+  if (canonical.size === 0) {
+    byLen.set(minLen, null);
+    return null;
+  }
+  const source = [...canonical.keys()]
+    .sort((a, b) => b.length - a.length)
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+  const compiled: CompiledConcat = { re: new RegExp(`(?:${source})`, 'gi'), canonical };
+  byLen.set(minLen, compiled);
+  return compiled;
+}
+
+/**
+ * Scan the separator-stripped variant of `text` for separator-stripped `terms`.
+ *
+ * Matches are mapped back to their index in the ORIGINAL text so the negation
+ * guard and the reported context still see real clause structure — stripping
+ * separators destroys both, and running the guard on the stripped string would
+ * silently disable negation handling.
+ */
+export function scanConcatenated(
+  text: string,
+  terms: string[],
+  minLen: number,
+  neg: NegationOptions = {},
+): TermMatch[] {
+  const out: TermMatch[] = [];
+  if (!text || terms.length === 0) return out;
+  const compiled = compileConcatTerms(terms, minLen);
+  if (!compiled) return out;
+  const { stripped, map } = stripSeparators(text);
+  if (!stripped) return out;
+  compiled.re.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = compiled.re.exec(stripped)) !== null) {
+    if (m[0].length === 0) {
+      compiled.re.lastIndex += 1;
+      continue;
+    }
+    const originalIndex = map[m.index] ?? 0;
+    if (hasNegationContext(text, originalIndex, neg)) continue;
+    const endIndex = (map[m.index + m[0].length - 1] ?? originalIndex) + 1;
+    out.push({
+      term: compiled.canonical.get(m[0].toLowerCase()) ?? m[0],
+      index: originalIndex,
+      context: text.slice(Math.max(0, originalIndex - 40), endIndex + 40),
+    });
+  }
+  return out;
+}
+
+/**
  * Collapse repeated letters (`canncer` -> `cancer`). EXTRA-PASS ONLY: applying
  * this to real copy would corrupt ordinary words, so the caller scans the
  * result in addition to — never instead of — the untouched surface.
@@ -210,7 +402,14 @@ export function leetFold(text: string, oneAs: 'i' | 'l'): string {
  * leetspeak readings, composed. The primary text is always returned first and
  * is never rewritten.
  */
+const DEOBFUSCATED_CACHE = new Map<string, string[]>();
+const DOUBLE_COLLAPSED_CACHE = new Map<string, string[]>();
+
 export function deobfuscatedVariants(text: string): string[] {
+  return memoized(DEOBFUSCATED_CACHE, text, () => deobfuscatedVariantsUncached(text));
+}
+
+function deobfuscatedVariantsUncached(text: string): string[] {
   const out = new Set<string>([text]);
   for (const base of [text, collapseSeparators(text)]) {
     out.add(base);
@@ -232,7 +431,9 @@ export function deobfuscatedVariants(text: string): string[] {
  * every term that legitimately contains a double letter.
  */
 export function doubleCollapsedVariants(text: string): string[] {
-  return [...new Set(deobfuscatedVariants(text).map(collapseDoubles))];
+  return memoized(DOUBLE_COLLAPSED_CACHE, text, () => [
+    ...new Set(deobfuscatedVariants(text).map(collapseDoubles)),
+  ]);
 }
 
 const COLLAPSED_TERMS_CACHE = new WeakMap<string[], string[]>();
@@ -419,6 +620,22 @@ export function hasNegationContext(
   return true;
 }
 
+/**
+ * TERM WORD BOUNDARIES.
+ *
+ * Both guards used to be `[a-z0-9]`, which meant a single trailing or leading
+ * DIGIT disarmed the whole lexicon: `cancer1`, `cancer\u00b9` (NFKC-folded to
+ * `cancer1`) and `1cancer` all evaded every scan. The guards are letters-only
+ * now, so a digit no longer buys immunity while a real word still cannot match
+ * inside a longer word (`cancerous`, `oncancer`).
+ *
+ * Legitimate alphanumerics are unaffected because they are not banned terms:
+ * a term list containing `cancer` cannot match `B12`, `CoQ10`, `Omega-3` or
+ * `5-HTP` no matter what the boundary is.
+ */
+const TERM_LEAD = '(?<![a-z])';
+const TERM_TRAIL = '(?![a-z])';
+
 const TERM_RE_CACHE = new Map<string, RegExp>();
 
 /** Word-boundary regex for a term, tolerating simple plural s/es and flexible inner whitespace. */
@@ -432,7 +649,7 @@ export function termRegex(term: string): RegExp {
     .trim()
     .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     .replace(/\s+/g, '\\s+');
-  const re = new RegExp(`(?<![a-z0-9])${escaped}(?:e?s)?(?![a-z0-9])`, 'gi');
+  const re = new RegExp(`${TERM_LEAD}${escaped}(?:e?s)?${TERM_TRAIL}`, 'gi');
   TERM_RE_CACHE.set(term, re);
   return re;
 }
@@ -505,7 +722,7 @@ function compileTerms(terms: string[]): CompiledTerms {
     .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'))
     .join('|');
   const compiled: CompiledTerms = {
-    re: new RegExp(`(?<![a-z0-9])(?:${source})(?:e?s)?(?![a-z0-9])`, 'gi'),
+    re: new RegExp(`${TERM_LEAD}(?:${source})(?:e?s)?${TERM_TRAIL}`, 'gi'),
     canonical,
   };
   ALTERNATION_CACHE.set(terms, compiled);

@@ -1,6 +1,20 @@
 export type { GateContext } from './types';
-export { activeDiseaseNouns, allDiseaseNouns, diseaseActionVerbs, packFailClosed } from './pack';
-export { extractUnitNumbers, diseaseNegationOptions } from './shared';
+export {
+  activeDiseaseNouns,
+  allDiseaseNouns,
+  diseaseActionVerbs,
+  missingPackPieces,
+  packFailClosed,
+  requiredPackPieceIds,
+  REQUIRED_PACK_PIECES,
+} from './pack';
+export type { PackPiece } from './pack';
+export {
+  CONCAT_MIN_TERM_LEN,
+  extractUnitNumbers,
+  diseaseNegationOptions,
+  factsComplianceSurfaces,
+} from './shared';
 export type { UnitNumber, Dimension } from './shared';
 
 export {
@@ -29,6 +43,7 @@ export {
 } from './c-quality';
 
 export { c17Style, styleSurfaces, allCapsOffenders } from './c-style';
+export { c20Structure } from './c-structure';
 
 export {
   a1AplusDisclaimer,

@@ -24,10 +24,11 @@ function allergenFields(cp: CompliancePack) {
 /** Allergens present = any declaration rule whose source pattern matches the label list. */
 export function presentAllergens(l: OptimizedListing, cp: CompliancePack) {
   const f = allergenFields(cp);
+  const attrs = l.attributes ?? {};
   const labelText = normalize(
-    `${l.attributes[f.labelList] ?? ''} ${l.attributes[f.declaration] ?? ''}`,
+    `${attrs[f.labelList] ?? ''} ${attrs[f.declaration] ?? ''}`,
   ).toLowerCase();
-  return cp.allergenRules.filter((r) =>
+  return (cp.allergenRules ?? []).filter((r) =>
     new RegExp(`\\b(?:${r.source})\\b`, 'i').test(labelText),
   );
 }
@@ -47,7 +48,8 @@ export function c9Allergen(l: OptimizedListing, pack: KnowledgePack): Failure[] 
   const f = allergenFields(cp);
   const declarationField = `attributes.${f.declaration}`;
   const out: Failure[] = [];
-  const all = `${l.title} ${l.description} ${l.bullets.join(' ')} ${Object.values(l.attributes).join(' ')}`;
+  const attrs = l.attributes ?? {};
+  const all = `${l.title ?? ''} ${l.description ?? ''} ${(l.bullets ?? []).map((b) => b ?? '').join(' ')} ${Object.values(attrs).join(' ')}`;
   const present = presentAllergens(l, cp);
   if (present.length === 0) return [];
   const normalizedAll = normalize(all).toLowerCase();
@@ -58,13 +60,13 @@ export function c9Allergen(l: OptimizedListing, pack: KnowledgePack): Failure[] 
     }
   }
   for (const rule of present) {
-    if (l.attributes[f.declaration] !== rule.canonicalString) {
-      out.push(fail('C9', declarationField, l.attributes[f.declaration] ?? '(empty)', `${f.declaration} must equal exactly '${rule.canonicalString}'`));
+    if (attrs[f.declaration] !== rule.canonicalString) {
+      out.push(fail('C9', declarationField, attrs[f.declaration] ?? '(empty)', `${f.declaration} must equal exactly '${rule.canonicalString}'`));
     }
-    if (!l.bullets.some((b) => allergenMentioned(b, rule, cp))) {
+    if (!(l.bullets ?? []).some((b) => allergenMentioned(b ?? '', rule, cp))) {
       out.push(fail('C9', 'bullets', `no bullet declares ${rule.class}`, `Declare the allergen ('${rule.canonicalString}') in at least one bullet`));
     }
-    if (!allergenMentioned(l.description, rule, cp)) {
+    if (!allergenMentioned(l.description ?? '', rule, cp)) {
       out.push(fail('C9', 'description', `description does not declare ${rule.class}`, `Declare the allergen ('${rule.canonicalString}') in the description`));
     }
   }

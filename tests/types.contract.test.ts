@@ -76,6 +76,7 @@ describe('output contract field parity (brain/05)', () => {
       scorecard: { total: 0, perPrinciple: [] },
       gaps: [],
       gateResult: { pass: false, failures: [] },
+      packIntegrity: { ok: true, problems: [] },
       verified: false,
       rulesStale: false,
     };
@@ -87,6 +88,7 @@ describe('output contract field parity (brain/05)', () => {
       scorecard: { total: 0, perPrinciple: [] },
       gaps: [],
       gateResult: { pass: true, failures: [] },
+      packIntegrity: { ok: true, problems: [] },
       verified: true,
       rulesStale: true,
       rulesStaleNotice: 'snapshot is old',

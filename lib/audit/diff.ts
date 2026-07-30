@@ -35,9 +35,9 @@ export function diff(
     const surfaces: [string, string][] = [
       ['title', current.title],
       ['description', current.description],
-      ...current.bullets.map((b, i) => [`bullets[${i}]`, b] as [string, string]),
+      ...(current.bullets ?? []).map((b, i) => [`bullets[${i}]`, b ?? ''] as [string, string]),
     ];
-    const disclaimers = [cp.disclaimer, ...cp.auditAcceptDisclaimers].map(normalize);
+    const disclaimers = [cp.disclaimer, ...(cp.auditAcceptDisclaimers ?? [])].map(normalize);
     for (const [field, textRaw] of surfaces) {
       const text = subtractDisclaimers(normalize(textRaw), disclaimers);
       for (const m of scanTerms(text, nouns)) {
@@ -66,13 +66,13 @@ export function diff(
 
   // --- limits in the current listing ---
   if (current.title.length > pack.rules.titleMaxLegacy) {
-    gaps.push({ field: 'title', current: `${current.title.length} chars`, proposed: `${proposed.title.length} chars (≤${pack.rules.titleMaxLegacy})`, why: 'Current title exceeds the hard limit.', severity: 'P0' });
+    gaps.push({ field: 'title', current: `${current.title.length} chars`, proposed: `${(proposed.title ?? '').length} chars (≤${pack.rules.titleMaxLegacy})`, why: 'Current title exceeds the hard limit.', severity: 'P0' });
   }
   if (current.title.length > pack.rules.title75Max) {
     gaps.push({
       field: 'title75',
       current: `${current.title.length}-char title; no 75-char variant`,
-      proposed: clip(proposed.title75),
+      proposed: clip(proposed.title75 ?? ''),
       why: 'Amazon\'s 75-char title policy (eff. Jul 27 2026) will AI-rewrite longer titles — a controlled 75-char title beats an automated rewrite.',
       severity: 'P1',
     });
@@ -80,7 +80,7 @@ export function diff(
   gaps.push({
     field: 'itemHighlights',
     current: 'unknown',
-    proposed: clip(proposed.itemHighlights),
+    proposed: clip(proposed.itemHighlights ?? ''),
     why: 'Item Highlights (≤125 chars, searchable) absorbs title overflow under the new policy; not visible publicly — enter when your template supports it.',
     severity: 'P1',
   });
@@ -100,7 +100,7 @@ export function diff(
   gaps.push({
     field: 'backendSearchTerms',
     current: 'unknown',
-    proposed: `${utf8Bytes(proposed.backendSearchTerms)} bytes of synonyms/misspellings/other-language variants (≤${pack.rules.backendMaxBytes})`,
+    proposed: `${utf8Bytes(proposed.backendSearchTerms ?? '')} bytes of synonyms/misspellings/other-language variants (≤${pack.rules.backendMaxBytes})`,
     why: 'Current backend terms are seller-private and cannot be audited from the PDP; the proposed set is deduplicated against all title surfaces.',
     severity: 'P1',
   });
@@ -124,47 +124,47 @@ export function diff(
   }
   const rawView = current.raw as { aplusText?: string } | null;
   if (!rawView?.aplusText) {
-    gaps.push({ field: 'aplusContent', current: 'No extractable A+ text detected', proposed: `${proposed.aplusContent.modules.length} real-text modules + comparison + FAQ`, why: 'AI/voice engines read A+ text even though classic A9 ignores it; image-only A+ is invisible to them.', severity: 'P1' });
+    gaps.push({ field: 'aplusContent', current: 'No extractable A+ text detected', proposed: `${(proposed.aplusContent?.modules ?? []).length} real-text modules + comparison + FAQ`, why: 'AI/voice engines read A+ text even though classic A9 ignores it; image-only A+ is invisible to them.', severity: 'P1' });
   }
 
   // --- quality lint (advisory, deterministic) ---
-  const nameLen = proposed.productName.length;
-  const postName = proposed.title.slice(nameLen, nameLen + 75).toLowerCase();
-  if (!postName.includes(proposed.primaryKeyword.toLowerCase())) {
-    gaps.push({ field: 'title', current: clip(current.title, 80), proposed: clip(proposed.title, 80), why: `Quality lint: primary keyword '${proposed.primaryKeyword}' should sit immediately after the product name.`, severity: 'P2' });
+  const nameLen = (proposed.productName ?? '').length;
+  const postName = (proposed.title ?? '').slice(nameLen, nameLen + 75).toLowerCase();
+  if (!postName.includes((proposed.primaryKeyword ?? '').toLowerCase())) {
+    gaps.push({ field: 'title', current: clip(current.title, 80), proposed: clip(proposed.title ?? '', 80), why: `Quality lint: primary keyword '${proposed.primaryKeyword ?? ''}' should sit immediately after the product name.`, severity: 'P2' });
   }
   const anchors = proposed.bulletAnchors ?? [];
   if (new Set(anchors.filter(Boolean)).size < anchors.length) {
     gaps.push({ field: 'bullets', current: 'n/a', proposed: anchors.join(' | '), why: 'Quality lint: bullet use-case anchors should be distinct (one per major use-case).', severity: 'P2' });
   }
-  const whoFor = proposed.aplusContent.modules.some((m) => /who/i.test(m.id) || /who it'?s for|who it is for/i.test(`${m.headline} ${m.body}`)) ||
-    proposed.qa.some((q) => /who is it for|who it'?s for/i.test(q.q));
+  const whoFor = (proposed.aplusContent?.modules ?? []).some((m) => /who/i.test(m?.id ?? '') || /who it'?s for|who it is for/i.test(`${m?.headline ?? ''} ${m?.body ?? ''}`)) ||
+    (proposed.qa ?? []).some((q) => /who is it for|who it'?s for/i.test(q?.q ?? ''));
   if (!whoFor) {
     gaps.push({ field: 'aplusContent', current: 'n/a', proposed: 'Add a who-it\'s-for module/FAQ', why: 'Quality lint: comparison + who-it\'s-for is a major AI query class.', severity: 'P2' });
   }
 
   // --- explicit current-vs-proposed copy deltas (visible fields) ---
-  if (normalize(current.title) !== normalize(proposed.title)) {
+  if (normalize(current.title) !== normalize(proposed.title ?? '')) {
     gaps.push({
       field: 'title',
       current: clip(current.title, 120),
-      proposed: clip(proposed.title, 120),
+      proposed: clip(proposed.title ?? '', 120),
       why: 'Title restructured for product-name lead, keyword front-loading, and limit-safe length under the new 75-char policy.',
       severity: 'P2',
     });
   }
   if (
     current.bullets.length === pack.rules.bulletCount &&
-    proposed.bullets.length === pack.rules.bulletCount
+    (proposed.bullets ?? []).length === pack.rules.bulletCount
   ) {
     const changed = current.bullets.filter(
-      (b, i) => normalize(b) !== normalize(proposed.bullets[i] ?? ''),
+      (b, i) => normalize(b) !== normalize((proposed.bullets ?? [])[i] ?? ''),
     ).length;
     if (changed >= 3) {
       gaps.push({
         field: 'bullets',
         current: clip(current.bullets[0] ?? '', 100),
-        proposed: clip(proposed.bullets[0] ?? '', 100),
+        proposed: clip((proposed.bullets ?? [])[0] ?? '', 100),
         why: `${changed}/5 bullets rewritten with distinct situational anchors and compliant structure/function framing.`,
         severity: 'P2',
       });

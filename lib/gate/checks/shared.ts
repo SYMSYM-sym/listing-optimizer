@@ -11,6 +11,7 @@ import {
   doubleCollapsedVariants,
   hasNegationContext,
   normalize,
+  scanConcatenated,
   scanTerms,
   subtractDisclaimers,
   termRegex,
@@ -21,30 +22,65 @@ import { diseaseActionVerbs } from './pack';
 export const fail = (checkId: string, field: string, context: string, fix: string): Failure => ({
   checkId,
   field,
-  context: context.slice(0, 220),
+  context: String(context ?? '').slice(0, 220),
   fix,
 });
+
+/**
+ * NULL-SAFE surface coercion.
+ *
+ * Every surface builder runs it: malformed LLM output (a `null` bullet, a
+ * missing `qa`, an A+ block without `comparison`) must produce FAILURES, not a
+ * `TypeError` that escapes `runGate` and takes the whole request down. A thrown
+ * gate is a fail-OPEN in practice — the caller never gets `verified:false`.
+ */
+const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
+
+/**
+ * Minimum term length for the separator-STRIPPED pass (see `scanConcatenated`).
+ * Below this, concatenating a surface produces accidental substring hits.
+ */
+export const CONCAT_MIN_TERM_LEN = 5;
 
 /** Customer-surface set used by C6–C12 (buyer-facing copy). */
 export function customerSurfaces(l: OptimizedListing): [string, string][] {
   const out: [string, string][] = [
-    ['title', l.title],
-    ['title75', l.title75],
-    ['itemHighlights', l.itemHighlights],
-    ['description', l.description],
-    ['backendSearchTerms', l.backendSearchTerms],
-    ...l.bullets.map((b, i) => [`bullets[${i}]`, b] as [string, string]),
+    ['title', str(l.title)],
+    ['title75', str(l.title75)],
+    ['itemHighlights', str(l.itemHighlights)],
+    ['description', str(l.description)],
+    ['backendSearchTerms', str(l.backendSearchTerms)],
+    ...(l.bullets ?? []).map((b, i) => [`bullets[${i}]`, str(b)] as [string, string]),
   ];
   // Q&A + image plan (brain/02: disease terms banned on every surface including Q&A/images)
-  l.qa.forEach((item, i) => {
-    out.push([`qa[${i}].q`, item.q]);
-    out.push([`qa[${i}].a`, item.a]);
+  (l.qa ?? []).forEach((item, i) => {
+    out.push([`qa[${i}].q`, str(item?.q)]);
+    out.push([`qa[${i}].a`, str(item?.a)]);
   });
-  l.imagePlan.forEach((slot, i) => {
-    out.push([`imagePlan[${i}].purpose`, slot.purpose]);
-    out.push([`imagePlan[${i}].spec`, slot.spec]);
-    out.push([`imagePlan[${i}].notes`, slot.notes]);
+  (l.imagePlan ?? []).forEach((slot, i) => {
+    out.push([`imagePlan[${i}].purpose`, str(slot?.purpose)]);
+    out.push([`imagePlan[${i}].spec`, str(slot?.spec)]);
+    out.push([`imagePlan[${i}].notes`, str(slot?.notes)]);
   });
+  return out;
+}
+
+/**
+ * Canonical FACTS as a scanned surface.
+ *
+ * `facts.*` is echoed verbatim into every repair prompt, so a claim parked in
+ * a fact string used to reach the generator without any check ever reading it.
+ * Only STRING values are scanned (numbers cannot carry a claim).
+ *
+ * Scanned by the disease/drug path (C6) ONLY — deliberately NOT by C18/C19:
+ * `facts.price` legitimately holds the standard price, which C18 would
+ * (correctly, for customer copy) report as a prohibited price statement.
+ */
+export function factsComplianceSurfaces(l: OptimizedListing): [string, string][] {
+  const out: [string, string][] = [];
+  for (const [key, value] of Object.entries(l.facts ?? {})) {
+    if (typeof value === 'string' && value.trim()) out.push([`facts.${key}`, value]);
+  }
   return out;
 }
 
@@ -57,28 +93,30 @@ export function customerSurfaces(l: OptimizedListing): [string, string][] {
  */
 export function attributeComplianceSurfaces(l: OptimizedListing): [string, string][] {
   const out: [string, string][] = [];
-  for (const [key, value] of Object.entries(l.attributes)) {
-    out.push([`attributes.${key}`, value]);
+  for (const [key, value] of Object.entries(l.attributes ?? {})) {
+    out.push([`attributes.${key}`, str(value)]);
   }
   return out;
 }
 
 /** Every A+ text field (headlines, bodies, subcopy, comparison cells, FAQ q/a). */
-export function aplusSurfaces(a: AplusContent): [string, string][] {
+export function aplusSurfaces(a: AplusContent | null | undefined): [string, string][] {
   const out: [string, string][] = [];
-  a.modules.forEach((m) => {
-    out.push([`aplus.modules[${m.id}].headline`, m.headline]);
-    out.push([`aplus.modules[${m.id}].body`, m.body]);
-    if (m.subcopy) out.push([`aplus.modules[${m.id}].subcopy`, m.subcopy]);
+  if (!a) return out;
+  (a.modules ?? []).forEach((m, idx) => {
+    const id = str(m?.id) || String(idx);
+    out.push([`aplus.modules[${id}].headline`, str(m?.headline)]);
+    out.push([`aplus.modules[${id}].body`, str(m?.body)]);
+    if (m?.subcopy) out.push([`aplus.modules[${id}].subcopy`, str(m.subcopy)]);
   });
-  a.comparison.rows.forEach((r, i) => {
-    out.push([`aplus.comparison[${i}].label`, r.label]);
-    out.push([`aplus.comparison[${i}].ours`, r.ours]);
-    out.push([`aplus.comparison[${i}].typical`, r.typical]);
+  (a.comparison?.rows ?? []).forEach((r, i) => {
+    out.push([`aplus.comparison[${i}].label`, str(r?.label)]);
+    out.push([`aplus.comparison[${i}].ours`, str(r?.ours)]);
+    out.push([`aplus.comparison[${i}].typical`, str(r?.typical)]);
   });
-  a.faq.forEach((f, i) => {
-    out.push([`aplus.faq[${i}].q`, f.q]);
-    out.push([`aplus.faq[${i}].a`, f.a]);
+  (a.faq ?? []).forEach((f, i) => {
+    out.push([`aplus.faq[${i}].q`, str(f?.q)]);
+    out.push([`aplus.faq[${i}].a`, str(f?.a)]);
   });
   return out;
 }
@@ -123,10 +161,10 @@ export function scanSurfacesForBanned(
   checkId: string,
 ): Failure[] {
   const out: Failure[] = [];
-  const disclaimers = [cp.disclaimer, ...cp.auditAcceptDisclaimers];
+  const disclaimers = [cp.disclaimer, ...(cp.auditAcceptDisclaimers ?? [])].filter(Boolean);
   const neg = diseaseNegationOptions(cp);
   for (const [field, textRaw] of surfaces) {
-    const text = subtractDisclaimers(normalize(textRaw), disclaimers.map(normalize));
+    const text = subtractDisclaimers(normalize(textRaw ?? ''), disclaimers.map(normalize));
     // The SAME scan runs over ADDITIVE de-obfuscated copies of the surface, so
     // "c-a-n-c-e-r", "canncer" and "canc3r" are all caught without the primary
     // scan ever being weakened (the untouched text is always variant #1).
@@ -141,6 +179,22 @@ export function scanSurfacesForBanned(
       },
     ];
     const seen = new Set<string>();
+
+    // PARTIAL-SPLIT pass (additive, third variant family): every intra-word
+    // separator is removed from the surface AND from the term list, so
+    // `c ancer`, `ca ncer`, `can-cer` and `cance r` are all caught — splits
+    // `collapseSeparators` cannot rebuild because they leave a multi-letter
+    // fragment. Only terms of >= CONCAT_MIN_TERM_LEN characters participate:
+    // gluing a whole surface together can manufacture accidental substrings,
+    // and the short terms are the ones that collide. Terms shorter than that
+    // are NOT covered by this pass (they stay covered by the ordinary
+    // word-boundary scan above). Disease VERBS are not scanned here either.
+    for (const m of scanConcatenated(text, nouns, CONCAT_MIN_TERM_LEN, neg)) {
+      if (seen.has(`n:${m.term}`)) continue;
+      seen.add(`n:${m.term}`);
+      out.push(fail(checkId, field, m.context, `Remove banned term '${m.term}' — reframe as a structure/function state`));
+    }
+
     for (const pass of passes) {
       for (const variant of pass.variants) {
         for (const m of scanTerms(variant, pass.nouns, neg)) {
@@ -328,7 +382,7 @@ export function factConsistencyOver(
   const { familyOf } = compileUnits(units);
   const family = (unit: string): string => familyOf.get(unit) ?? unit;
   const out: Failure[] = [];
-  const facts = l.facts;
+  const facts = l.facts ?? {};
   const potencyFact = parsePotencyFact(facts.potency, units);
   const allowedCounts = new Set<number>(
     [facts.unitCount, facts.servings, facts.daySupply, facts.formulaCount,

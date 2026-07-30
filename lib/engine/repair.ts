@@ -26,11 +26,15 @@ import { optimize, type GroupName } from './optimize';
  * LLM-owned, so regenerating the title group could not repair it.
  */
 export const FIELD_TO_GROUP: ReadonlyArray<{ match: (field: string, checkId: string) => boolean; group: GroupName }> = [
-  { match: (f) => f === 'title' || f === 'title75' || f === 'itemHighlights', group: 'title' },
+  { match: (f) => f === 'title' || f === 'title75' || f === 'itemHighlights' || f === 'productName' || f === 'primaryKeyword', group: 'title' },
   { match: (f) => f.startsWith('bullets'), group: 'bullets' },
   { match: (f) => f === 'description', group: 'description' },
   { match: (f) => f === 'backendSearchTerms', group: 'backend' },
-  { match: (f) => f.startsWith('attributes.'), group: 'attributes' },
+  { match: (f) => f === 'attributes' || f.startsWith('attributes.'), group: 'attributes' },
+  // `facts.*` is now a scanned surface (C6). The facts block is produced
+  // deterministically from the snapshot alongside the attribute group, so the
+  // attributes group owns any repair round a facts failure triggers.
+  { match: (f) => f === 'facts' || f.startsWith('facts.'), group: 'attributes' },
   { match: (f) => f.startsWith('aplus') || f === 'aplusContent', group: 'aplus' },
   { match: (f) => f.startsWith('imagePlan'), group: 'images' },
   { match: (f) => f.startsWith('qa'), group: 'qa' },

@@ -30,7 +30,7 @@ export function sanitizeBackendSearchTerms(
       return true;
     });
 
-  let out = kept.join(' ');
+  const out = kept.join(' ');
   if (utf8Bytes(out) <= maxBytes) return out;
 
   // Word-boundary truncate to ≤ maxBytes UTF-8 (never mid-codepoint).

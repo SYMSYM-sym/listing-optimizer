@@ -20,8 +20,11 @@ export function allDiseaseNouns(cp: CompliancePack): string[] {
   if (cached) return cached;
   const union = [
     ...new Set([
-      ...cp.coreDiseaseNouns,
-      ...Object.values(cp.diseaseNounsBySubcategory).flat(),
+      ...(cp.coreDiseaseNouns ?? []),
+      ...Object.values(cp.diseaseNounsBySubcategory ?? {}).flat(),
+      // Prescription-drug names ride the SAME path: "works like a natural
+      // Ozempic" is a drug claim, and the pack keeps the lexicon.
+      ...(cp.prescriptionDrugNames ?? []),
     ]),
   ];
   UNION_CACHE.set(cp, union);
@@ -56,52 +59,243 @@ export function diseaseActionVerbs(cp: CompliancePack): string[] {
   return verbs;
 }
 
-/** Fail-closed rule — an empty disease-noun pack must never launder a pass. */
+// ---------------------------------------------------------------------------
+// PACK-INTEGRITY MANIFEST
+// ---------------------------------------------------------------------------
+
+/**
+ * One required piece of a compliance-bearing pack.
+ *
+ * Every check in this gate is only as strong as the pack data behind it, so
+ * emptying ANY of these lists used to silently disarm the corresponding check
+ * while the gate still returned `pass:true` with zero signal. The manifest
+ * turns that fail-OPEN into a blocking `PACK` failure that NAMES the missing
+ * piece.
+ *
+ * The list is DECLARED (not inferred), so adding a new pack-driven check means
+ * adding one row here; `tests/redteam4.gate.test.ts` empties every row in turn
+ * and additionally asserts that every row has a mutation, so a row cannot be
+ * added without a test.
+ */
+export interface PackPiece {
+  /** Stable id used in the failure context and in the test table. */
+  id: string;
+  /** What silently breaks when this piece is empty (rendered into the fix text). */
+  disarms: string;
+  /** True when the piece is present AND non-empty. */
+  present: (pack: KnowledgePack, cp: CompliancePack) => boolean;
+}
+
+const nonEmptyList = (v: unknown): boolean => Array.isArray(v) && v.filter((x) => x !== undefined && x !== null && String(x).trim() !== '').length > 0;
+const nonEmptyString = (v: unknown): boolean => typeof v === 'string' && v.trim().length > 0;
+const nonEmptyPairs = (v: unknown): boolean =>
+  Array.isArray(v) && v.some((row) => Array.isArray(row) && nonEmptyString(row[0]));
+
+/**
+ * REQUIRED pieces for a pack that carries a compliance module.
+ *
+ * Coverage note (deliberately precise, not aspirational): this manifest
+ * asserts PRESENCE and NON-EMPTINESS of the pieces below. It does NOT validate
+ * their contents — a pack that ships one junk disease noun still passes the
+ * manifest. Optional pack data that only WIDENS a check
+ * (`diseaseActionVerbRoots`, `negationMetaPhrases`, `fictionPhrases`,
+ * `auditAcceptDisclaimers`, `subcategoryKeywords`, `prescriptionDrugNames`) is
+ * intentionally NOT required, because an empty value there is a legitimate
+ * configuration rather than a disarmed check.
+ */
+export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
+  {
+    id: 'compliancePack.coreDiseaseNouns',
+    disarms: 'the always-on disease-term scan (C6/A2)',
+    present: (_p, cp) => nonEmptyList(cp.coreDiseaseNouns),
+  },
+  {
+    id: 'compliancePack.diseaseVerbs',
+    disarms: 'the drug-claim verb scan (C6/A2)',
+    present: (_p, cp) => nonEmptyList(cp.diseaseVerbs),
+  },
+  {
+    id: 'compliancePack.diseaseNounsBySubcategory',
+    disarms: 'every subcategory disease lexicon (C6/A2)',
+    present: (_p, cp) =>
+      !!cp.diseaseNounsBySubcategory &&
+      Object.values(cp.diseaseNounsBySubcategory).some((list) => nonEmptyList(list)),
+  },
+  {
+    id: 'compliancePack.superlativeBans',
+    disarms: 'the banned-marketing-phrase half of C19',
+    present: (_p, cp) => nonEmptyList(cp.superlativeBans),
+  },
+  {
+    id: 'compliancePack.allergenRules',
+    disarms: 'the allergen declaration checks (C9/A7)',
+    present: (_p, cp) => nonEmptyList(cp.allergenRules),
+  },
+  {
+    id: 'compliancePack.allergenFields',
+    disarms: 'the attribute lookup behind the allergen checks (C9/A7)',
+    present: (_p, cp) =>
+      !!cp.allergenFields &&
+      nonEmptyString(cp.allergenFields.labelList) &&
+      nonEmptyString(cp.allergenFields.declaration) &&
+      nonEmptyString(cp.allergenFields.declarationVerb) &&
+      nonEmptyString(cp.allergenFields.aplusModuleIdCue),
+  },
+  {
+    id: 'compliancePack.noAllergenPhrases',
+    disarms: 'the banned allergen-absence phrasing check (C9)',
+    present: (_p, cp) => nonEmptyList(cp.noAllergenPhrases),
+  },
+  {
+    id: 'compliancePack.disclaimer',
+    disarms: 'the verbatim-disclaimer checks (C5/A1)',
+    present: (_p, cp) => nonEmptyString(cp.disclaimer),
+  },
+  {
+    id: 'rules.style',
+    disarms: 'the entire style/formatting gate (C17)',
+    present: (p) => {
+      const st = p.rules?.style;
+      if (!st) return false;
+      return (
+        typeof st.allCapsMinWordLen === 'number' && st.allCapsMinWordLen > 0 &&
+        typeof st.allCapsRunMin === 'number' && st.allCapsRunMin >= 2 &&
+        nonEmptyList(st.bannedSymbols) &&
+        nonEmptyList(st.bannedChars) &&
+        nonEmptyList(st.bannedCharsSurfaces) &&
+        nonEmptyList(st.titleTermBans) &&
+        nonEmptyList(st.titleTermBanSurfaces) &&
+        nonEmptyString(st.bulletTrailingPunctuation) &&
+        nonEmptyString(st.asinPattern) &&
+        nonEmptyString(st.emojiPattern) &&
+        nonEmptyString(st.htmlTagPattern) &&
+        nonEmptyList(st.descriptionAllowedHtml) &&
+        typeof st.descriptionMaxBytes === 'number' && st.descriptionMaxBytes > 0
+      );
+    },
+  },
+  {
+    id: 'rules.prohibitedContent.patterns',
+    disarms: 'the prohibited detail-page content scan (C18)',
+    present: (p) => nonEmptyPairs(p.rules?.prohibitedContent?.patterns),
+  },
+  {
+    id: 'rules.prohibitedContent.surfaces',
+    disarms: 'every surface C18 would scan',
+    present: (p) => nonEmptyList(p.rules?.prohibitedContent?.surfaces),
+  },
+  {
+    id: 'rules.prohibitedMarketing.patterns',
+    disarms: 'the prohibited-marketing scan (C19/A8)',
+    present: (p) => nonEmptyPairs(p.rules?.prohibitedMarketing?.patterns),
+  },
+  {
+    id: 'rules.prohibitedMarketing.surfaces',
+    disarms: 'every surface C19 would scan',
+    present: (p) => nonEmptyList(p.rules?.prohibitedMarketing?.surfaces),
+  },
+  {
+    id: 'rules.units.dimensions',
+    disarms: 'the unit-anchored potency + fact-consistency checks (C10/C12/A5)',
+    present: (p) => {
+      const dims = p.rules?.units?.dimensions;
+      return !!dims && Object.values(dims).some((list) => nonEmptyList(list));
+    },
+  },
+];
+
+/** Ids of every manifest row — the test table is asserted against this. */
+export const requiredPackPieceIds: string[] = REQUIRED_PACK_PIECES.map((p) => p.id);
+
+/** Missing/empty required pieces, in manifest order. */
+export function missingPackPieces(pack: KnowledgePack): string[] {
+  const cp = pack.compliancePack;
+  if (!cp) return pack.requiresCompliance ? ['compliancePack'] : [];
+  const missing: string[] = [];
+  for (const piece of REQUIRED_PACK_PIECES) {
+    let ok = false;
+    try {
+      ok = piece.present(pack, cp);
+    } catch {
+      ok = false;
+    }
+    if (!ok) missing.push(piece.id);
+  }
+  return missing;
+}
+
+const disarmedBy = (ids: string[]): string =>
+  REQUIRED_PACK_PIECES.filter((p) => ids.includes(p.id))
+    .map((p) => `${p.id} (${p.disarms})`)
+    .join('; ');
+
+/**
+ * FAIL-CLOSED rule.
+ *
+ * Three layers:
+ *  1. A pack that DECLARES it needs a compliance module but ships none is
+ *     blocking (`requiresCompliance`), whatever the copy says.
+ *  2. Every required pack piece must be present and non-empty — see the
+ *     manifest above. Emptying one now NAMES itself in a blocking failure
+ *     instead of silently switching its check off.
+ *  3. A pack with no compliance module and no declared requirement still fails
+ *     closed when the snapshot smells like a regulated category
+ *     (`suspicionLexicon`).
+ */
 export function packFailClosed(
   l: OptimizedListing,
   pack: KnowledgePack,
   ctx: GateContext,
 ): Failure[] {
   const cp = pack.compliancePack;
-  if (cp) {
-    // The always-on lexicons must be populated: emptying EITHER of them
-    // silently disarms every disease scan, so both are blocking.
-    if (cp.coreDiseaseNouns.length === 0 || cp.diseaseVerbs.length === 0) {
+  if (!cp) {
+    if (pack.requiresCompliance) {
       return [
         fail(
           'PACK',
           'compliance',
-          `core nouns: ${cp.coreDiseaseNouns.length}, verbs: ${cp.diseaseVerbs.length}`,
-          'compliance pack incomplete for this category — populate disease nouns before trusting a pass',
+          `pack '${pack.id}' requires a compliance module but ships none (missing: compliancePack)`,
+          'compliance pack incomplete for this category — restore the compliance module before trusting a pass',
         ),
       ];
     }
-    const nonEmptySubs = ctx.subcategories.filter(
-      (s) => (cp.diseaseNounsBySubcategory[s] ?? []).length > 0,
-    );
-    if (ctx.subcategories.length === 0 || nonEmptySubs.length === 0) {
+    const hay = normalize(`${ctx.snapshotText ?? ''} ${l.title ?? ''} ${l.description ?? ''}`).toLowerCase();
+    const hit = (pack.suspicionLexicon ?? []).find((t) => hay.includes(t.toLowerCase()));
+    if (hit) {
       return [
         fail(
           'PACK',
           'compliance',
-          `detected subcategories: [${ctx.subcategories.join(', ') || 'none'}]`,
-          'compliance pack incomplete for this category — populate disease nouns before trusting a pass',
+          `pack '${pack.id}' has no compliance module but product matches suspicion term '${hit}'`,
+          'compliance pack incomplete for this category — route to a pack with a compliance module before trusting a pass',
         ),
       ];
     }
     return [];
   }
-  const hay = normalize(
-    `${ctx.snapshotText ?? ''} ${l.title} ${l.description}`,
-  ).toLowerCase();
-  const hit = pack.suspicionLexicon.find((t) => hay.includes(t.toLowerCase()));
-  if (hit) {
+
+  const missing = missingPackPieces(pack);
+  if (missing.length > 0) {
     return [
       fail(
         'PACK',
         'compliance',
-        `pack '${pack.id}' has no compliance module but product matches suspicion term '${hit}'`,
-        'compliance pack incomplete for this category — route to a pack with a compliance module before trusting a pass',
+        `missing or empty pack piece(s): ${missing.join(', ')}`,
+        `compliance pack incomplete for this category — ${disarmedBy(missing) || missing.join(', ')} — populate before trusting a pass`,
+      ),
+    ];
+  }
+
+  const nonEmptySubs = ctx.subcategories.filter(
+    (s) => (cp.diseaseNounsBySubcategory[s] ?? []).length > 0,
+  );
+  if (ctx.subcategories.length === 0 || nonEmptySubs.length === 0) {
+    return [
+      fail(
+        'PACK',
+        'compliance',
+        `detected subcategories: [${ctx.subcategories.join(', ') || 'none'}]`,
+        'compliance pack incomplete for this category — populate disease nouns before trusting a pass',
       ),
     ];
   }

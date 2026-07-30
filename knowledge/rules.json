@@ -98,7 +98,12 @@
       "™",
       "®",
       "©",
-      "€"
+      "€",
+      "£",
+      "¥",
+      "₹",
+      "₩",
+      "¢"
     ],
     "bannedChars": [
       "!",
@@ -299,6 +304,22 @@
       [
         "\\bbogo\\b",
         "promotional claim"
+      ],
+      [
+        "[£¥₹₩¢₽₴]\\s*\\d",
+        "price (non-USD currency symbol)"
+      ],
+      [
+        "\\+\\d{1,3}[\\s.-]?\\d{2,4}[\\s.-]?\\d{3,4}[\\s.-]?\\d{3,4}",
+        "phone number (international format)"
+      ],
+      [
+        "[\\w.-]+\\s*(?:\\[at\\]|\\(at\\)|\\sat\\s)\\s*[\\w.-]+\\s*(?:\\[dot\\]|\\(dot\\)|\\sdot\\s)\\s*(?:com|net|org|io)",
+        "email address (obfuscated)"
+      ],
+      [
+        "per[- ](?:bottle|unit|serving|month)\\s+(?:cost|price)",
+        "price statement (per-unit cost framing)"
       ]
     ],
     "surfaces": [
@@ -392,6 +413,38 @@
       [
         "\\bfda[- ]approved\\b",
         "false regulatory-approval claim"
+      ],
+      [
+        "\\btop[- ]?selling\\b",
+        "best-seller claim"
+      ],
+      [
+        "\\bnumber one rated\\b",
+        "ranking claim"
+      ],
+      [
+        "\\brisk[- ]free\\b",
+        "guarantee"
+      ],
+      [
+        "\\bsatisfaction\\s+(?:assured|guaranteed)\\b",
+        "guarantee"
+      ],
+      [
+        "\\b(?:doctor|physician|dermatologist|pharmacist)\\s+recommended\\b",
+        "authority-endorsement claim"
+      ],
+      [
+        "\\baward[- ]winning\\b",
+        "award/ranking claim"
+      ],
+      [
+        "\\bas seen on tv\\b",
+        "media-endorsement claim"
+      ],
+      [
+        "\\bclinically\\s+studied\\b",
+        "clinical-endorsement claim (borderline: legitimate when substantiated, banned here because Amazon treats unsubstantiated clinical framing as a prohibited claim)"
       ]
     ],
     "surfaces": [

@@ -1,5 +1,13 @@
 import type { CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
-import { normalize, subtractDisclaimers, termRegex } from '../util';
+import { CONCAT_MIN_TERM_LEN } from './shared';
+import {
+  deobfuscatedVariants,
+  normalize,
+  scanConcatenated,
+  stripSeparators,
+  subtractDisclaimers,
+  termRegex,
+} from '../util';
 
 interface ScanSurface {
   field: string;
@@ -13,51 +21,92 @@ interface ScanSurface {
  */
 function collectSurfaces(listing: OptimizedListing, want: Set<string>): ScanSurface[] {
   const surfaces: ScanSurface[] = [];
-  if (want.has('title')) surfaces.push({ field: 'title', text: listing.title });
-  if (want.has('title75')) surfaces.push({ field: 'title75', text: listing.title75 });
-  if (want.has('itemHighlights')) surfaces.push({ field: 'itemHighlights', text: listing.itemHighlights });
+  const s = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
+  if (want.has('title')) surfaces.push({ field: 'title', text: s(listing.title) });
+  if (want.has('title75')) surfaces.push({ field: 'title75', text: s(listing.title75) });
+  if (want.has('itemHighlights')) surfaces.push({ field: 'itemHighlights', text: s(listing.itemHighlights) });
   if (want.has('bullets')) {
-    listing.bullets.forEach((b, i) => surfaces.push({ field: `bullets[${i}]`, text: b }));
+    (listing.bullets ?? []).forEach((b, i) => surfaces.push({ field: `bullets[${i}]`, text: s(b) }));
   }
-  if (want.has('description')) surfaces.push({ field: 'description', text: listing.description });
+  if (want.has('description')) surfaces.push({ field: 'description', text: s(listing.description) });
   if (want.has('backendSearchTerms')) {
-    surfaces.push({ field: 'backendSearchTerms', text: listing.backendSearchTerms });
+    surfaces.push({ field: 'backendSearchTerms', text: s(listing.backendSearchTerms) });
   }
   if (want.has('qa')) {
     (listing.qa ?? []).forEach((item, i) => {
-      surfaces.push({ field: `qa[${i}].q`, text: item.q });
-      surfaces.push({ field: `qa[${i}].a`, text: item.a });
+      surfaces.push({ field: `qa[${i}].q`, text: s(item?.q) });
+      surfaces.push({ field: `qa[${i}].a`, text: s(item?.a) });
     });
   }
   // purpose/spec/notes are ALL creative copy — an overlay price or URL written
   // into `purpose` reaches the customer exactly like one written into `notes`.
   if (want.has('imagePlan')) {
     (listing.imagePlan ?? []).forEach((slot, i) => {
-      surfaces.push({ field: `imagePlan[${i}].purpose`, text: slot.purpose });
-      surfaces.push({ field: `imagePlan[${i}].spec`, text: slot.spec });
-      surfaces.push({ field: `imagePlan[${i}].notes`, text: slot.notes });
+      surfaces.push({ field: `imagePlan[${i}].purpose`, text: s(slot?.purpose) });
+      surfaces.push({ field: `imagePlan[${i}].spec`, text: s(slot?.spec) });
+      surfaces.push({ field: `imagePlan[${i}].notes`, text: s(slot?.notes) });
     });
   }
   // Attribute VALUES render in the customer-facing detail table.
   if (want.has('attributes')) {
     for (const [key, value] of Object.entries(listing.attributes ?? {})) {
-      surfaces.push({ field: `attributes.${key}`, text: value });
+      surfaces.push({ field: `attributes.${key}`, text: s(value) });
     }
   }
   if (want.has('aplus') && listing.aplusContent) {
     const a = listing.aplusContent;
-    a.modules.forEach((m) =>
+    (a.modules ?? []).forEach((m) =>
       surfaces.push({
         field: `aplus.modules[${m.id}]`,
-        text: `${m.headline} ${m.body} ${m.subcopy ?? ''}`,
+        text: `${s(m?.headline)} ${s(m?.body)} ${s(m?.subcopy)}`,
       }),
     );
-    a.comparison.rows.forEach((row, i) =>
-      surfaces.push({ field: `aplus.comparison[${i}]`, text: `${row.label} ${row.ours} ${row.typical}` }),
+    (a.comparison?.rows ?? []).forEach((row, i) =>
+      surfaces.push({ field: `aplus.comparison[${i}]`, text: `${s(row?.label)} ${s(row?.ours)} ${s(row?.typical)}` }),
     );
-    a.faq.forEach((f, i) => surfaces.push({ field: `aplus.faq[${i}]`, text: `${f.q} ${f.a}` }));
+    (a.faq ?? []).forEach((f, i) => surfaces.push({ field: `aplus.faq[${i}]`, text: `${s(f?.q)} ${s(f?.a)}` }));
   }
   return surfaces;
+}
+
+/**
+ * The variants EVERY C18/C19 pattern is run over.
+ *
+ * C18/C19 used to regex the normalized text ONLY, so the very same
+ * de-obfuscation tricks the disease scan has defended against for two rounds
+ * (`b-e-s-t s-e-l-l-e-r`, leetspeak) walked straight past the price, contact
+ * and marketing patterns. They now share the disease scan's ADDITIVE variant
+ * set — the untouched text is always variant #1, so nothing is weakened.
+ *
+ * Coverage note: the separator-STRIPPED variant is included as well, but the
+ * pack patterns are written with `\s`/word boundaries, so most of them cannot
+ * match a fully concatenated string. It is there for the patterns that can
+ * (bare domains, symbol+digit), not as a general guarantee.
+ */
+function scanVariants(clean: string): string[] {
+  const variants = new Set<string>(deobfuscatedVariants(clean));
+  const { stripped } = stripSeparators(clean);
+  if (stripped) variants.add(stripped);
+  return [...variants];
+}
+
+/**
+ * Compiled pack patterns, cached by SOURCE STRING.
+ *
+ * C18/C19 now run every pattern over several de-obfuscated variants of every
+ * surface, so re-compiling the same source thousands of times per gate run was
+ * the dominant cost. Each cached regex is reset before use (the `g` flag makes
+ * `lastIndex` stateful).
+ */
+const PATTERN_CACHE = new Map<string, RegExp>();
+function patternRe(source: string): RegExp {
+  let re = PATTERN_CACHE.get(source);
+  if (!re) {
+    re = new RegExp(source, 'gi');
+    PATTERN_CACHE.set(source, re);
+  }
+  re.lastIndex = 0;
+  return re;
 }
 
 function disclaimersOf(cp: CompliancePack | null | undefined): string[] {
@@ -98,18 +147,21 @@ export function c18ProhibitedContent(
     // The verbatim disclaimer is required text — never scan it.
     const clean = subtractDisclaimers(normalize(text ?? ''), disclaimers);
     if (!clean) continue;
+    const variants = scanVariants(clean);
     for (const entry of cfg.patterns) {
       const [source, label] = entry;
       if (!source) continue;
-      const re = new RegExp(source, 'gi');
-      const m = re.exec(clean);
-      if (m) {
+      // One finding per pattern per surface, whichever variant exposes it.
+      for (const variant of variants) {
+        const m = patternRe(source).exec(variant);
+        if (!m) continue;
         out.push({
           checkId: 'C18',
           field,
           context: m[0].trim(),
           fix: `Remove the ${label} — Amazon prohibits price, availability, condition and contact details in listing content`,
         });
+        break;
       }
     }
   }
@@ -149,37 +201,58 @@ export function c19ProhibitedMarketing(
   const surfaces = collectSurfaces(listing, new Set(cfg?.surfaces ?? []));
 
   const out: Failure[] = [];
+  // Superlative bans are de-obfuscated the same way, and additionally scanned
+  // in the separator-STRIPPED variant when the phrase is long enough that a
+  // concatenated surface cannot produce it by accident (same threshold as the
+  // disease-term concatenated pass).
   for (const { field, text } of surfaces) {
     const clean = subtractDisclaimers(normalize(text ?? ''), disclaimers);
     if (!clean) continue;
+    const variants = scanVariants(clean);
 
     for (const [source, label] of patterns) {
       if (!source) continue;
-      const re = new RegExp(source, 'gi');
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(clean)) !== null) {
+      let hit: string | null = null;
+      for (const variant of variants) {
+        const m = patternRe(source).exec(variant);
+        if (m) {
+          hit = m[0].trim();
+          break;
+        }
+      }
+      if (hit !== null) {
         out.push({
           checkId: 'C19',
           field,
-          context: m[0].trim(),
+          context: hit,
           fix: `Remove the ${label} — Amazon prohibits promotional, ranking, guarantee and review claims in listing content`,
         });
-        break; // one finding per pattern per surface
       }
     }
 
     for (const term of superlatives) {
       if (!term.trim()) continue;
-      const re = termRegex(term);
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(clean)) !== null) {
+      let context: string | null = null;
+      for (const variant of variants) {
+        const re = termRegex(term);
+        re.lastIndex = 0;
+        const m = re.exec(variant);
+        if (m) {
+          context = variant.slice(Math.max(0, m.index - 20), m.index + term.length + 20);
+          break;
+        }
+      }
+      if (context === null) {
+        const m = scanConcatenated(clean, [term], CONCAT_MIN_TERM_LEN)[0];
+        if (m) context = m.context;
+      }
+      if (context !== null) {
         out.push({
           checkId: 'C19',
           field,
-          context: clean.slice(Math.max(0, m.index - 20), m.index + term.length + 20),
+          context,
           fix: `Remove the prohibited marketing phrase '${term}' — it is banned on every surface`,
         });
-        break;
       }
     }
   }
