@@ -244,6 +244,13 @@ export interface CompliancePack {
   auditAcceptDisclaimers: string[];
   /** Drug/action verbs always banned as product claims. */
   diseaseVerbs: string[];
+  /**
+   * ROOTS of the therapeutic-ACTION verb class (relieve, ease, reverse, …).
+   * Inflections are generated in code (`inflect`), so the pack stays short and
+   * a synonym of "treats" cannot slip past the negation guard. These veto
+   * negation suppression; they never create a failure on their own.
+   */
+  diseaseActionVerbRoots?: string[];
   /** Always-on disease/infection nouns scanned for EVERY product in this pack. */
   coreDiseaseNouns: string[];
   /**

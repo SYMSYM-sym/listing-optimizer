@@ -6,7 +6,9 @@ import type {
   UnitRules,
 } from '@/lib/types';
 import {
-  collapseSeparators,
+  collapseDoublesTerms,
+  deobfuscatedVariants,
+  doubleCollapsedVariants,
   hasNegationContext,
   normalize,
   scanTerms,
@@ -14,6 +16,7 @@ import {
   termRegex,
   type NegationOptions,
 } from '../util';
+import { diseaseActionVerbs } from './pack';
 
 export const fail = (checkId: string, field: string, context: string, fix: string): Failure => ({
   checkId,
@@ -94,17 +97,21 @@ export function aplusFactSurfaces(a: AplusContent): [string, string][] {
 
 /**
  * Negation settings for the DISEASE-TERM path (C6/A2).
- * A cue only suppresses a disease term when it negates THAT term: same clause,
- * tight window, and no disease verb in between. Genuine meta-phrases
- * ("not intended to diagnose, treat, cure, or prevent any disease") come from
- * pack data (`compliancePack.negationMetaPhrases`); when the pack ships none we
- * fall back to the tightened clause rule alone.
+ *
+ * Suppression requires POSITIVE evidence that the cue negates THAT term: the
+ * cue sits adjacent to it inside one clause with no therapeutic-action verb in
+ * between, or the term sits inside a genuine meta-phrase
+ * ("not intended to diagnose, treat, cure, or prevent any disease") — pack data
+ * (`compliancePack.negationMetaPhrases`). The blocking-verb CLASS is generated
+ * from `compliancePack.diseaseActionVerbRoots`, so a synonym of "treats" cannot
+ * re-open the hole.
  */
 export function diseaseNegationOptions(cp: CompliancePack): NegationOptions {
   return {
     mode: 'strict',
     commaBreaks: true,
-    blockingVerbs: cp.diseaseVerbs,
+    blockingVerbs: diseaseActionVerbs(cp),
+    metaGapVerbs: cp.diseaseVerbs,
     metaPhrases: cp.negationMetaPhrases ?? [],
   };
 }
@@ -120,27 +127,38 @@ export function scanSurfacesForBanned(
   const neg = diseaseNegationOptions(cp);
   for (const [field, textRaw] of surfaces) {
     const text = subtractDisclaimers(normalize(textRaw), disclaimers.map(normalize));
-    // The SAME scan runs over a separator-collapsed copy of the surface, so
-    // "c-a-n-c-e-r" is caught without the primary scan ever being weakened.
-    const collapsed = collapseSeparators(text);
-    const variants: string[] = collapsed === text ? [text] : [text, collapsed];
+    // The SAME scan runs over ADDITIVE de-obfuscated copies of the surface, so
+    // "c-a-n-c-e-r", "canncer" and "canc3r" are all caught without the primary
+    // scan ever being weakened (the untouched text is always variant #1).
+    // The doubled-letter pass compares collapsed text against a COLLAPSED term
+    // list, so terms that legitimately carry a double letter still match.
+    const passes: { variants: string[]; nouns: string[]; verbs: string[] }[] = [
+      { variants: deobfuscatedVariants(text), nouns, verbs: cp.diseaseVerbs },
+      {
+        variants: doubleCollapsedVariants(text),
+        nouns: collapseDoublesTerms(nouns),
+        verbs: collapseDoublesTerms(cp.diseaseVerbs),
+      },
+    ];
     const seen = new Set<string>();
-    for (const variant of variants) {
-      for (const m of scanTerms(variant, nouns, neg)) {
-        // "No disease language" / "not for diabetes" are prohibitions, not claims
-        if (hasNegationContext(variant, m.index, neg)) continue;
-        if (seen.has(`n:${m.term}`)) continue;
-        seen.add(`n:${m.term}`);
-        out.push(fail(checkId, field, m.context, `Remove banned disease term '${m.term}' — reframe as a structure/function state`));
-      }
-      for (const verb of cp.diseaseVerbs) {
-        const vre = termRegex(verb);
-        let vm: RegExpExecArray | null;
-        while ((vm = vre.exec(variant)) !== null) {
-          if (hasNegationContext(variant, vm.index, neg)) continue;
-          const windowText = variant.slice(vm.index, vm.index + verb.length + 25);
-          const nounHit = nouns.find((n) => termRegex(n).test(windowText));
-          if (nounHit) {
+    for (const pass of passes) {
+      for (const variant of pass.variants) {
+        for (const m of scanTerms(variant, pass.nouns, neg)) {
+          // "No disease language" / "not for diabetes" are prohibitions, not claims
+          if (hasNegationContext(variant, m.index, neg)) continue;
+          if (seen.has(`n:${m.term}`)) continue;
+          seen.add(`n:${m.term}`);
+          out.push(fail(checkId, field, m.context, `Remove banned disease term '${m.term}' — reframe as a structure/function state`));
+        }
+        for (const verb of pass.verbs) {
+          const vre = termRegex(verb);
+          vre.lastIndex = 0;
+          let vm: RegExpExecArray | null;
+          while ((vm = vre.exec(variant)) !== null) {
+            if (hasNegationContext(variant, vm.index, neg)) continue;
+            const windowText = variant.slice(vm.index, vm.index + verb.length + 25);
+            const nounHit = scanTerms(windowText, pass.nouns)[0]?.term;
+            if (!nounHit) continue;
             if (seen.has(`v:${verb}|${nounHit}`)) continue;
             seen.add(`v:${verb}|${nounHit}`);
             out.push(fail(checkId, field, variant.slice(Math.max(0, vm.index - 30), vm.index + 60), `Drug-claim pattern '${verb} … ${nounHit}' — prohibited`));

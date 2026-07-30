@@ -9,7 +9,6 @@ import { rainforestSample } from './fixtures/rainforest.sample';
 
 const pack = loadPack('supplements');
 const snapshot = toSnapshot(mapProduct('B0TESTASIN', rainforestSample.product, rainforestSample));
-const ctx = ['probiotic', 'digestive'];
 
 describe('diff (current vs proposed)', () => {
   it('classifies P0 for banned disease terms in the current listing', async () => {
@@ -18,7 +17,7 @@ describe('diff (current vs proposed)', () => {
       bullets: ['TREATS DIABETES: helps manage diabetes symptoms fast', ...snapshot.bullets.slice(1)],
     };
     const proposed = await optimize(dirty, pack, mockLlm);
-    const gaps = diff(dirty, proposed, pack, ctx);
+    const gaps = diff(dirty, proposed, pack);
     const p0 = gaps.filter((g) => g.severity === 'P0');
     expect(p0.length).toBeGreaterThanOrEqual(1);
     expect(p0.some((g) => g.why.toLowerCase().includes('diabetes'))).toBe(true);
@@ -28,7 +27,7 @@ describe('diff (current vs proposed)', () => {
 
   it('marks seller-private backend as current: unknown with P1 severity', async () => {
     const proposed = await optimize(snapshot, pack, mockLlm);
-    const gaps = diff(snapshot, proposed, pack, ctx);
+    const gaps = diff(snapshot, proposed, pack);
     const backend = gaps.find((g) => g.field === 'backendSearchTerms');
     expect(backend?.current).toBe('unknown');
     expect(backend?.severity).toBe('P1');
@@ -41,7 +40,7 @@ describe('diff (current vs proposed)', () => {
       attributes: { brand_name: 'BrandX' },
     };
     const proposed = await optimize(sparse, pack, mockLlm);
-    const gaps = diff(sparse, proposed, pack, ctx);
+    const gaps = diff(sparse, proposed, pack);
     const facet = gaps.find((g) => g.field === 'attributes' && g.severity === 'P1');
     expect(facet).toBeTruthy();
     expect(facet?.current).toContain('empty filter-facet');
@@ -49,7 +48,7 @@ describe('diff (current vs proposed)', () => {
 
   it('shows explicit title current-vs-proposed delta when copy changes', async () => {
     const proposed = await optimize(snapshot, pack, mockLlm);
-    const gaps = diff(snapshot, proposed, pack, ctx);
+    const gaps = diff(snapshot, proposed, pack);
     const titleGap = gaps.find(
       (g) => g.field === 'title' && g.current !== 'unknown' && g.proposed !== 'unknown',
     );
@@ -61,7 +60,7 @@ describe('diff (current vs proposed)', () => {
 
   it('returns ≥3 concrete gaps for the golden fixture', async () => {
     const proposed = await optimize(snapshot, pack, mockLlm);
-    const gaps = diff(snapshot, proposed, pack, ctx);
+    const gaps = diff(snapshot, proposed, pack);
     expect(gaps.length).toBeGreaterThanOrEqual(3);
     for (const g of gaps) {
       expect(['P0', 'P1', 'P2']).toContain(g.severity);

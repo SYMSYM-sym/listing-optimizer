@@ -1,9 +1,8 @@
 import type { Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { hasNegationContext, normalize } from '../util';
-import { activeDiseaseNouns } from './pack';
+import { allDiseaseNouns } from './pack';
 import { allergenMentioned, presentAllergens } from './c-quality';
 import { aplusSurfaces, fail, fictionOver, potencyPhrasingOver, scanSurfacesForBanned } from './shared';
-import type { GateContext } from './types';
 
 export function a1AplusDisclaimer(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const cp = pack.compliancePack;
@@ -27,10 +26,11 @@ export function a1AplusDisclaimer(l: OptimizedListing, pack: KnowledgePack): Fai
   return out;
 }
 
-export function a2AplusBannedTerms(l: OptimizedListing, pack: KnowledgePack, ctx: GateContext): Failure[] {
+/** A2 — same full-union lexicon as C6, applied to every A+ text field. */
+export function a2AplusBannedTerms(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const cp = pack.compliancePack;
   if (!cp) return [];
-  const nouns = activeDiseaseNouns(cp, ctx.subcategories);
+  const nouns = allDiseaseNouns(cp);
   return scanSurfacesForBanned(aplusSurfaces(l.aplusContent), cp, nouns, 'A2');
 }
 

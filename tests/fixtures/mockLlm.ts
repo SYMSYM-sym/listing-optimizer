@@ -98,7 +98,7 @@ const responses: Record<string, unknown> = {
       { slot: 3, purpose: 'supplement-facts-panel', spec: 'Real photograph of the printed Supplement Facts panel — never AI-generated or altered; sharp, evenly lit, fully readable', notes: 'Show full panel and ingredient list' },
       { slot: 4, purpose: 'ingredient-story', spec: '1000px+; macro texture or strain-diagram illustration', notes: '10-strain blend with prebiotic fiber; name key strains' },
       { slot: 5, purpose: 'how-to-use-routine', spec: '1000px+; 3-step layout', notes: 'One capsule daily, with or without food, morning routine framing' },
-      { slot: 6, purpose: 'trust-heritage', spec: '1000px+; factual badges only (third-party tested, cGMP, Non-GMO)', notes: 'No ratings, guarantees, or unsubstantiated claims' },
+      { slot: 6, purpose: 'trust-heritage', spec: '1000px+; factual badges only (third-party tested, cGMP, Non-GMO)', notes: 'No star ratings and no unsubstantiated claims' },
       { slot: 7, purpose: 'lifestyle-outcome', spec: '1000px+; adult using product in daily/travel context', notes: 'Situational: packing a travel bag; steady-routine feeling' },
     ],
   },

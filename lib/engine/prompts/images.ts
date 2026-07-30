@@ -8,6 +8,6 @@ export function imagesPrompt(snapshot: ListingSnapshot, pack: KnowledgePack): st
 
 TASK: A 7-slot image/creative plan.
 Slots: (1) main image on pure white RGB ${wr}/${wg}/${wb}, product ≥${r.imageMainProductFillPct}% of frame, longest side ≥${r.imageMainMinLongSidePx}px; (2) value-prop infographic; (3) a real photograph of any regulated facts panel on the label — never AI-generated or altered; (4) key-component/feature story; (5) how-to-use routine; (6) trust/heritage (substantiated signals only); (7) lifestyle/outcome.
-- "spec": concrete requirements per slot. Write "purpose", "spec" and "notes" in sentence case — never in capitals. "notes": copy/layout guidance. No price, ratings, guarantees, or promotional CTAs on any image.
+- "spec": concrete requirements per slot. Write "purpose", "spec" and "notes" in sentence case — never in capitals. "notes": copy/layout guidance. Never put price, star ratings, warranty promises or promotional CTA copy on any image.
 Return JSON: { "imagePlan": [{ "slot", "purpose", "spec", "notes" } ×7] }`;
 }

@@ -104,7 +104,7 @@ describe('C-series fail fixtures (exact checkId + field)', () => {
   });
   it('C6 negation: "No disease language" in image notes is not a violation', () => {
     const l = mut((x) => {
-      x.imagePlan[0] = { ...x.imagePlan[0]!, notes: 'Structure/function overlay only. No disease language, no guarantees.' };
+      x.imagePlan[0] = { ...x.imagePlan[0]!, notes: 'Structure/function overlay only. No disease language.' };
     });
     expect(idsOf(l).filter((id) => id === 'C6')).toEqual([]);
   });
@@ -343,7 +343,7 @@ describe('per-check pass on compliant fixture', () => {
       () => import('@/lib/gate/checks').then((m) => m.c3BackendBytes(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.c4DescriptionLength(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.c5Disclaimer(clean, pack)),
-      () => import('@/lib/gate/checks').then((m) => m.c6BannedTerms(clean, pack, ctx)),
+      () => import('@/lib/gate/checks').then((m) => m.c6BannedTerms(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.c7BrandLeakage(clean)),
       () => import('@/lib/gate/checks').then((m) => m.c8ProductNameLead(clean)),
       () => import('@/lib/gate/checks').then((m) => m.c9Allergen(clean, pack)),
@@ -354,7 +354,7 @@ describe('per-check pass on compliant fixture', () => {
       () => import('@/lib/gate/checks').then((m) => m.c16BackendDedup(clean)),
       () => import('@/lib/gate/checks').then((m) => m.c17Style(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.a1AplusDisclaimer(clean, pack)),
-      () => import('@/lib/gate/checks').then((m) => m.a2AplusBannedTerms(clean, pack, ctx)),
+      () => import('@/lib/gate/checks').then((m) => m.a2AplusBannedTerms(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.a3AplusBrandLeakage(clean)),
       () => import('@/lib/gate/checks').then((m) => m.a4AplusProductName(clean, pack)),
       () => import('@/lib/gate/checks').then((m) => m.a5AplusPotencyPhrasing(clean, pack)),

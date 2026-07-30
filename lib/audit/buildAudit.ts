@@ -29,7 +29,7 @@ export function buildAudit(
 ): Audit {
   const gateResult = runGate(proposed, pack, ctx);
   const scorecard = scoreAgainstPrinciples(current, pack);
-  const gaps = diff(current, proposed, pack, ctx.subcategories);
+  const gaps = diff(current, proposed, pack);
   // Advisory only: staleness never enters `verified` and never becomes a failure.
   const staleness = rulesStaleness(pack.rules);
   return {

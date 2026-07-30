@@ -1,5 +1,5 @@
 export type { GateContext } from './types';
-export { activeDiseaseNouns, packFailClosed } from './pack';
+export { activeDiseaseNouns, allDiseaseNouns, diseaseActionVerbs, packFailClosed } from './pack';
 export { extractUnitNumbers, diseaseNegationOptions } from './shared';
 export type { UnitNumber, Dimension } from './shared';
 

@@ -4,7 +4,7 @@ import type {
   ListingSnapshot,
   OptimizedListing,
 } from '@/lib/types';
-import { activeDiseaseNouns } from '@/lib/gate/checks';
+import { allDiseaseNouns } from '@/lib/gate/checks';
 import { normalize, scanTerms, subtractDisclaimers, utf8Bytes } from '@/lib/gate/util';
 
 /**
@@ -16,18 +16,22 @@ import { normalize, scanTerms, subtractDisclaimers, utf8Bytes } from '@/lib/gate
 
 const clip = (s: string, n = 160): string => (s.length > n ? `${s.slice(0, n)}…` : s);
 
+/**
+ * Gap analysis reads the SAME full disease-noun union the gate enforces, so a
+ * detected subcategory can no longer shrink what counts as a P0 in the current
+ * listing.
+ */
 export function diff(
   current: ListingSnapshot,
   proposed: OptimizedListing,
   pack: KnowledgePack,
-  subcategories: string[],
 ): AuditGap[] {
   const gaps: AuditGap[] = [];
   const cp = pack.compliancePack;
 
   // --- P0: compliance violations in the CURRENT listing ---
   if (cp) {
-    const nouns = activeDiseaseNouns(cp, subcategories);
+    const nouns = allDiseaseNouns(cp);
     const surfaces: [string, string][] = [
       ['title', current.title],
       ['description', current.description],

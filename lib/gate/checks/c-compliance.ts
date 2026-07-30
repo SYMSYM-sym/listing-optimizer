@@ -1,8 +1,7 @@
 import type { Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { normalize } from '../util';
-import { activeDiseaseNouns } from './pack';
+import { allDiseaseNouns } from './pack';
 import { attributeComplianceSurfaces, customerSurfaces, fail, scanSurfacesForBanned } from './shared';
-import type { GateContext } from './types';
 
 export function c5Disclaimer(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const cp = pack.compliancePack;
@@ -17,14 +16,18 @@ export function c5Disclaimer(l: OptimizedListing, pack: KnowledgePack): Failure[
   return out;
 }
 
-export function c6BannedTerms(
-  l: OptimizedListing,
-  pack: KnowledgePack,
-  ctx: GateContext,
-): Failure[] {
+/**
+ * C6 — banned disease terms on every customer surface.
+ *
+ * The scanned lexicon is the FULL pack union: a drug claim is illegal whatever
+ * the product is, so the DETECTED subcategories deliberately no longer reach
+ * this check (they only order the prompt injection and drive the fail-closed
+ * PACK rule).
+ */
+export function c6BannedTerms(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const cp = pack.compliancePack;
   if (!cp) return [];
-  const nouns = activeDiseaseNouns(cp, ctx.subcategories);
+  const nouns = allDiseaseNouns(cp);
   return scanSurfacesForBanned(
     [...customerSurfaces(l), ...attributeComplianceSurfaces(l)],
     cp,

@@ -1,5 +1,5 @@
 import type { CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
-import { hasNegationContext, normalize, subtractDisclaimers, termRegex } from '../util';
+import { normalize, subtractDisclaimers, termRegex } from '../util';
 
 interface ScanSurface {
   field: string;
@@ -128,10 +128,12 @@ export function c18ProhibitedContent(
  *
  * Both lexicons are PACK DATA — this module hard-codes nothing.
  *
- * The tightened (clause-scoped) negation guard applies so genuinely negated
- * copy — an image brief saying "No ratings, guarantees, or unsubstantiated
- * claims" — is not reported, while a cue several words away can no longer
- * launder a real marketing claim.
+ * NOTE: exactly like C18, this check applies NO negation guard. A prohibited
+ * marketing claim is prohibited whatever surrounds it, and every guard variant
+ * shipped so far was bypassable by prefixing the claim with an unrelated
+ * negation ("No fillers here, <claim>"). Copy that needs to ENUMERATE the
+ * banned words (an internal image brief) must be phrased without them — the
+ * shipped prompts are written that way.
  */
 export function c19ProhibitedMarketing(
   listing: OptimizedListing,
@@ -145,7 +147,6 @@ export function c19ProhibitedMarketing(
 
   const disclaimers = disclaimersOf(cp);
   const surfaces = collectSurfaces(listing, new Set(cfg?.surfaces ?? []));
-  const neg = { mode: 'strict' as const, metaPhrases: cp?.negationMetaPhrases ?? [] };
 
   const out: Failure[] = [];
   for (const { field, text } of surfaces) {
@@ -157,7 +158,6 @@ export function c19ProhibitedMarketing(
       const re = new RegExp(source, 'gi');
       let m: RegExpExecArray | null;
       while ((m = re.exec(clean)) !== null) {
-        if (hasNegationContext(clean, m.index, neg)) continue;
         out.push({
           checkId: 'C19',
           field,
@@ -173,7 +173,6 @@ export function c19ProhibitedMarketing(
       const re = termRegex(term);
       let m: RegExpExecArray | null;
       while ((m = re.exec(clean)) !== null) {
-        if (hasNegationContext(clean, m.index, neg)) continue;
         out.push({
           checkId: 'C19',
           field,

@@ -1,5 +1,5 @@
 import type { Failure, KnowledgePack, OptimizedListing, StyleRules } from '@/lib/types';
-import { normalize, subtractDisclaimers, utf8Bytes } from '../util';
+import { decodeEntities, normalize, subtractDisclaimers, utf8Bytes } from '../util';
 import { aplusSurfaces, fail } from './shared';
 
 /**
@@ -222,36 +222,43 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
     }
   }
 
-  // 8 — the description accepts ONLY <br>. Every other tag (<p>, <b>, <ul>, ...)
-  // was deprecated in July 2021 and can suppress the listing or render raw.
-  // The RAW description is scanned here (not the disclaimer-subtracted copy) so
-  // that markup can never hide inside a stripped span.
-  const rawDescription = l.description ?? '';
+  // 8 — markup is prohibited on EVERY surface, not just the description.
+  // Amazon deprecated description HTML in July 2021, and a <b>/<ul>/<li> in a
+  // BULLET or an A+ body renders raw or suppresses the listing exactly the same
+  // way. Each surface is scanned RAW *and* entity-decoded, so `&lt;p&gt;` — which
+  // Amazon un-escapes on render — cannot hide the tag either.
   const allowedHtml = new Set(style.descriptionAllowedHtml.map((t) => t.toLowerCase()));
   if (style.htmlTagPattern) {
-    const tagRe = new RegExp(style.htmlTagPattern, 'g');
-    const badTags = new Set<string>();
-    let m: RegExpExecArray | null;
-    while ((m = tagRe.exec(rawDescription)) !== null) {
-      const tag = (m[1] ?? '').toLowerCase();
-      if (!allowedHtml.has(tag)) badTags.add(m[0]);
-    }
-    if (badTags.size > 0) {
-      out.push(
-        fail(
-          CHECK_ID,
-          'description',
-          [...badTags].join(' '),
-          `Remove the HTML tag(s) ${[...badTags].join(' ')} — Amazon's description field accepts only ${style.descriptionAllowedHtml
-            .map((t) => `<${t}>`)
-            .join('/')}; use plain-text paragraphs`,
-        ),
-      );
+    for (const surface of styleSurfaces(l)) {
+      const raw = surface.text ?? '';
+      if (!raw) continue;
+      const decoded = decodeEntities(raw);
+      const badTags = new Set<string>();
+      for (const variant of decoded === raw ? [raw] : [raw, decoded]) {
+        const tagRe = new RegExp(style.htmlTagPattern, 'g');
+        let m: RegExpExecArray | null;
+        while ((m = tagRe.exec(variant)) !== null) {
+          const tag = (m[1] ?? '').toLowerCase();
+          if (!allowedHtml.has(tag)) badTags.add(m[0]);
+        }
+      }
+      if (badTags.size > 0) {
+        out.push(
+          fail(
+            CHECK_ID,
+            surface.field,
+            [...badTags].join(' '),
+            `Remove the HTML tag(s) ${[...badTags].join(' ')} — Amazon accepts only ${style.descriptionAllowedHtml
+              .map((t) => `<${t}>`)
+              .join('/')} markup in listing copy; use plain text`,
+          ),
+        );
+      }
     }
   }
 
   // 9 — description UTF-8 BYTE cap (belt-and-braces alongside the char cap)
-  const descBytes = utf8Bytes(rawDescription);
+  const descBytes = utf8Bytes(l.description ?? '');
   if (descBytes > style.descriptionMaxBytes) {
     out.push(
       fail(

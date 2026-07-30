@@ -3,16 +3,20 @@ import { activeDiseaseNouns } from '@/lib/gate/checks/pack';
 import { prohibitedContentBlock, styleRulesBlock } from './shared';
 
 /**
- * Upper bound on the injected disease-noun list. The generator must be told
- * every term the gate will actually fail it on (prevention layer) — truncating
- * to a handful guaranteed repair rounds on terms it was never shown.
+ * NO cap on the injected disease-noun list — deliberately.
+ *
+ * The generator must be told EVERY term the gate will fail it on (prevention
+ * layer). The old 250-term ceiling silently dropped ~440 of the 687 enforced
+ * terms, so the model was blind to two thirds of the lexicon and only found out
+ * via repair rounds. `tests/redteam3.gate.test.ts` asserts the injected set is a
+ * SUPERSET of the gate-enforced set, so re-introducing truncation fails CI.
  */
-const MAX_INJECTED_NOUNS = 250;
 
 /**
  * Shared system preamble — identical across groups for prompt caching.
- * `subcategories` are the DETECTED subcategories: the injected disease-noun set
- * is exactly the union the gate scans (core ∪ active subcategory lists).
+ * `subcategories` are the DETECTED subcategories: they only ORDER the injected
+ * disease-noun set, which is exactly the union the gate scans (core ∪ EVERY
+ * subcategory list).
  */
 export function buildSystemPrompt(
   pack: KnowledgePack,
@@ -21,7 +25,9 @@ export function buildSystemPrompt(
 ): string {
   const r = pack.rules;
   const cp = pack.compliancePack;
-  const activeNouns = cp ? activeDiseaseNouns(cp, subcategories).slice(0, MAX_INJECTED_NOUNS) : [];
+  // Full union, ordered so the DETECTED subcategories lead (ranking only —
+  // never a filter: the gate scans the whole union whatever the product is).
+  const activeNouns = cp ? activeDiseaseNouns(cp, subcategories) : [];
   const principleLines = pack.principles
     .filter((p) => p.scorable)
     .map((p) => `- [${p.id}] ${p.text}`)

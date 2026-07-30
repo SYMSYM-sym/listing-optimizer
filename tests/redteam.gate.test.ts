@@ -307,9 +307,9 @@ describe('no false positives — legitimate copy still passes', () => {
     expect(fieldFailures(l, 'bullets[0]')).toEqual([]);
   });
 
-  it('an image brief saying "No ratings, guarantees, or unsubstantiated claims" is clean', () => {
+  it('an image brief saying "No star ratings and no unsubstantiated claims" is clean', () => {
     const l = mut((x) => {
-      x.imagePlan[1] = { ...x.imagePlan[1]!, notes: 'No ratings, guarantees, or unsubstantiated claims' };
+      x.imagePlan[1] = { ...x.imagePlan[1]!, notes: 'No star ratings and no unsubstantiated claims' };
     });
     expect(fieldFailures(l, 'imagePlan[1].notes')).toEqual([]);
   });
