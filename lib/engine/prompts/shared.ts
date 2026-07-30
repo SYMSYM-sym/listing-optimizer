@@ -103,6 +103,38 @@ export function approvedClaimBlock(cp: CompliancePack | null | undefined): strin
   return lines.join('\n');
 }
 
+/**
+ * CANONICAL product name block — the PREVENTION half of C8 / C15 / A4.
+ *
+ * `productName` is invented by the TITLE group, but three deterministic checks
+ * demand that exact identifier on surfaces owned by OTHER groups: C8 (must
+ * start `title` AND appear in `description`), C15 (must start `title75`) and A4
+ * (must appear in the A+ brand-story and hero modules). While every group was
+ * generated in ONE parallel fan-out, the description and A+ groups could not
+ * possibly know which name the title group was choosing — they satisfied C8/A4
+ * only by luck, when the model happened to echo the source listing's name.
+ *
+ * `optimize()` now resolves the name in a short first phase and states it here,
+ * so the embedding groups are TOLD the identifier instead of guessing it. This
+ * is instruction, not laundering: no generated copy is rewritten afterwards and
+ * the gate still re-validates every surface independently and fails closed.
+ *
+ * `requirement` is the group-specific obligation, passed in by the caller; this
+ * module hard-codes no product name and no category text.
+ */
+export function canonicalNameBlock(productName: string, requirement: string): string {
+  const name = (productName ?? '').trim();
+  if (!name) return '';
+  return `CANONICAL product name: "${name}"
+Use this EXACT string — character for character. Never shorten, expand, re-order,
+translate or rephrase it, and never substitute the name the source listing above
+uses. It is a SHARED identifier: the title leads with it, the description must
+contain it verbatim, and the A+ brand-story and hero modules must each contain it
+verbatim.
+${requirement}
+`;
+}
+
 export function snapshotBlock(snapshot: ListingSnapshot): string {
   return `CURRENT LISTING (source data — improve, don't copy mistakes):
 Title: ${snapshot.title}

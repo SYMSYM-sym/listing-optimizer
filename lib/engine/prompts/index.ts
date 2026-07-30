@@ -23,18 +23,25 @@ export function buildGroupPrompts(pack: KnowledgePack, titlePolicy: TitlePolicy 
   // Style rules are rendered from PACK DATA and injected into every copy group
   // that gate C17 scans, so repair rounds can actually fix a style failure.
   const styleBlock = styleRulesBlock(pack.rules.style);
+  // `canonicalProductName` is the identifier PHASE 1 resolved (see optimize.ts).
+  // Every group that must EMBED or RESPECT it takes it as an optional argument;
+  // omitting it renders no block at all, so nothing here depends on a name.
   return {
     // `pinnedProductName` is set on REPAIR regenerations only — see optimize.ts.
     title: (s: ListingSnapshot, pinnedProductName?: string) =>
       titlePrompt(s, titlePolicy, styleBlock, pinnedProductName ?? ''),
-    bullets: (s: ListingSnapshot) => bulletsPrompt(s, styleBlock, packRules.bullets ?? []),
-    description: (s: ListingSnapshot) => descriptionPrompt(s, hasCompliance, styleBlock, packRules.description ?? []),
+    bullets: (s: ListingSnapshot, canonicalProductName?: string) =>
+      bulletsPrompt(s, styleBlock, packRules.bullets ?? [], canonicalProductName ?? ''),
+    description: (s: ListingSnapshot, canonicalProductName?: string) =>
+      descriptionPrompt(s, hasCompliance, styleBlock, packRules.description ?? [], canonicalProductName ?? ''),
     // Title surfaces (when known) feed C16 forbidden stems into the backend prompt.
     backend: (s: ListingSnapshot, surfaces?: TitleSurfaces) => backendPrompt(s, surfaces),
     attributes: (s: ListingSnapshot, schemaFields: string) =>
       attributesPrompt(s, schemaFields, packRules.attributes ?? []),
-    aplus: (s: ListingSnapshot) => aplusPrompt(s, pack, styleBlock),
+    aplus: (s: ListingSnapshot, canonicalProductName?: string) =>
+      aplusPrompt(s, pack, styleBlock, canonicalProductName ?? ''),
     images: (s: ListingSnapshot) => imagesPrompt(s, pack),
-    qa: (s: ListingSnapshot) => qaPrompt(s, packRules.qa ?? []),
+    qa: (s: ListingSnapshot, canonicalProductName?: string) =>
+      qaPrompt(s, packRules.qa ?? [], canonicalProductName ?? ''),
   };
 }

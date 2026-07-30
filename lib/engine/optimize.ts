@@ -132,8 +132,29 @@ export async function optimize(
   // product name rather than invent a new one — see pinProductName above.
   const pinnedProductName = base?.productName ?? '';
 
-  // Title runs first so backend generation knows the optimized title-surface
-  // stems (C16). Remaining groups still fan out in parallel.
+  // ---------------------------------------------------------------------------
+  // PHASE 1 — resolve the canonical product name (one short call, ~3s).
+  //
+  // WHY THIS PHASE EXISTS. `productName` is invented by the TITLE group, but
+  // three deterministic checks demand that exact identifier on surfaces owned by
+  // OTHER groups: C8 (must START `title` and APPEAR in `description`), C15 (must
+  // START `title75`) and A4 (must appear in the A+ brand-story AND hero
+  // modules). While all eight groups fanned out together, `description` and
+  // `aplus` were being written at the same instant the name was being chosen —
+  // they could not possibly embed it, and satisfied C8/A4 only by luck, when the
+  // model happened to echo the source listing's name. Pinning the name across
+  // repair rounds stopped it OSCILLATING but could not create knowledge that did
+  // not exist: the live failure simply moved to `verified:false [C8, A4, A4]`
+  // with `description`/`aplus` regenerated and still nameless.
+  //
+  // So the title group runs ALONE first, and phase 2 is told what it chose.
+  // (Phase 1 also gives the backend group the optimized title-surface stems it
+  // needs for C16 — that is why the title call was already hoisted here.)
+  //
+  // COST. Phase 1 is one small call; phase 2 keeps the full 7-way parallel
+  // fan-out, so total latency is one short call above the old shape — never
+  // eight serialized calls. And when `title` is NOT in the regenerate set,
+  // `run()` returns the `base` slice and phase 1 makes NO call at all.
   const title = await run(
     'title',
     () =>
@@ -160,21 +181,40 @@ export async function optimize(
     itemHighlights: title.itemHighlights,
   };
 
+  // The identifier phase 2 must embed. On a repair regeneration the PINNED name
+  // wins (it is what the assembled listing will carry — see pinProductName), so
+  // a title group that drifts cannot mislead the groups downstream of it.
+  const canonicalProductName = (pinnedProductName || title.productName || '').trim();
+  logServer('optimize.canonical_name_resolved', {
+    // Never the copy itself (lib/server/log.ts contract) — shape only.
+    // `run()` skips the call only when the group is out of scope AND a `base`
+    // slice exists to fall back on — mirror that exactly.
+    phase1Generated: groups.includes('title') || !base,
+    pinned: pinnedProductName !== '',
+    nameLength: canonicalProductName.length,
+    phase2Groups: ALL_GROUPS.filter((g) => g !== 'title' && groups.includes(g)),
+  });
+
+  // ---------------------------------------------------------------------------
+  // PHASE 2 — the remaining seven groups, still fully in PARALLEL. Groups that
+  // must embed or respect the identifier are handed `canonicalProductName`;
+  // `run()` still honours `opts.groups`, so a repair round regenerates only what
+  // was asked for and everything else falls back to `base`.
   const [bullets, description, backend, attributes, aplus, images, qa] =
     await Promise.all([
-      run('bullets', () => generateGroup(llm, 'bullets', system, withCtx('bullets', groupPrompts.bullets(snapshot)), bulletsGroupSchema, 2000),
+      run('bullets', () => generateGroup(llm, 'bullets', system, withCtx('bullets', groupPrompts.bullets(snapshot, canonicalProductName)), bulletsGroupSchema, 2000),
         base && { bullets: base.bullets.map((text, i) => ({ text, useCaseAnchor: base.bulletAnchors?.[i] ?? '', claimBearing: text.trimEnd().endsWith('*') })) }),
-      run('description', () => generateGroup(llm, 'description', system, withCtx('description', groupPrompts.description(snapshot)), descriptionGroupSchema, 2000),
+      run('description', () => generateGroup(llm, 'description', system, withCtx('description', groupPrompts.description(snapshot, canonicalProductName)), descriptionGroupSchema, 2000),
         base && { description: stripDisclaimer(base.description, disclaimer) }),
       run('backend', () => generateGroup(llm, 'backend', system, withCtx('backend', groupPrompts.backend(snapshot, titleSurfaces)), backendGroupSchema, 600),
         base && { backendSearchTerms: base.backendSearchTerms }),
       run('attributes', () => generateGroup(llm, 'attributes', system, withCtx('attributes', groupPrompts.attributes(snapshot, schemaFields)), attributesGroupSchema, 3000),
         base && { attributes: base.attributes }),
-      run('aplus', () => generateGroup(llm, 'aplus', system, withCtx('aplus', groupPrompts.aplus(snapshot)), aplusGroupSchema, 6000),
+      run('aplus', () => generateGroup(llm, 'aplus', system, withCtx('aplus', groupPrompts.aplus(snapshot, canonicalProductName)), aplusGroupSchema, 6000),
         base && { modules: base.aplusContent.modules.map((m) => ({ ...m, body: stripDisclaimer(m.body, disclaimer) })), comparison: base.aplusContent.comparison, faq: base.aplusContent.faq.map((f) => ({ ...f, a: stripDisclaimer(f.a, disclaimer) })) }),
       run('images', () => generateGroup(llm, 'images', system, withCtx('images', groupPrompts.images(snapshot)), imagesGroupSchema, 2500),
         base && { imagePlan: base.imagePlan }),
-      run('qa', () => generateGroup(llm, 'qa', system, withCtx('qa', groupPrompts.qa(snapshot)), qaGroupSchema, 3500),
+      run('qa', () => generateGroup(llm, 'qa', system, withCtx('qa', groupPrompts.qa(snapshot, canonicalProductName)), qaGroupSchema, 3500),
         base && { qa: base.qa.map((f) => ({ ...f, a: stripDisclaimer(f.a, disclaimer) })) }),
     ]);
 
