@@ -10,7 +10,7 @@ import type { GateContext } from '@/lib/gate/checks';
 import { runGate } from '@/lib/gate/runGate';
 import { logServer } from '@/lib/server/log';
 import type { LlmClient } from './llm';
-import { optimize, type GroupName } from './optimize';
+import { optimize, pinProductName, type GroupName } from './optimize';
 
 /**
  * Bounded repair loop. Maps each failure to the prompt group that OWNS it and
@@ -63,6 +63,15 @@ export async function runRepairLoop(
   let listing = initial ?? (await optimize(snapshot, pack, llm));
   let gateResult = runGate(listing, pack, ctx);
   let iterations = 0;
+  // The FIRST pass chooses the canonical product name; every later round reuses
+  // it. `productName` is an identifier that C8/C15 (title surfaces) and A4 (A+
+  // modules) all cross-reference, so letting a title-only repair round rename
+  // the product invalidates copy written in an earlier round and the loop
+  // oscillates. `optimize` already pins against its `base`; re-asserting the
+  // loop's own canonical value here keeps the invariant true even if a group
+  // ever regenerates without one. It changes NO other generated copy, and the
+  // gate below still validates every surface independently.
+  const canonicalProductName = listing.productName;
 
   // PACK fail-closed short-circuit: regeneration cannot repair a pack gap —
   // surface it immediately without burning LLM rounds.
@@ -108,11 +117,14 @@ export async function runRepairLoop(
       groups: [...groups],
       failureIds: gateResult.failures.map((f) => f.checkId),
     });
-    listing = await optimize(snapshot, pack, llm, {
-      groups: [...groups],
-      base: listing,
-      failureContext,
-    });
+    listing = pinProductName(
+      await optimize(snapshot, pack, llm, {
+        groups: [...groups],
+        base: listing,
+        failureContext,
+      }),
+      canonicalProductName,
+    );
     gateResult = runGate(listing, pack, ctx);
     if (gateResult.failures.some((f) => f.checkId === 'PACK')) break;
   }

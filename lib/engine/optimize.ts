@@ -6,6 +6,7 @@ import type {
   ListingSnapshot,
   OptimizedListing,
 } from '@/lib/types';
+import { logServer } from '@/lib/server/log';
 import { sanitizeBackendSearchTerms } from './backendSanitize';
 import { sanitizeBullets } from './bulletSanitize';
 import { buildFacts } from './facts';
@@ -53,6 +54,43 @@ function appendDisclaimer(text: string, disclaimer: string): string {
   return text.includes(disclaimer) ? text : `${text.trimEnd()}\n\n${disclaimer}`;
 }
 
+/**
+ * Pin the canonical product name across repair regenerations.
+ *
+ * WHY THIS IS NOT GATE LAUNDERING — read before "simplifying" it away.
+ * `productName` is a canonical IDENTIFIER, not generated copy. Three checks
+ * require the SAME identifier to appear on surfaces owned by DIFFERENT prompt
+ * groups: C8 (must start `title`, must appear in `description`), C15 (must
+ * start `title75`) and A4 (must appear in the A+ brand-story and hero modules).
+ * A repair round that regenerates ONLY the title group therefore cannot be
+ * allowed to invent a new name: the description and the A+ modules were written
+ * in an earlier round against the old one, so a rename instantly breaks A4/C8
+ * and the loop oscillates (fix C15 → break A4 → fix A4 → break C15).
+ *
+ * Pinning keeps that identifier stable. It rewrites NOTHING else: no title, no
+ * title75, no bullet, no description sentence, no A+ body is touched. The gate
+ * then re-validates every surface independently and fails closed exactly as
+ * before — if the regenerated `title`/`title75` do not actually LEAD with the
+ * pinned name, or the A+ modules do not actually contain it, C8/C15/A4 still
+ * fail and the run is still reported unverified. This is the opposite of
+ * mutating copy to force a pass: it removes a moving target so the gate's
+ * verdict is about the copy rather than about which name the model felt like
+ * using this round.
+ */
+export function pinProductName(
+  listing: OptimizedListing,
+  pinned: string | undefined,
+): OptimizedListing {
+  if (!pinned || listing.productName === pinned) return listing;
+  // Observability: the model TRIED to rename mid-run. Log the fact and the
+  // lengths only — never the copy itself (see lib/server/log.ts contract).
+  logServer('repair.product_name_pinned', {
+    pinnedLength: pinned.length,
+    regeneratedLength: listing.productName?.length ?? 0,
+  });
+  return { ...listing, productName: pinned };
+}
+
 export interface OptimizeOptions {
   /** Regenerate only these groups, merging over `base` (repair loop). */
   groups?: GroupName[];
@@ -90,6 +128,9 @@ export async function optimize(
     .join('\n');
 
   const base = opts.base;
+  // A repair regeneration (`base` present) must reuse the ALREADY-CHOSEN
+  // product name rather than invent a new one — see pinProductName above.
+  const pinnedProductName = base?.productName ?? '';
 
   // Title runs first so backend generation knows the optimized title-surface
   // stems (C16). Remaining groups still fan out in parallel.
@@ -100,7 +141,7 @@ export async function optimize(
         llm,
         'title',
         system,
-        withCtx('title', groupPrompts.title(snapshot)),
+        withCtx('title', groupPrompts.title(snapshot, pinnedProductName)),
         titleGroupSchema,
         1000,
       ),
@@ -162,7 +203,7 @@ export async function optimize(
     })),
   };
 
-  return {
+  const assembled: OptimizedListing = {
     title: title.title,
     title75: title.title75,
     itemHighlights: title.itemHighlights,
@@ -191,6 +232,9 @@ export async function optimize(
     productName: title.productName,
     state: 'draft',
   };
+
+  // Belt-and-braces: the prompt asks for the pinned name; this guarantees it.
+  return pinProductName(assembled, pinnedProductName || undefined);
 }
 
 function stripDisclaimer(text: string, disclaimer: string): string {

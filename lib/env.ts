@@ -54,9 +54,11 @@ export const env = {
   },
 
   maxRepairIterations: (): number => {
-    // Default 2: fewer auto-repair rounds → faster wall-clock; more fixable
-    // failures may surface in the Audit tab instead of burning LLM rounds.
-    const n = Number.parseInt(optional('MAX_REPAIR_ITERATIONS', '2'), 10);
+    // Default 3: live runs regularly needed a third round (round 1 fixes the
+    // bulk, round 2 the knock-on failure, round 3 converges). 2 exhausted the
+    // budget mid-repair and returned unverified. Deliberately NOT higher —
+    // each round is a full group regeneration and latency matters.
+    const n = Number.parseInt(optional('MAX_REPAIR_ITERATIONS', '3'), 10);
     if (!Number.isFinite(n) || n < 0 || n > 10) {
       throw new Error('MAX_REPAIR_ITERATIONS must be an integer 0–10');
     }

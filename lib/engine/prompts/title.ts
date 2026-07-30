@@ -9,15 +9,38 @@ const POLICY_EMPHASIS: Record<TitlePolicy, string> = {
   new75: 'EMPHASIS: the \u226475 title + itemHighlights are the primary surfaces (Jul 27 2026 policy) \u2014 make them the strongest; still return a valid legacy title.',
 };
 
+/**
+ * PINNED product name block (repair rounds only).
+ *
+ * `productName` is a canonical identifier that OTHER groups embed (C8 wants it
+ * in the description, A4 wants it in the A+ brand-story and hero modules). Once
+ * the first pass has chosen one, a repair round that regenerates ONLY the title
+ * group must not invent a different one — that would silently invalidate copy
+ * generated in an earlier round. So the pinned value is stated as a hard
+ * constraint here, and re-asserted in code after assembly.
+ */
+function pinnedBlock(pinnedProductName: string): string {
+  if (!pinnedProductName.trim()) return '';
+  return `PINNED product name: ${pinnedProductName}
+You MUST use this exact string as "productName" and as the leading characters of
+BOTH "title" and "title75". Do not shorten, expand, re-order or rephrase it — not
+even by one character. It was already embedded in the description and the A+
+modules by an earlier round, so changing it here would break those surfaces.
+If "title75" is too long, cut the KEYWORD TAIL, never the product name.
+`;
+}
+
 export function titlePrompt(
   snapshot: ListingSnapshot,
   policy: TitlePolicy = 'dual',
   styleBlock = '',
+  pinnedProductName = '',
 ): string {
   return `${snapshotBlock(snapshot)}
 
 ${styleBlock}
 
+${pinnedBlock(pinnedProductName)}
 TASK: Generate the title group.
 - "productName": the customer-facing product name (not the backend brand string if it differs).
   CRITICAL: "title" AND "title75" must both START with this EXACT string, character for character.

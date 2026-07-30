@@ -24,7 +24,9 @@ export function buildGroupPrompts(pack: KnowledgePack, titlePolicy: TitlePolicy 
   // that gate C17 scans, so repair rounds can actually fix a style failure.
   const styleBlock = styleRulesBlock(pack.rules.style);
   return {
-    title: (s: ListingSnapshot) => titlePrompt(s, titlePolicy, styleBlock),
+    // `pinnedProductName` is set on REPAIR regenerations only — see optimize.ts.
+    title: (s: ListingSnapshot, pinnedProductName?: string) =>
+      titlePrompt(s, titlePolicy, styleBlock, pinnedProductName ?? ''),
     bullets: (s: ListingSnapshot) => bulletsPrompt(s, styleBlock, packRules.bullets ?? []),
     description: (s: ListingSnapshot) => descriptionPrompt(s, hasCompliance, styleBlock, packRules.description ?? []),
     // Title surfaces (when known) feed C16 forbidden stems into the backend prompt.
