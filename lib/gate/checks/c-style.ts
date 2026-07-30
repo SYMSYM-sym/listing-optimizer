@@ -1,5 +1,5 @@
 import type { Failure, KnowledgePack, OptimizedListing, StyleRules } from '@/lib/types';
-import { decodeEntities, normalize, subtractDisclaimers, utf8Bytes } from '../util';
+import { compatibilityVariant, decodeEntities, normalize, subtractDisclaimers, utf8Bytes } from '../util';
 import { aplusSurfaces, fail } from './shared';
 
 /**
@@ -64,38 +64,117 @@ export function styleSurfaces(l: OptimizedListing): StyleSurface[] {
   for (const [key, value] of Object.entries(l.attributes ?? {})) {
     out.push({ field: `attributes.${key}`, group: 'attributes', text: s(value) });
   }
+  // BACKEND search terms and canonical FACTS were the two surfaces this list
+  // omitted entirely, so an ASIN, a banned symbol, an emoji or raw HTML in either
+  // shipped as `verified`. They get their own groups: the pack's
+  // `bannedCharsSurfaces` / `titleTermBanSurfaces` do NOT list them, so a legal
+  // '$' in `facts.price` stays legal and only the ALWAYS-ON rules (symbols,
+  // emoji, ASIN, HTML, ALL-CAPS) apply here.
+  out.push({ field: 'backendSearchTerms', group: 'backend', text: s(l.backendSearchTerms) });
+  for (const [key, value] of Object.entries(l.facts ?? {})) {
+    if (typeof value !== 'string') continue;
+    out.push({ field: `facts.${key}`, group: 'facts', text: s(value) });
+  }
   return out;
 }
+
+/**
+ * The allowlist, EXPANDED with the sub-tokens the tokenizer actually produces.
+ *
+ * `WORD_RE` splits on hyphens and leading digits, so the shipped entries
+ * `L-THEANINE`, `5HTP`, `COQ10` and `KSM-66` were compared against tokens that
+ * can never equal them (`THEANINE`, `HTP`, …) and were DEAD. Each entry is
+ * therefore expanded into its own word tokens as well as kept verbatim.
+ */
+const ALLOWLIST_CACHE = new WeakMap<StyleRules, Set<string>>();
+
+function expandedAllowlist(style: StyleRules): Set<string> {
+  const cached = ALLOWLIST_CACHE.get(style);
+  if (cached) return cached;
+  const out = new Set<string>();
+  for (const entry of style.allCapsAllowlist ?? []) {
+    const e = entry.trim();
+    if (!e) continue;
+    out.add(e);
+    for (const token of e.match(WORD_RE) ?? []) out.add(token);
+  }
+  ALLOWLIST_CACHE.set(style, out);
+  return out;
+}
+
+/**
+ * RUN-NEUTRAL tokens: any all-caps token carrying a DIGIT (`D3`, `B12`, `K2`,
+ * `MK7`). A measurement/ingredient designator is not emphasis, and counting it
+ * as a run member failed ordinary sentence-case copy — `Vitamin D3 2000 IU, B12
+ * and Zinc` produced the "run" `D3 IU B12` and `D3 K2 MK7 complex` produced
+ * `D3 K2 MK7`. Neutral tokens neither count as a member nor break the run.
+ *
+ * Stated plainly: SHORT tokens are NOT neutral. Making every token under
+ * `allCapsMinWordLen` neutral would let `NEW BIG WOW` — three 3-letter words —
+ * pass, which is exactly the shouting the run rule exists to catch.
+ */
+function isRunNeutral(word: string): boolean {
+  return /[0-9]/.test(word);
+}
+
+/**
+ * Clause punctuation ENDS a run. Shouting is a contiguous phrase
+ * ("BUY MORE NOW"); a comma-separated list of certification bodies
+ * ("IFOS, BSCG, HACCP, SQF") is a list, and reading it as one long run was a
+ * false positive on ordinary certification copy.
+ */
+const RUN_BREAK_RE = /[.,;:!?()[\]{}|/\n]/;
 
 /** True for a token that is written entirely in capitals. */
 const isAllCaps = (word: string): boolean =>
   word === word.toUpperCase() && /[A-Z]/.test(word);
 
 /**
- * Runs of `style.allCapsRunMin`+ CONSECUTIVE all-caps tokens.
+ * Runs of `style.allCapsRunMin`+ CONSECUTIVE all-caps tokens, measured PER
+ * CLAUSE (see `RUN_BREAK_RE`).
  *
  * The per-word rule alone let "NEW BIG WOW gut support" through (every word is
- * under the minimum length) and let allow-listed acronyms double as emphasis
- * ("SAME NON USA GABA blend"). Shouting is a property of the RUN, not of one
- * word, so a run is reported whatever the token lengths are — and the acronym
- * allowlist is NOT honoured for tokens inside a run.
+ * under the minimum length). Shouting is a property of the RUN, not of one
+ * word, so a run is reported whatever the token lengths are — but RUN-NEUTRAL
+ * tokens (allow-listed acronyms and digit-bearing tokens like `D3`/`B12`) are
+ * skipped, because a measurement list is not emphasis.
  */
 export function allCapsRuns(text: string, style: StyleRules): string[][] {
   const min = style.allCapsRunMin;
   if (!min || min < 2) return [];
+  const allow = expandedAllowlist(style);
+  const runs: string[][] = [];
+  for (const segment of text.split(RUN_BREAK_RE)) {
+    runs.push(...segmentRuns(segment, min, allow));
+  }
+  return runs;
+}
+
+function segmentRuns(text: string, min: number, allow: Set<string>): string[][] {
   const runs: string[][] = [];
   let current: string[] = [];
+  // A run made ENTIRELY of allow-listed acronyms needs one MORE member than the
+  // pack minimum before it reads as emphasis. That is the line between an
+  // ingredient list ("DHA EPA ALA trio") and acronyms used AS shouting
+  // ("SAME NON USA GABA blend"). A run with even one non-allow-listed member is
+  // measured against the pack minimum unchanged, so "NEW BIG WOW" still fails.
+  const flush = (): void => {
+    const min2 = current.every((w) => allow.has(w)) ? min + 1 : min;
+    if (current.length >= min2) runs.push(current);
+    current = [];
+  };
   for (const word of text.match(WORD_RE) ?? []) {
     if (isAllCaps(word)) {
+      if (isRunNeutral(word)) continue; // digit-bearing designator, not emphasis
       current.push(word);
       continue;
     }
-    if (current.length >= min) runs.push(current);
-    current = [];
+    flush();
   }
-  if (current.length >= min) runs.push(current);
+  flush();
   return runs;
 }
+
 
 /**
  * ALL-CAPS words at/over the pack minimum length that are not allow-listed.
@@ -103,7 +182,7 @@ export function allCapsRuns(text: string, style: StyleRules): string[][] {
  * same word is not reported twice.
  */
 export function allCapsOffenders(text: string, style: StyleRules): string[] {
-  const allow = new Set(style.allCapsAllowlist);
+  const allow = expandedAllowlist(style);
   const inRun = new Set(allCapsRuns(text, style).flat());
   const seen = new Set<string>();
   for (const word of text.match(WORD_RE) ?? []) {
@@ -154,6 +233,13 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   for (const surface of styleSurfaces(l)) {
     const text = clean(surface.text);
     if (!text) continue;
+    // EXTRA variant for the CHARACTER/TERM rules only. `normalize` leaves
+    // fullwidth/compatibility punctuation alone on purpose, so `＄24.99` and
+    // `＃1 rated` evaded the banned-character and promo-term lists. The banned
+    // SYMBOL and emoji rules deliberately keep reading the primary text: NFKC
+    // decomposes the pack's banned symbols into ASCII letters and would blind them.
+    const compat = compatibilityVariant(text);
+    const charVariants = compat === text ? [text] : [text, compat];
 
     // 1 — ALL-CAPS emphasis: shouting RUNS first (allowlist does not apply
     // inside a run), then the per-word length rule for isolated offenders.
@@ -164,7 +250,7 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
           CHECK_ID,
           surface.field,
           runs.map((r) => r.join(' ')).join(' | '),
-          `Rewrite in sentence case — ${style.allCapsRunMin}+ consecutive ALL-CAPS words read as shouting (the acronym allowlist does not apply inside such a run)`,
+          `Rewrite in sentence case — ${style.allCapsRunMin}+ consecutive ALL-CAPS words read as shouting (allow-listed acronyms and digit-bearing tokens are not counted)`,
         ),
       );
     }
@@ -197,7 +283,7 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
 
     // 5 — banned characters (scoped by the pack: '$'/'?' are legitimate elsewhere)
     if (bannedCharsGroups.has(surface.group)) {
-      const charHits = style.bannedChars.filter((ch) => text.includes(ch));
+      const charHits = style.bannedChars.filter((ch) => charVariants.some((v) => v.includes(ch)));
       if (charHits.length > 0) {
         out.push(
           fail(CHECK_ID, surface.field, charHits.join(' '), `Remove the banned character(s) ${charHits.join(' ')} — use hyphen/comma/parentheses instead`),
@@ -207,8 +293,10 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
 
     // 6 — no ASIN in customer-facing copy
     if (asinRe) {
-      asinRe.lastIndex = 0;
-      const asins = [...new Set(text.match(asinRe) ?? [])];
+      const asins = [...new Set(charVariants.flatMap((v) => {
+        asinRe.lastIndex = 0;
+        return v.match(asinRe) ?? [];
+      }))];
       if (asins.length > 0) {
         out.push(fail(CHECK_ID, surface.field, asins.join(', '), 'Remove the ASIN — identifiers must never appear in customer-facing copy'));
       }
@@ -219,7 +307,7 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
       for (const term of style.titleTermBans) {
         if (!term.trim()) continue;
         const re = new RegExp(`(?<![a-z0-9])${escapeRe(term).replace(/\s+/g, '\\s+')}(?![a-z0-9])`, 'i');
-        if (re.test(text)) {
+        if (charVariants.some((v) => re.test(v))) {
           out.push(fail(CHECK_ID, surface.field, term, `Remove the promotional term '${term}' — prohibited in title surfaces`));
         }
       }

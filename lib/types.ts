@@ -116,6 +116,13 @@ export interface UnitRules {
   potencyVerbs: string[];
   /** Dosage-form tokens the facts producer parses "take N <form> daily" with. */
   dosageForms: string[];
+  /**
+   * Cues that make a DAY figure a supply statement ("90 day supply", "lasts 30
+   * days"). C12 only measures a day figure against `facts.daySupply` when one of
+   * these sits next to it — without the gate, ordinary copy ("Give it 90 days")
+   * failed as a contradicted supply claim.
+   */
+  daySupplyCues?: string[];
 }
 
 /** Snapshot attribute keys the deterministic facts producer reads (pack data). */
@@ -261,6 +268,17 @@ export interface CompliancePack {
   /** Always-on disease/infection nouns scanned for EVERY product in this pack. */
   coreDiseaseNouns: string[];
   /**
+   * Terms that are NOT a claim on their own and only fail when a
+   * therapeutic-ACTION verb sits in the same sentence.
+   *
+   * Two kinds live here: enumerated NATURAL STATES (menopause, perimenopause —
+   * 21 CFR 101.93(g)), where "formulated for women in menopause" is a lawful
+   * structure/function claim but "cures menopause" is not; and short names that
+   * collide with a surname or place. They are NOT part of `allDiseaseNouns`, so
+   * the plain noun scan never sees them.
+   */
+  actionPairedNouns?: string[];
+  /**
    * Prescription-drug brand/generic names. Claiming a supplement replaces or
    * acts like a prescription drug IS a drug claim, so these are scanned by
    * exactly the same C6/A2 path (and the same de-obfuscation passes) as the
@@ -291,6 +309,13 @@ export interface CompliancePack {
   allergenFields: AllergenFields;
   /** Phrases that must never appear when a declarable allergen is present (C9). */
   noAllergenPhrases: string[];
+  /**
+   * Compounds whose NAME contains an allergen source word but which are not that
+   * allergen ("milk thistle", "wheatgrass", "eggshell"). Blanked out of the
+   * label text before the allergen-source scan, so the gate never tells an
+   * operator to print "Contains: Milk" on a milk-thistle label.
+   */
+  allergenCompoundExclusions?: string[];
   /** Category-specific generation guidance injected into the prompts. */
   promptRules?: PromptRules;
   superlativeBans: string[];

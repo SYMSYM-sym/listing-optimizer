@@ -260,7 +260,17 @@
     "sugar disease",
     "neoplasia",
     "carcinogenesis",
-    "oncogenesis"
+    "oncogenesis",
+    "anaemia",
+    "oedema",
+    "haemorrhoids",
+    "haemorrhoid",
+    "diarrhoea",
+    "leukaemia",
+    "coeliac",
+    "sarcoma",
+    "mpox",
+    "scabies"
   ],
   "_prescriptionDrugNamesComment": "Prescription-drug brand/generic names. Claiming a product replaces or acts like a prescription drug is a DRUG CLAIM, so the gate scans these on the same C6/A2 path (same de-obfuscation passes) as the disease nouns.",
   "prescriptionDrugNames": [
@@ -278,7 +288,13 @@
     "zoloft",
     "ambien",
     "lipitor",
-    "insulin"
+    "insulin",
+    "mounjaro",
+    "tirzepatide",
+    "oxycontin",
+    "oxycodone",
+    "chemotherapy",
+    "radiation therapy"
   ],
   "negationMetaPhrases": [
     "not intended to diagnose, treat, cure, or prevent any disease",
@@ -722,9 +738,7 @@
       "recurrent uti",
       "pelvic inflammatory disease",
       "vaginal atrophy",
-      "endometrial cancer",
-      "menopause",
-      "perimenopause"
+      "endometrial cancer"
     ],
     "mens": [
       "erectile dysfunction",
@@ -852,7 +866,6 @@
       "cirrhosis",
       "liver disease",
       "jaundice",
-      "nash",
       "nonalcoholic steatohepatitis",
       "hepatitis a",
       "hepatitis b",
@@ -1399,5 +1412,40 @@
     "aplus": [
       "In the ingredients/feature module, declare \"Contains: [Allergen]\" if an allergen is applicable."
     ]
-  }
+  },
+  "_actionPairedNounsComment": "Terms that are NOT diseases on their own and must only fail when a therapeutic-ACTION verb sits in the same sentence. 'menopause'/'perimenopause' are enumerated NATURAL STATES under 21 CFR 101.93(g), so 'Formulated for women in perimenopause and menopause' is a lawful structure/function claim and blocking it blocked tens of thousands of lawful listings; 'cures menopause' still fails. 'nash' collides with a common surname and place name. Scanned by the same C6/A2 path, gated on the pack's own action-verb class.",
+  "actionPairedNouns": [
+    "menopause",
+    "perimenopause",
+    "nash"
+  ],
+  "_allergenCompoundExclusionsComment": "Compounds whose NAME contains an allergen source word but which are not that allergen. Blanked out of the label text BEFORE the allergen-source scan, so 'Milk Thistle Extract' no longer produces a demand to write 'Contains: Milk' on the label and 'Gluten Free Oat Fibre' no longer produces 'Contains: Wheat'. Pack data — the gate holds no ingredient literals.",
+  "allergenCompoundExclusions": [
+    "milk thistle",
+    "milk thistle extract",
+    "milk vetch",
+    "coconut water",
+    "coconut oil mct",
+    "mct oil",
+    "wheatgrass",
+    "wheat grass",
+    "buckwheat",
+    "eggshell",
+    "eggshell membrane",
+    "eggplant",
+    "shea butter",
+    "cocoa butter",
+    "butterbur",
+    "butterfly pea",
+    "nutmeg",
+    "nutritional yeast",
+    "soy free",
+    "dairy free",
+    "gluten free",
+    "egg free",
+    "nut free",
+    "milk free",
+    "fish oil free",
+    "sesame street"
+  ]
 }

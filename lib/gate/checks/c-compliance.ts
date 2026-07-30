@@ -1,6 +1,6 @@
 import type { Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { normalize } from '../util';
-import { allDiseaseNouns } from './pack';
+import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
 import {
   attributeComplianceSurfaces,
   customerSurfaces,
@@ -25,23 +25,26 @@ export function c5Disclaimer(l: OptimizedListing, pack: KnowledgePack): Failure[
 /**
  * C6 — banned disease terms on every customer surface.
  *
- * The scanned lexicon is the FULL pack union: a drug claim is illegal whatever
- * the product is, so the DETECTED subcategories deliberately no longer reach
- * this check (they only order the prompt injection and drive the fail-closed
- * PACK rule).
+ * The scanned lexicon is the CROSS-PACK union — every compliance module the pack
+ * assembler attached, not just the routed pack's own list. A drug claim is
+ * illegal whatever the product is, and scoping the scan to the routed pack meant
+ * a listing routed to one pack could claim to cure cancer and reverse diabetes and
+ * come back verified, because those nouns live only in the other pack's lexicon.
+ * The DETECTED subcategories deliberately do not reach this check (they only
+ * order the prompt injection and drive the fail-closed PACK rule).
  */
 export function c6BannedTerms(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const cp = pack.compliancePack;
   if (!cp) return [];
-  const nouns = allDiseaseNouns(cp);
   return scanSurfacesForBanned(
     // `facts.*` string values are scanned too: they are echoed verbatim into
     // every repair prompt, so a claim parked there used to ride into the
     // generator with no check ever reading it.
     [...customerSurfaces(l), ...attributeComplianceSurfaces(l), ...factsComplianceSurfaces(l)],
     cp,
-    nouns,
+    crossPackDiseaseNouns(pack),
     'C6',
+    crossPackActionPairedNouns(pack),
   );
 }
 

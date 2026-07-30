@@ -181,15 +181,56 @@ export function diseaseNegationOptions(cp: CompliancePack): NegationOptions {
   };
 }
 
+/** The sentence `index` sits in (sentence punctuation or a line break bounds it). */
+function sentenceAround(text: string, index: number): string {
+  const before = text.slice(0, index);
+  const start = Math.max(
+    before.lastIndexOf('.'), before.lastIndexOf('!'), before.lastIndexOf('?'),
+    before.lastIndexOf(';'), before.lastIndexOf('\n'),
+  );
+  const rest = text.slice(index);
+  const endRel = rest.search(/[.!?;\n]/);
+  return text.slice(start + 1, endRel < 0 ? text.length : index + endRel);
+}
+
+/**
+ * ACTION-PAIRED tier (`compliancePack.actionPairedNouns`).
+ *
+ * These terms are not a claim on their own — an enumerated NATURAL STATE under
+ * 21 CFR 101.93(g) ("formulated for women in perimenopause and menopause") or a
+ * name that collides with a surname/place. They fail ONLY when a
+ * therapeutic-action verb sits in the SAME SENTENCE ("cures menopause",
+ * "reverses menopause").
+ */
+function scanActionPaired(
+  text: string,
+  paired: string[],
+  verbs: string[],
+  neg: NegationOptions,
+): { term: string; context: string }[] {
+  if (paired.length === 0 || verbs.length === 0) return [];
+  const out: { term: string; context: string }[] = [];
+  for (const variant of deobfuscatedVariants(text)) {
+    for (const m of scanTerms(variant, paired, neg)) {
+      const sentence = sentenceAround(variant, m.index);
+      if (!verbs.some((v) => termRegex(v).test(sentence))) continue;
+      out.push({ term: m.term, context: m.context });
+    }
+  }
+  return out;
+}
+
 export function scanSurfacesForBanned(
   surfaces: [string, string][],
   cp: CompliancePack,
   nouns: string[],
   checkId: string,
+  actionPairedNouns: string[] = [],
 ): Failure[] {
   const out: Failure[] = [];
   const disclaimers = [cp.disclaimer, ...(cp.auditAcceptDisclaimers ?? [])].filter(Boolean);
   const neg = diseaseNegationOptions(cp);
+  const actionVerbs = diseaseActionVerbs(cp);
   for (const [field, textRaw] of surfaces) {
     const text = subtractDisclaimers(normalize(textRaw ?? ''), disclaimers.map(normalize));
     // The SAME scan runs over ADDITIVE de-obfuscated copies of the surface, so
@@ -218,6 +259,12 @@ export function scanSurfacesForBanned(
     // accidental matches. Terms of 1-2 characters still stay out of this pass
     // (they remain covered by the ordinary word-boundary scan above), and
     // disease VERBS are not scanned here either.
+    for (const m of scanActionPaired(text, actionPairedNouns, actionVerbs, neg)) {
+      if (seen.has(`p:${m.term}`)) continue;
+      seen.add(`p:${m.term}`);
+      out.push(fail(checkId, field, m.context, `Therapeutic-action claim about '${m.term}' — describe the state, never an action on it`));
+    }
+
     for (const m of scanConcatenated(text, nouns, CONCAT_MIN_TERM_LEN, neg)) {
       if (seen.has(`n:${m.term}`)) continue;
       seen.add(`n:${m.term}`);
@@ -396,6 +443,94 @@ export function extractUnitNumbers(text: string, units: UnitRules): UnitNumber[]
   return out;
 }
 
+/**
+ * Words that CANNOT attribute a figure to an ingredient.
+ *
+ * Purely structural English (articles, prepositions, quantifiers, adverbs, the
+ * verbs that introduce a figure, packaging nouns) plus every token the PACK
+ * declares as a unit, a dosage form, a per-dose phrase, a potency verb or a
+ * supply cue. Nothing category-specific is written here — the domain half comes
+ * off `rules.units`.
+ */
+const NON_ATTRIBUTING_WORDS = [
+  'a', 'an', 'the', 'and', 'or', 'plus', 'with', 'of', 'for', 'from', 'in', 'into', 'on', 'at',
+  'to', 'by', 'per', 'each', 'every', 'all', 'only', 'just', 'about', 'approximately', 'approx',
+  'around', 'nearly', 'almost', 'over', 'under', 'up', 'now', 'still', 'also', 'even', 'another',
+  'other', 'our', 'your', 'their', 'its', 'this', 'that', 'these', 'those', 'is', 'are', 'be',
+  'was', 'were', 'has', 'have', 'had', 'get', 'gets', 'take', 'takes', 'use', 'uses', 'offers',
+  'offer', 'packed', 'loaded', 'featuring', 'features', 'boasts', 'full', 'total', 'whopping',
+  'more', 'than', 'less', 'least', 'most', 'high', 'strong', 'maximum', 'minimum', 'strength',
+  'potency', 'dosage', 'formula', 'formulas', 'blend', 'blends', 'complex', 'support', 'size',
+  'weight', 'net', 'amount', 'bottle', 'bottles', 'jar', 'jars', 'tub', 'tubs', 'pouch', 'pack',
+  'packs', 'box', 'container', 'containers', 'unit', 'units', 'count', 'daily', 'day', 'days',
+];
+
+const ATTRIBUTION_CACHE = new WeakMap<UnitRules, Set<string>>();
+
+function nonAttributingWords(units: UnitRules): Set<string> {
+  const cached = ATTRIBUTION_CACHE.get(units);
+  if (cached) return cached;
+  const out = new Set<string>(NON_ATTRIBUTING_WORDS);
+  const packTokens = [
+    ...Object.values(units.dimensions ?? {}).flat(),
+    ...(units.dosageForms ?? []),
+    ...(units.potencyVerbs ?? []),
+    ...(units.perServingPhrases ?? []),
+    ...(units.daySupplyCues ?? []),
+  ];
+  for (const token of packTokens) {
+    for (const word of token.toLowerCase().split(/[^a-z0-9']+/)) {
+      if (word) out.add(word);
+    }
+  }
+  ATTRIBUTION_CACHE.set(units, out);
+  return out;
+}
+
+/**
+ * True when the figure at `index` is ATTRIBUTED to a named ingredient — i.e. the
+ * token immediately in front of it (same clause, only spaces/hyphens skipped) is
+ * a content word rather than a function word.
+ *
+ * WHY: `facts.potency` is a SINGLE scalar, so measuring every same-family figure
+ * against it failed any multi-ingredient formula that states more than one
+ * ("Glucosamine 1500 mg, Chondroitin 1200 mg, MSM 1000 mg" produced four
+ * failures) — the whole joint / sleep / multivitamin / prenatal segment.
+ *
+ * COVERAGE, stated plainly: this is an ADJACENCY rule, not an ingredient
+ * lexicon. A conflicting figure that is written with a content word in front of
+ * it ("Maximum-strength Turmeric 2000 mg" against a 500 mg canonical fact) is
+ * NOT reported. Unattributed figures — the ones that read as the product's
+ * headline potency ("a 90 Billion CFU blend", "now with 25 billion CFU") — are
+ * still measured against the canonical fact exactly as before.
+ */
+function isAttributed(text: string, index: number, units: UnitRules): boolean {
+  let i = index - 1;
+  while (i >= 0 && /[\s\-]/.test(text[i]!)) i--;
+  if (i < 0) return false;
+  if (!/[A-Za-z0-9']/.test(text[i]!)) return false; // clause punctuation / bracket
+  const end = i + 1;
+  while (i >= 0 && /[A-Za-z0-9']/.test(text[i]!)) i--;
+  const token = text.slice(i + 1, end);
+  if (!/[A-Za-z]/.test(token) || token.length < 2) return false;
+  return !nonAttributingWords(units).has(token.toLowerCase());
+}
+
+/**
+ * True when a DAY figure carries a supply cue (`rules.units.daySupplyCues`).
+ *
+ * Without this every day figure was measured against `facts.daySupply`, so stock
+ * copy — "Give it 90 days", "results in 30 days" — failed as a contradicted
+ * supply claim. When the pack ships no cues the old always-compare behaviour is
+ * kept.
+ */
+function isSupplyClaim(text: string, n: UnitNumber, units: UnitRules): boolean {
+  const cues = units.daySupplyCues ?? [];
+  if (cues.length === 0) return true;
+  const window = text.slice(Math.max(0, n.index - 40), n.index + n.raw.length + 40).toLowerCase();
+  return cues.some((cue) => cue.trim() && window.includes(cue.trim().toLowerCase()));
+}
+
 function parsePotencyFact(potency: string | undefined, units: UnitRules): UnitNumber | null {
   if (!potency) return null;
   const nums = extractUnitNumbers(potency, units).filter((n) => n.dimension === 'potency');
@@ -429,7 +564,12 @@ export function factConsistencyOver(
 
     if (potencyFact) {
       const sameUnit = nums.filter(
-        (n) => n.dimension === 'potency' && family(n.unit) === family(potencyFact.unit),
+        (n) =>
+          n.dimension === 'potency' &&
+          family(n.unit) === family(potencyFact.unit) &&
+          // A figure attributed to a named ingredient is that INGREDIENT's
+          // potency, not the product's headline potency — see `isAttributed`.
+          !isAttributed(text, n.index, units),
       );
       for (const n of sameUnit) {
         if (n.value !== potencyFact.value) {
@@ -446,7 +586,12 @@ export function factConsistencyOver(
       if (n.dimension === 'count' && allowedCounts.size > 0 && !allowedCounts.has(n.value)) {
         out.push(fail(checkId, field, n.raw, `Count '${n.raw}' matches no canonical fact (unitCount=${facts.unitCount}, servings=${facts.servings})`));
       }
-      if (n.dimension === 'days' && allowedDays.size > 0 && !allowedDays.has(n.value)) {
+      if (
+        n.dimension === 'days' &&
+        allowedDays.size > 0 &&
+        isSupplyClaim(text, n, units) &&
+        !allowedDays.has(n.value)
+      ) {
         out.push(fail(checkId, field, n.raw, `Day figure '${n.raw}' disagrees with facts.daySupply=${facts.daySupply}`));
       }
     }

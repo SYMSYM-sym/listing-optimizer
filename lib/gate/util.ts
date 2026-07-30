@@ -288,6 +288,35 @@ function normalizeUncached(text: string): string {
 }
 
 /**
+ * COMPATIBILITY PUNCTUATION fold, produced as an EXTRA scan variant.
+ *
+ * `foldCompatibility` (used by `normalize`) deliberately refuses any fold whose
+ * result is not purely alphanumeric, so the SYMBOLS the style gate must still
+ * see are never dissolved. The cost of that rule is that fullwidth/compatibility
+ * PUNCTUATION survives untouched — `＄24.99`, `50％ off`, `＃1`, `care＠brandx。com`,
+ * `555・123・4567` all walked past the price / discount / contact / promo-term
+ * patterns.
+ *
+ * This helper is therefore ADDITIVE and is only handed to the pattern scans: a
+ * whole-string NFKC pass, plus the handful of CJK/compatibility dot-and-comma
+ * characters NFKC does NOT decompose (U+3002, U+30FB, U+3001 and friends), which
+ * are what a fullwidth email/phone payload is actually built from. The primary
+ * text is never rewritten, so the trademark/currency symbol detection (which
+ * reads the primary text) is unaffected.
+ */
+const PUNCT_COMPAT: Record<string, string> = {
+  '\u3002': '.', '\uFF61': '.', '\u30FB': '.', '\uFF65': '.',
+  '\u2024': '.', '\u2027': '.', '\u2219': '.', '\u22C5': '.', '\u00B7': '.',
+  '\u3001': ',', '\uFF64': ',',
+};
+
+export function compatibilityVariant(text: string): string {
+  let out = '';
+  for (const ch of text.normalize('NFKC')) out += PUNCT_COMPAT[ch] ?? ch;
+  return out;
+}
+
+/**
  * Separator-padded evasion (`c-a-n-c-e-r`, `d.i.a.b.e.t.e.s`, `c a n c e r`,
  * `c*a*n*c*e*r`, `c,a,n,c,e,r`).
  *
@@ -403,7 +432,10 @@ function compileConcatTerms(terms: string[], minLen: number): CompiledConcat | n
     .join('|');
   // Trailing plural is part of the match so `tum ors` still anchors on the
   // token END (see `scanConcatenated`) instead of stopping one char short.
-  const compiled: CompiledConcat = { re: new RegExp(`(?:${source})(?:e?s)?`, 'gi'), canonical };
+  // The BARE term is captured in group 1 so `scanConcatenated` can re-anchor on
+  // it when the optional `(?:e?s)?` swallowed the first letter of the NEXT word
+  // (`can cer support` -> `cancers|upport`) — see the anchor retry there.
+  const compiled: CompiledConcat = { re: new RegExp(`(${source})(?:e?s)?`, 'gi'), canonical };
   byLen.set(minLen, compiled);
   return compiled;
 }
@@ -453,19 +485,62 @@ export function scanConcatenated(
       continue;
     }
     const originalIndex = map[m.index] ?? 0;
-    const lastIndex = map[m.index + m[0].length - 1] ?? originalIndex;
+    // A match that fails the anchor must NOT consume the region it covered:
+    // in `lu puss` -> `lupuss` the alternation matched `flu` inside
+    // `relief|lupus`, that match was correctly dropped, and `lastIndex` had
+    // already moved past the real `lupus`. Scanning resumes one character after
+    // the rejected match instead.
+    const matchStart = m.index;
+    const resume = (): void => { compiled.re.lastIndex = matchStart + 1; };
     // Token anchoring, evaluated on the ORIGINAL (un-glued) text.
-    if (isLetter(text[originalIndex - 1])) continue;
-    if (isLetter(text[lastIndex + 1])) continue;
+    if (isLetter(text[originalIndex - 1])) {
+      resume();
+      continue;
+    }
+    // TRAILING-ANCHOR RETRY. The regex ends on an OPTIONAL `(?:e?s)?`, so when
+    // the word after a split term starts with `s`/`es` the optional suffix
+    // swallowed it (`can cer support` -> `cancers|upport`), the anchor saw a
+    // letter and the whole match was DROPPED — silently defeating this pass.
+    // The same happened one level up when the term list itself ships the plural
+    // (`tumors` is a term, so `tum or shrinkage` matched `tumors` and the `s`
+    // came out of "shrinkage").
+    //
+    // A match is therefore accepted when ANY of these ends satisfies the
+    // original-text anchor: the suffixed end, the bare-term end, or — when the
+    // bare term itself ends in `s`/`es` and the shortened form is ALSO a known
+    // term — that shorter end.
+    const base = (m[1] ?? m[0]).toLowerCase();
+    const fullLen = m[0].length;
+    const ends: number[] = [];
+    const addEnd = (len: number): void => {
+      if (len >= minLen && len <= fullLen && !ends.includes(len)) ends.push(len);
+    };
+    addEnd(fullLen);
+    addEnd(base.length);
+    if (base.endsWith('es') && compiled.canonical.has(base.slice(0, -2))) addEnd(base.length - 2);
+    if (base.endsWith('s') && compiled.canonical.has(base.slice(0, -1))) addEnd(base.length - 1);
+    let lastIndex = -1;
+    let matched = m[0];
+    for (const len of ends) {
+      const candidate = map[m.index + len - 1] ?? originalIndex;
+      if (isLetter(text[candidate + 1])) continue;
+      lastIndex = candidate;
+      matched = m[0].slice(0, len);
+      break;
+    }
+    if (lastIndex < 0) {
+      resume();
+      continue;
+    }
     if (hasNegationContext(text, originalIndex, neg)) continue;
     const endIndex = lastIndex + 1;
-    const key = m[0].toLowerCase();
+    const key = matched.toLowerCase();
     out.push({
       term:
         compiled.canonical.get(key) ??
         compiled.canonical.get(key.replace(/es$/, '')) ??
         compiled.canonical.get(key.replace(/s$/, '')) ??
-        m[0],
+        matched,
       index: originalIndex,
       context: text.slice(Math.max(0, originalIndex - 40), endIndex + 40),
     });
@@ -600,17 +675,19 @@ const LEGACY_NEGATION_CUES = [
  * diagnose, treat, cure, or prevent any disease"), which is positive evidence
  * and is checked first.
  *
- * What remains here are cues that cannot themselves be read as a claim about a
- * disease ("banned", "prohibited", "cannot", "must not", "do not", "there is
- * no") — e.g. an internal note saying "disease words are banned".
+ * ROUND-6 REMOVAL: `do not`, `don't`, `must not` and `cannot` are gone too.
+ * They are IMPERATIVE, not prohibitive, and in front of a disease noun they are
+ * the claim: "Don't let osteoporosis steal your bones", "Do not suffer
+ * migraines another day", "You must not accept arthritis pain" are all
+ * prevention/treatment claims that each used to suppress themselves.
+ *
+ * What remains are cues that cannot be read as a claim ABOUT a disease
+ * ("banned", "prohibited", "there is no") — e.g. an internal note saying
+ * "disease words are banned".
  */
 const STRICT_NEGATION_CUES = [
   'banned',
-  'do not',
-  "don't",
   'there is no',
-  'cannot',
-  'must not',
   'prohibited',
 ];
 
@@ -632,10 +709,41 @@ const META_MAX_GAP_CHARS = 24;
  */
 const CLAUSE_BOUNDARY_RE = /[.;:!?,\-|/()\[\]{}\n\u2013\u2014]/;
 
-/** Function words allowed between a meta-phrase and the term it negates. */
+/**
+ * Function words allowed between a meta-phrase and the term it negates.
+ *
+ * ROUND-6 REMOVAL: `or`, `and`, `for` and `the` are gone. They are the hinge
+ * every laundering payload turned on — "Not intended to diagnose OR THE tumor
+ * shrinks within two weeks", "This is not a drug FOR hypertension yet users cut
+ * their pills", "Not a substitute for medical advice OR cancer care". A genuine
+ * enumeration is covered by the FULL meta-phrase (the noun then sits INSIDE the
+ * phrase span), which needs no connector at all.
+ */
 const META_GAP_CONNECTORS = new Set([
-  'or', 'and', 'to', 'any', 'a', 'an', 'the', 'of', 'for', 'nor', 'no', 'not', 'other', 'such',
+  'to', 'any', 'a', 'an', 'of', 'nor', 'no', 'not', 'other', 'such',
 ]);
+
+/**
+ * A RESULT claim following the noun ("shrinks within two weeks", "50% in a
+ * month"). Purely structural — a time-frame or a percentage — so it carries no
+ * domain lexicon. Present in the same sentence, it vetoes meta-phrase
+ * suppression: a disclaimer does not promise an outcome.
+ */
+const RESULT_CLAIM_RE =
+  /\b(?:in|within|after)\s+(?:\d+|a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelve)\s+(?:day|week|month|year)s?\b|\b\d+(?:\.\d+)?\s*%/i;
+
+/**
+ * True when the character before `start` (skipping whitespace) is clause
+ * punctuation, or `start` is the beginning of the string.
+ */
+function atClauseStart(lower: string, start: number): boolean {
+  for (let i = start - 1; i >= 0; i--) {
+    const ch = lower[i]!;
+    if (/\s/.test(ch)) continue;
+    return CLAUSE_BOUNDARY_RE.test(ch);
+  }
+  return true;
+}
 
 export interface NegationOptions {
   /**
@@ -644,8 +752,12 @@ export interface NegationOptions {
    *            inside the same clause, or the term must sit inside (or in the
    *            enumeration immediately after) a pack meta-phrase.
    *            Used by the disease-term path (C6/A2).
+   * `none`   — NO negation handling at all. Used by the checks whose documented
+   *            contract is "prohibited whatever surrounds it" (C18/C19): those
+   *            used to fall through to `legacy` by default, which re-opened the
+   *            very hole their own comments said they had closed.
    */
-  mode?: 'legacy' | 'strict';
+  mode?: 'legacy' | 'strict' | 'none';
   /** Override the proximity window in characters. */
   windowChars?: number;
   /** Strict mode only: kept for call-site clarity — commas ALWAYS break a clause. */
@@ -716,6 +828,10 @@ function metaPhraseSuppresses(
       from = start + 1;
       if (matchIndex >= start && matchIndex < end) return true; // inside the phrase
       if (end > matchIndex || matchIndex - end > META_MAX_GAP_CHARS) continue;
+      // The ENUMERATION branch. The meta-phrase must be its OWN clause — a
+      // phrase glued onto the tail of another clause ("This is not a drug for
+      // hypertension …") is a fragment being used as cover, not a disclaimer.
+      if (!atClauseStart(lower, start)) continue;
       const between = lower.slice(end, matchIndex);
       // A comma / dash / pipe / slash / sentence mark ENDS the disclaimer —
       // "Not intended to diagnose, cancer support in weeks" is a claim.
@@ -724,6 +840,11 @@ function metaPhraseSuppresses(
       const words = between.split(/[^a-z0-9']+/).filter(Boolean);
       if (words.length === 0) continue; // the term is the direct object, not an enumeration
       if (!words.every((w) => allowedGapWords.has(w))) continue;
+      // A therapeutic-action verb or a RESULT claim after the noun, in the same
+      // sentence, means the sentence makes a claim whatever it opened with.
+      const sentence = lower.slice(matchIndex).split(/[.;!?\n]/)[0] ?? '';
+      if (blockingVerbs.length > 0 && containsTerm(sentence, blockingVerbs)) continue;
+      if (RESULT_CLAIM_RE.test(sentence)) continue;
       return true;
     }
   }
@@ -778,6 +899,7 @@ export function hasNegationContext(
   opts: NegationOptions = {},
 ): boolean {
   const lower = text.toLowerCase();
+  if (opts.mode === 'none') return false;
   if ((opts.mode ?? 'legacy') === 'legacy') {
     const windowStart = Math.max(0, matchIndex - (opts.windowChars ?? LEGACY_WINDOW_CHARS));
     const preceding = lower.slice(windowStart, matchIndex);

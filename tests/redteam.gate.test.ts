@@ -247,10 +247,23 @@ describe('FIX 4 — previously missing condition terms are now caught', () => {
     });
   }
 
-  it('"menopause" is caught for a women\'s-health product', () => {
-    const l = mut((x) => { x.bullets[0] = 'Daily support that menopause*'; });
+  /**
+   * ROUND-6 REVISION. "menopause"/"perimenopause" are enumerated NATURAL STATES
+   * under 21 CFR 101.93(g), not diseases: "for women in menopause" is a lawful
+   * structure/function claim, and blocking it blocked a whole lawful segment.
+   * They moved to the ACTION-PAIRED tier — they fail only when a
+   * therapeutic-action verb sits in the same sentence.
+   */
+  it('"menopause" paired with a therapeutic-action verb is still caught', () => {
+    const l = mut((x) => { x.bullets[0] = 'Daily support that cures menopause*'; });
     const womens: GateContext = { subcategories: ['womens'] };
     expect(failures(l, womens).some((y) => y.checkId === 'C6' && y.field === 'bullets[0]')).toBe(true);
+  });
+
+  it('"menopause" as a lawful natural-state reference is NOT caught', () => {
+    const l = mut((x) => { x.bullets[0] = 'Formulated for women in perimenopause and menopause*'; });
+    const womens: GateContext = { subcategories: ['womens'] };
+    expect(failures(l, womens).filter((y) => y.checkId === 'C6' && y.field === 'bullets[0]')).toEqual([]);
   });
 
   /**

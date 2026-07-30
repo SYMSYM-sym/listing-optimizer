@@ -27,11 +27,27 @@ const rules: RuleSet = rulesJson as unknown as RuleSet;
 const principles: Principle[] = principlesJson as Principle[];
 const genericSuspicionLexicon: string[] = suspicionGenericJson.suspicionLexicon;
 
+/**
+ * EVERY compliance module in the project, assembled HERE (pack data), so
+ * `lib/gate` can union the disease/drug lexicons without naming a category.
+ *
+ * A drug claim is illegal whatever the product is. Attaching this only to the
+ * generic pack meant the cosmetics pack — whose own lexicon has no `cancer`,
+ * `diabetes`, `arthritis` or `hypertension` — returned `pass:true, verified:true`
+ * for a bullet reading "Cures cancer and reverses diabetes in eight weeks".
+ * Every pack now carries the same cross-check set.
+ */
+const ALL_COMPLIANCE_PACKS: CompliancePack[] = [
+  complianceJson as CompliancePack,
+  cosmeticsComplianceJson as CompliancePack,
+];
+
 export function loadPack(id: PackId): KnowledgePack {
   if (id === 'supplements') {
     return {
       id: 'supplements',
       rules,
+      crossCheckCompliancePacks: ALL_COMPLIANCE_PACKS,
       requiresCompliance: true,
       compliancePack: complianceJson as CompliancePack,
       attributeSchema: attributeSchemaJson as AttributeField[],
@@ -43,6 +59,7 @@ export function loadPack(id: PackId): KnowledgePack {
     return {
       id: 'cosmetics',
       rules,
+      crossCheckCompliancePacks: ALL_COMPLIANCE_PACKS,
       requiresCompliance: true,
       compliancePack: cosmeticsComplianceJson as CompliancePack,
       attributeSchema: cosmeticsAttributeSchemaJson as AttributeField[],
@@ -57,10 +74,7 @@ export function loadPack(id: PackId): KnowledgePack {
     // lexicon (vocabulary heuristic) and the regulated packs' disease/drug
     // lexicons (`crossCheckCompliancePacks`), which make a generic-routed
     // listing that names a disease fail CLOSED.
-    crossCheckCompliancePacks: [
-      complianceJson as CompliancePack,
-      cosmeticsComplianceJson as CompliancePack,
-    ],
+    crossCheckCompliancePacks: ALL_COMPLIANCE_PACKS,
     requiresCompliance: false,
     rules,
     compliancePack: null,

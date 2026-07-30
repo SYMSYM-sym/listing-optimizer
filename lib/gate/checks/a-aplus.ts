@@ -1,6 +1,6 @@
 import type { Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { hasNegationContext, normalize } from '../util';
-import { allDiseaseNouns } from './pack';
+import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
 import { allergenMentioned, presentAllergens } from './c-quality';
 import { aplusSurfaces, fail, fictionOver, potencyPhrasingOver, scanSurfacesForBanned } from './shared';
 
@@ -27,12 +27,17 @@ export function a1AplusDisclaimer(l: OptimizedListing, pack: KnowledgePack): Fai
   return out;
 }
 
-/** A2 — same full-union lexicon as C6, applied to every A+ text field. */
+/** A2 — same CROSS-PACK union lexicon as C6, applied to every A+ text field. */
 export function a2AplusBannedTerms(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const cp = pack.compliancePack;
   if (!cp) return [];
-  const nouns = allDiseaseNouns(cp);
-  return scanSurfacesForBanned(aplusSurfaces(l.aplusContent), cp, nouns, 'A2');
+  return scanSurfacesForBanned(
+    aplusSurfaces(l.aplusContent),
+    cp,
+    crossPackDiseaseNouns(pack),
+    'A2',
+    crossPackActionPairedNouns(pack),
+  );
 }
 
 export function a3AplusBrandLeakage(l: OptimizedListing): Failure[] {

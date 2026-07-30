@@ -44,6 +44,68 @@ export function activeDiseaseNouns(cp: CompliancePack, subcategories: string[]):
 }
 
 /**
+ * Every compliance module reachable from this pack: its own (if any) plus every
+ * module the pack ASSEMBLER attached as a cross-check (`crossCheckCompliancePacks`,
+ * built in knowledge/ — this module still names no category).
+ */
+function reachableCompliancePacks(pack: KnowledgePack): CompliancePack[] {
+  const out: CompliancePack[] = [];
+  const seen = new Set<CompliancePack>();
+  for (const cp of [pack.compliancePack, ...(pack.crossCheckCompliancePacks ?? [])]) {
+    if (!cp || seen.has(cp)) continue;
+    seen.add(cp);
+    out.push(cp);
+  }
+  return out;
+}
+
+const CROSS_NOUN_CACHE = new WeakMap<KnowledgePack, string[]>();
+const CROSS_PAIRED_CACHE = new WeakMap<KnowledgePack, string[]>();
+
+/**
+ * The disease/drug lexicon C6 and A2 actually scan: the UNION over EVERY
+ * compliance module the pack can reach.
+ *
+ * Rationale, stated by the project's own rule: a drug claim is illegal whatever
+ * the product is. Scoping the scan to the ROUTED pack's own lexicon meant a
+ * listing routed to one pack could claim to cure cancer and reverse diabetes and
+ * come back `pass:true, verified:true`, because those nouns live only in the
+ * other pack's lexicon.
+ */
+export function crossPackDiseaseNouns(pack: KnowledgePack): string[] {
+  const cached = CROSS_NOUN_CACHE.get(pack);
+  if (cached) return cached;
+  const union = [...new Set(reachableCompliancePacks(pack).flatMap(allDiseaseNouns))];
+  CROSS_NOUN_CACHE.set(pack, union);
+  return union;
+}
+
+/** The same union for the ACTION-PAIRED tier (see `CompliancePack.actionPairedNouns`). */
+export function crossPackActionPairedNouns(pack: KnowledgePack): string[] {
+  const cached = CROSS_PAIRED_CACHE.get(pack);
+  if (cached) return cached;
+  const union = [
+    ...new Set(reachableCompliancePacks(pack).flatMap((cp) => cp.actionPairedNouns ?? [])),
+  ];
+  CROSS_PAIRED_CACHE.set(pack, union);
+  return union;
+}
+
+/**
+ * The set injected into the PROMPT: the pack's own union first (ordered by the
+ * detected subcategories), then every cross-pack noun, then the action-paired
+ * tier. The generator must be told EVERYTHING the gate can fail it on — the
+ * cross-pack union is now part of that.
+ */
+export function promptDiseaseNouns(pack: KnowledgePack, subcategories: string[]): string[] {
+  const cp = pack.compliancePack;
+  const out = new Set<string>(cp ? activeDiseaseNouns(cp, subcategories) : []);
+  for (const n of crossPackDiseaseNouns(pack)) out.add(n);
+  for (const n of crossPackActionPairedNouns(pack)) out.add(n);
+  return [...out];
+}
+
+/**
  * Therapeutic-ACTION verbs (relieves / eases / reverses / shrinks …).
  *
  * The pack ships ROOTS; every inflection is generated in code, so the class is

@@ -1,13 +1,23 @@
 import type { CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { CONCAT_MIN_TERM_LEN } from './shared';
 import {
+  compatibilityVariant,
   deobfuscatedVariants,
   normalize,
   scanConcatenated,
   stripSeparators,
   subtractDisclaimers,
   termRegex,
+  type NegationOptions,
 } from '../util';
+
+/**
+ * C18/C19 document that they apply NO negation guard. `scanConcatenated`
+ * defaults to the LEGACY ~90-char guard, so the C19 fallback silently had one —
+ * "No fillers used, our formula is the b est seller" passed. This makes the
+ * documented contract explicit at the call site.
+ */
+const NO_NEGATION: NegationOptions = { mode: 'none' };
 
 interface ScanSurface {
   field: string;
@@ -99,6 +109,16 @@ function scanVariants(clean: string): string[] {
   const variants = new Set<string>(deobfuscatedVariants(clean));
   const { stripped } = stripSeparators(clean);
   if (stripped) variants.add(stripped);
+  // COMPATIBILITY-PUNCTUATION variant: `normalize` deliberately leaves
+  // fullwidth/CJK punctuation alone (folding it would dissolve the symbols the
+  // style gate must still see), which let `＄24.99`, `50％ off`, `care＠brandx。com`
+  // and `555・123・4567` walk past every pattern here. Added as an EXTRA variant
+  // only — variant #1 is still the untouched text.
+  const compat = compatibilityVariant(clean);
+  if (compat !== clean) {
+    variants.add(compat);
+    for (const v of deobfuscatedVariants(compat)) variants.add(v);
+  }
   return [...variants];
 }
 
@@ -254,7 +274,7 @@ export function c19ProhibitedMarketing(
         }
       }
       if (context === null) {
-        const m = scanConcatenated(clean, [term], CONCAT_MIN_TERM_LEN)[0];
+        const m = scanConcatenated(clean, [term], CONCAT_MIN_TERM_LEN, NO_NEGATION)[0];
         if (m) context = m.context;
       }
       if (context !== null) {

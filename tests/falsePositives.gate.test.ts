@@ -5,7 +5,8 @@ import type { GateContext } from '@/lib/gate/checks';
 import { mapProduct } from '@/lib/ingest/providers/rainforest';
 import { toSnapshot } from '@/lib/ingest/toSnapshot';
 import { loadPack } from '@/lib/knowledge/loadPack';
-import type { Failure, OptimizedListing } from '@/lib/types';
+import { detectCategory } from '@/lib/knowledge/detectCategory';
+import type { Failure, ListingSnapshot, OptimizedListing } from '@/lib/types';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
 
@@ -143,5 +144,313 @@ describe('FALSE POSITIVES — the fix did not re-open the bypass it replaced', (
   it('a benign seasonal span does NOT launder an actual prevention claim', () => {
     const l = mut((x) => { x.bullets[1] = 'Prevents colds during cold and flu season*'; });
     expect(runGate(l, pack, ctx).failures.some((f) => f.checkId === 'C6' && f.field === 'bullets[1]')).toBe(true);
+  });
+});
+
+// ===========================================================================
+// ROUND 6 — the USABILITY half. Every case below is ordinary, lawful copy that
+// the tool blocked (and, for U1, gave actively harmful advice about).
+// ===========================================================================
+
+const cosmeticsPack = loadPack('cosmetics');
+
+/**
+ * U1 — the worst of them: `presentAllergens` regex-matched allergen SOURCES
+ * with no negation handling and no compound awareness, so it demanded
+ * "Contains: Milk" on a milk-thistle capsule, "Contains: Wheat" on a listing
+ * that says gluten free, and "Contains: Soy" on sunflower lecithin.
+ */
+describe('U1 — the allergen check no longer produces harmful advice', () => {
+  const c9c = (l: OptimizedListing, p = pack): Failure[] =>
+    runGate(l, p, ctx).failures.filter((f) => f.checkId === 'C9' || f.checkId === 'A7');
+
+  it('"Gluten free, dairy free, soy free" in the declaration field declares NOTHING', () => {
+    const l = mut((x) => {
+      x.attributes.ingredients = 'Rice Flour; Vegetable Cellulose';
+      x.attributes.allergen_information = 'Gluten free, dairy free, soy free';
+    });
+    expect(c9c(l)).toEqual([]);
+  });
+
+  it.each([
+    ['Milk Thistle Extract; Rice Flour', 'milk thistle is not milk'],
+    ['Sunflower Lecithin (soy free); Rice Flour', 'negated inside a parenthetical'],
+    ['Gluten Free Oat Fibre; Rice Flour', 'negated by a following "free"'],
+    ['Wheatgrass Powder; Rice Flour', 'wheatgrass is not wheat'],
+    ['Eggshell Membrane; Rice Flour', 'eggshell is not egg'],
+    ['Free from milk and soy; Rice Flour', '"free from" prefix'],
+    ['No added sesame; Rice Flour', '"no added" prefix'],
+    ['Zero dairy; Rice Flour', '"zero" prefix'],
+  ])('ingredients "%s" declare nothing (%s)', (ingredients) => {
+    const l = mut((x) => {
+      x.attributes.ingredients = ingredients;
+      x.attributes.allergen_information = 'Free from major allergens per label';
+    });
+    expect(c9c(l)).toEqual([]);
+  });
+
+  it('cosmetics: "No added fragrance" declares nothing', () => {
+    const l = mut((x) => {
+      x.attributes.ingredients = 'Aqua; Glycerin; No added fragrance';
+      x.attributes.allergen_information = 'None';
+    });
+    expect(
+      runGate(l, cosmeticsPack, { subcategories: ['skincare'] }).failures.filter(
+        (f) => f.checkId === 'C9' || f.checkId === 'A7',
+      ),
+    ).toEqual([]);
+  });
+
+  it('TRUE POSITIVE: a real allergen source is still enforced end to end', () => {
+    const undeclared = mut((x) => {
+      x.attributes.ingredients = 'Whey Protein Isolate; Rice Flour';
+      x.attributes.allergen_information = 'Free from major allergens per label';
+    });
+    const ids = runGate(undeclared, pack, ctx).failures.filter((f) => f.checkId === 'C9');
+    expect(ids.length).toBeGreaterThan(0);
+    expect(ids.map((f) => f.fix).join(' ')).toContain('Contains: Milk');
+
+    const declared = mut((x) => {
+      x.attributes.ingredients = 'Whey Protein Isolate; Rice Flour';
+      x.attributes.allergen_information = 'Contains: Milk';
+      x.bullets[3] = 'Quality you can verify: Contains: Milk. Third-party tested and made in a cGMP facility';
+      x.description = x.description.replace('Quality and safety:', 'Contains: Milk. Quality and safety:');
+      const ingredients = x.aplusContent.modules.find((m) => m.id === 'ingredients')!;
+      ingredients.body = `${ingredients.body} Contains: Milk.`;
+    });
+    expect(runGate(declared, pack, ctx).failures.filter((f) => f.checkId === 'C9' || f.checkId === 'A7')).toEqual([]);
+  });
+
+  it('TRUE POSITIVE: "no known allergens" alongside a real allergen still fails', () => {
+    const l = mut((x) => {
+      x.attributes.ingredients = 'Whey Protein Isolate; Rice Flour';
+      x.attributes.allergen_information = 'No Known Allergens';
+    });
+    expect(runGate(l, pack, ctx).failures.some((f) => f.checkId === 'C9')).toBe(true);
+  });
+});
+
+/**
+ * U3 — over-generic routing markers sent a cookbook, a bag of coffee and a
+ * watercolour set into a regulated pack that then demanded a compliance
+ * disclaimer, and sent a vitamin C serum to supplements instead of cosmetics.
+ */
+describe('U3 — routing no longer hijacks ordinary products', () => {
+  const snap = (title: string, category: string): ListingSnapshot => ({
+    asin: 'B0ROUTE001',
+    url: 'https://www.amazon.com/dp/B0ROUTE001',
+    title,
+    bullets: [],
+    description: '',
+    category,
+    subcategory: [],
+    attributes: {},
+    images: [],
+    price: '',
+    raw: {},
+  });
+
+  it.each([
+    ['Weeknight Blend: 100 Fast Dinner Recipes', 'Books > Cookbooks, Food & Wine'],
+    ['Espresso Blend Whole Bean Coffee, Dark Roast', 'Grocery & Gourmet Food > Coffee'],
+    ['Blend and Layer Watercolour Paint Set, 24 Pans', 'Arts, Crafts & Sewing > Painting'],
+    ['Rise and Shine Breakfast Formula Cookbook', 'Books > Cookbooks, Food & Wine'],
+    ['Cocoa Powder for Baking, Dutch Process', 'Grocery & Gourmet Food > Baking'],
+  ])('"%s" routes to generic', (title, category) => {
+    expect(detectCategory(snap(title, category)).packId).toBe('generic');
+  });
+
+  it.each([
+    ['GlowLab Vitamin C Serum with Hyaluronic Acid', 'Beauty & Personal Care > Skin Care > Face > Serums'],
+    ['GlowLab Vitamin C Serum with Hyaluronic Acid', ''],
+    ['DewDrop Collagen Face Cream', 'Beauty & Personal Care > Skin Care'],
+  ])('"%s" routes to cosmetics', (title, category) => {
+    expect(detectCategory(snap(title, category)).packId).toBe('cosmetics');
+  });
+
+  it.each([
+    ['BrandX Probiotic Supplement 50 Billion CFU, 60 Vegan Capsules', 'Health & Household > Vitamins & Dietary Supplements'],
+    ['BrandX Magnesium Glycinate Capsules', ''],
+    ['BrandX Vitamin C 1000 mg', ''],
+  ])('"%s" still routes to supplements', (title, category) => {
+    expect(detectCategory(snap(title, category)).packId).toBe('supplements');
+  });
+});
+
+/** U4 — a multi-ingredient formula may state more than one figure. */
+describe('U4 — C12 no longer treats every potency figure as the headline potency', () => {
+  const c12On = (l: OptimizedListing, field: string): Failure[] =>
+    runGate(l, pack, ctx).failures.filter((f) => f.checkId === 'C12' && f.field === field);
+
+  it.each([
+    'Glucosamine 1500 mg, Chondroitin 1200 mg, MSM 1000 mg and Turmeric 500 mg',
+    'Melatonin 3 mg, L-Theanine 200 mg and Magnesium Glycinate 100 mg',
+    'Vitamin D3 2000 IU, B12 500 mcg and Zinc 15 mg in one daily formula',
+    'Folate 400 mcg with Iron 27 mg and Choline 55 mg for prenatal routines',
+  ])('the attributed stack "%s" produces NO C12 failure', (copy) => {
+    const l = mut((x) => {
+      x.facts.potency = '1500 mg';
+      x.bullets[1] = `Formulated with ${copy}*`;
+    });
+    expect(c12On(l, 'bullets[1]')).toEqual([]);
+  });
+
+  it('an UNATTRIBUTED figure that contradicts facts.potency still FAILS', () => {
+    const l = mut((x) => {
+      x.facts.potency = '1500 mg';
+      x.bullets[1] = 'Now with 900 mg in every bottle for adults*';
+    });
+    expect(c12On(l, 'bullets[1]').length).toBeGreaterThan(0);
+  });
+
+  it('two UNATTRIBUTED figures in one surface are still an internal conflict', () => {
+    const l = mut((x) => {
+      x.facts.potency = '1500 mg';
+      x.bullets[1] = 'A 1500 mg blend and also 900 mg of the same blend*';
+    });
+    expect(c12On(l, 'bullets[1]').length).toBeGreaterThan(0);
+  });
+
+  it('the original CFU conflict rule is untouched', () => {
+    const l = mut((x) => { x.bullets[0] = 'STRONG: a 90 Billion CFU blend supports daily balance*'; });
+    expect(c12On(l, 'bullets[0]').length).toBeGreaterThan(0);
+  });
+});
+
+/** U5 — a day figure is only a supply statement when it says so. */
+describe('U5 — C12 day figures need a supply cue', () => {
+  const c12On = (l: OptimizedListing, field: string): Failure[] =>
+    runGate(l, pack, ctx).failures.filter((f) => f.checkId === 'C12' && f.field === field);
+
+  it.each([
+    'Give it 90 days and judge for yourself',
+    'Most routines settle within 30 days of consistent use',
+    'Return it within 45 days if it is not for you',
+  ])('"%s" produces NO C12 failure', (copy) => {
+    const l = mut((x) => { x.facts.daySupply = 60; x.bullets[1] = `${copy}*`; });
+    expect(c12On(l, 'bullets[1]')).toEqual([]);
+  });
+
+  it.each([
+    'A 90 day supply in every bottle',
+    'One bottle lasts 90 days of daily use',
+  ])('the supply claim "%s" still FAILS', (copy) => {
+    const l = mut((x) => { x.facts.daySupply = 60; x.bullets[1] = `${copy}*`; });
+    expect(c12On(l, 'bullets[1]').length).toBeGreaterThan(0);
+  });
+});
+
+/** U6 — the ALL-CAPS run rule counted digits and ignored the allowlist. */
+describe('U6 — C17 ALL-CAPS rules no longer fail ordinary sentence case', () => {
+  const c17On = (l: OptimizedListing, field: string): Failure[] =>
+    runGate(l, pack, ctx).failures.filter((f) => f.checkId === 'C17' && f.field === field);
+
+  it.each([
+    'Vitamin D3 2000 IU, B12 and Zinc in one capsule',
+    'D3 K2 MK7 complex for everyday routines',
+    'DHA EPA ALA trio from cold pressed oil',
+    'Third-party tested with L-THEANINE and 5HTP on the label',
+    'Batch tested to COQ10 and KSM standards',
+    'Certified by IFOS for freshness',
+    'Audited to BSCG standards each year',
+    'Made in a HACCP audited facility',
+    'Packed in an SQF certified plant',
+    'Made under a BRCGS certified programme',
+    'Verified by IGEN for non-GMO status',
+    'IFOS, BSCG, HACCP, SQF, BRCGS and IGEN audited every year',
+  ])('"%s" produces NO C17 failure', (copy) => {
+    const l = mut((x) => { x.bullets[1] = `${copy}*`; });
+    expect(c17On(l, 'bullets[1]')).toEqual([]);
+  });
+
+  it.each([
+    'NEW BIG WOW gut support',
+    'BUY MORE NOW while you can',
+    'THIS IS SHOUTING LOUD at the customer',
+    'SAME NON USA GABA blend',
+  ])('genuine shouting "%s" still FAILS C17', (copy) => {
+    const l = mut((x) => { x.bullets[1] = `${copy}*`; });
+    expect(c17On(l, 'bullets[1]').length).toBeGreaterThan(0);
+  });
+});
+
+/** U7 — `pounds` is a WEIGHT far more often than a currency. */
+describe('U7 — a weight in pounds is not a price claim', () => {
+  it.each([
+    'A 5 Pound tub for the whole family',
+    'Net weight 2 pounds of loose product',
+    'Ships at 3 pounds boxed',
+  ])('"%s" produces NO C18 failure', (copy) => {
+    const l = mut((x) => { x.bullets[1] = `${copy}*`; });
+    expect(runGate(l, pack, ctx).failures.filter((f) => f.checkId === 'C18' && f.field === 'bullets[1]')).toEqual([]);
+  });
+
+  it.each(['Only £19.95 today', 'Just 19 dollars and 95 cents', 'A steal at 20 euros'])(
+    'the real price claim "%s" still FAILS C18',
+    (copy) => {
+      const l = mut((x) => { x.bullets[1] = `${copy}*`; });
+      expect(runGate(l, pack, ctx).failures.some((f) => f.checkId === 'C18' && f.field === 'bullets[1]')).toBe(true);
+    },
+  );
+});
+
+/**
+ * U8 — menopause/perimenopause are enumerated NATURAL STATES under
+ * 21 CFR 101.93(g), and `nash` collides with a surname.
+ */
+describe('U8 — natural states and ambiguous names are not diseases on their own', () => {
+  const c6On = (l: OptimizedListing, field: string): Failure[] =>
+    runGate(l, pack, ctx).failures.filter((f) => f.checkId === 'C6' && f.field === field);
+
+  it.each([
+    'Formulated for women in perimenopause and menopause',
+    'Made for the years around menopause',
+    'Reviewed by Dr Nash in our own laboratory',
+  ])('"%s" produces NO C6 failure', (copy) => {
+    const l = mut((x) => { x.bullets[1] = `${copy}*`; });
+    expect(c6On(l, 'bullets[1]')).toEqual([]);
+  });
+
+  it.each([
+    'Cures menopause in eight weeks',
+    'Reverses perimenopause for good',
+    'Treats nash and restores the liver',
+  ])('the therapeutic-action claim "%s" still FAILS C6', (copy) => {
+    const l = mut((x) => { x.bullets[1] = `${copy}*`; });
+    expect(c6On(l, 'bullets[1]').length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * C-1 — `styleSurfaces()` omitted `backendSearchTerms` and `facts.*`, so an
+ * ASIN, an emoji or raw HTML in either one shipped as `verified`.
+ */
+describe('C-1 — the style gate now reads the backend field and the facts block', () => {
+  const c17On = (l: OptimizedListing, field: string): Failure[] =>
+    runGate(l, pack, ctx).failures.filter((f) => f.checkId === 'C17' && f.field === field);
+
+  it.each([
+    ['an ASIN', 'B0ABCD1234'],
+    ['an emoji', '✅'],
+    ['raw HTML', '<b>bold</b>'],
+    ['a banned symbol', '™'],
+  ])('%s in backendSearchTerms FAILS C17', (_why, payload) => {
+    const l = mut((x) => { x.backendSearchTerms = `${x.backendSearchTerms} ${payload}`; });
+    expect(c17On(l, 'backendSearchTerms').length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['an ASIN', 'B0ABCD1234'],
+    ['an emoji', '✅'],
+    ['raw HTML', '<b>bold</b>'],
+    ['a banned symbol', '™'],
+  ])('%s in a facts string FAILS C17', (_why, payload) => {
+    const l = mut((x) => { x.facts.potency = `50 Billion CFU ${payload}`; });
+    expect(c17On(l, 'facts.potency').length).toBeGreaterThan(0);
+  });
+
+  it('a legitimate "$" in facts.price is still legal (the pack scopes bannedChars)', () => {
+    const l = mut((x) => { x.facts.price = '$24.99'; });
+    expect(c17On(l, 'facts.price')).toEqual([]);
   });
 });

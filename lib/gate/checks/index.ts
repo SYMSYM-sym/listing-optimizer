@@ -2,8 +2,11 @@ export type { GateContext } from './types';
 export {
   activeDiseaseNouns,
   allDiseaseNouns,
+  crossPackActionPairedNouns,
+  crossPackDiseaseNouns,
   diseaseActionVerbs,
   missingPackPieces,
+  promptDiseaseNouns,
   packFailClosed,
   requiredPackPieceIds,
   REQUIRED_PACK_PIECES,

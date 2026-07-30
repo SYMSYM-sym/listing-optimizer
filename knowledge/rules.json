@@ -40,6 +40,8 @@
       "BCAA",
       "BHB",
       "BPA",
+      "BRCGS",
+      "BSCG",
       "CBD",
       "CBG",
       "CFU",
@@ -57,9 +59,14 @@
       "GLA",
       "GMO",
       "GMP",
+      "GRAS",
+      "HACCP",
       "HMB",
       "HPLC",
       "HTP",
+      "IFOS",
+      "IGEN",
+      "ISO",
       "IU",
       "KSM",
       "L-THEANINE",
@@ -70,6 +77,7 @@
       "NADH",
       "NMN",
       "NON",
+      "NPA",
       "NSF",
       "ORAC",
       "OTC",
@@ -78,6 +86,8 @@
       "REM",
       "SAME",
       "SOD",
+      "SQF",
+      "TGA",
       "TMG",
       "TUDCA",
       "UPC",
@@ -234,7 +244,7 @@
         "price ($ figure)"
       ],
       [
-        "\\b\\d+(?:[.,]\\d+)?\\s*(?:dollars?|cents?|usd|bucks|quid|euros?|pounds?)\\b",
+        "\\b\\d+(?:[.,]\\d+)?\\s*(?:dollars?|cents?|usd|bucks|quid|euros?)\\b",
         "price (spelled-out currency)"
       ],
       [
@@ -520,6 +530,22 @@
       "tablets",
       "scoop",
       "scoops"
+    ],
+    "_daySupplyCuesComment": "A day figure is only measured against facts.daySupply when one of these cues sits next to it. Without them, stock copy like 'Give it 90 days' was failing C12 as a contradicted supply claim.",
+    "daySupplyCues": [
+      "supply",
+      "day supply",
+      "bottle",
+      "bottles",
+      "container",
+      "per container",
+      "lasts",
+      "lasting",
+      "last you",
+      "jar",
+      "tub",
+      "pouch",
+      "pack"
     ]
   },
   "factFields": {

@@ -1,5 +1,5 @@
 import type { Facts, KnowledgePack } from '@/lib/types';
-import { activeDiseaseNouns } from '@/lib/gate/checks/pack';
+import { promptDiseaseNouns } from '@/lib/gate/checks/pack';
 import { prohibitedContentBlock, prohibitedMarketingBlock, styleRulesBlock } from './shared';
 
 /**
@@ -25,9 +25,10 @@ export function buildSystemPrompt(
 ): string {
   const r = pack.rules;
   const cp = pack.compliancePack;
-  // Full union, ordered so the DETECTED subcategories lead (ranking only —
-  // never a filter: the gate scans the whole union whatever the product is).
-  const activeNouns = cp ? activeDiseaseNouns(cp, subcategories) : [];
+  // Full CROSS-PACK union, ordered so the DETECTED subcategories lead (ranking
+  // only — never a filter: the gate scans the whole union whatever the product
+  // is, across every compliance module the pack assembler attached).
+  const activeNouns = promptDiseaseNouns(pack, subcategories);
   const principleLines = pack.principles
     .filter((p) => p.scorable)
     .map((p) => `- [${p.id}] ${p.text}`)
@@ -39,6 +40,21 @@ export function buildSystemPrompt(
   // The COMPLIANCE headline rules are PACK DATA too (`promptRules.compliance`)
   // — this module renders them, it no longer authors them.
   const complianceLines = (cp?.promptRules?.compliance ?? []).map((line) => `- ${line}`).join('\n');
+  // ALLERGEN DECLARATION RULES — pack data (`compliancePack.allergenRules` +
+  // `allergenFields`). The gate enforces an EXACT `canonicalString` match, and
+  // this block is the only place the generator is ever told what those strings
+  // are; without it the model was failed on a rule it had never been shown.
+  const af = cp?.allergenFields;
+  const allergenLines =
+    cp && af && (cp.allergenRules ?? []).length > 0
+      ? `
+ALLERGEN DECLARATIONS (exact strings — the gate compares them character for character):
+${(cp.allergenRules ?? [])
+  .map((r) => `- If the ${af.labelList} contain any of (${r.source}), then attributes.${af.declaration} must be EXACTLY "${r.canonicalString}".`)
+  .join('\n')}
+- The same declaration must also appear in at least one bullet and in the description, phrased with "${af.declarationVerb}" plus the allergen class or source.
+- Never write ${(cp.noAllergenPhrases ?? []).map((x) => `"${x}"`).join(' / ')} when a declarable allergen is present.`
+      : '';
   const compliance = cp
     ? `
 COMPLIANCE (structure/function claims ONLY — this is load-bearing):
@@ -46,7 +62,8 @@ ${complianceLines}
 - Banned verbs as product claims: ${cp.diseaseVerbs.join(', ')}.
 - NEVER use disease/condition nouns anywhere. The deterministic gate scans for ALL of these on EVERY surface: ${activeNouns.join(', ')} — plus any other condition name. Reframe as a structure/function state ("supports healthy [system] function", "[parameter] balance").
 - Banned marketing phrases: ${cp.superlativeBans.join(', ')}.
-${packLines}`
+${packLines}
+${allergenLines}`
     : `
 No category compliance module is active. Write factual, non-medical copy. No superlatives, no price, no review claims. Do not write any disclaimer text.`;
 
