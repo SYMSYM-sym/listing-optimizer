@@ -1,6 +1,7 @@
 import type { Facts, KnowledgePack } from '@/lib/types';
 import { promptDiseaseNouns } from '@/lib/gate/checks/pack';
 import {
+  approvedClaimBlock,
   prohibitedContentBlock,
   prohibitedMarketingBlock,
   semanticClaimBlock,
@@ -24,7 +25,8 @@ import {
  *  the pack's own compliance/system prompt rules, the ALLERGEN rules with their
  *  exact `canonicalString` values (C9/A7), the style rules and their allowlist
  *  (C17), the prohibited detail-page content and prohibited marketing LABELS
- *  (C18/C19) and — since round 7 — the semantic drug-claim shapes (C21).
+ *  (C18/C19) and — since round 7 — the semantic drug-claim shapes (C21) and the APPROVED
+ *  structure/function claim shapes with the natural-state safe harbour (C22).
  *
  *  NOT INJECTED, and why: the C18/C19 REGEXES themselves (only their
  *  human-readable labels are shown — a regex is not an instruction);
@@ -84,6 +86,11 @@ ${(cp.allergenRules ?? [])
   // The SEMANTIC claim shapes (C21). A claim needs no disease word to be
   // illegal, so the noun list above is not sufficient prevention on its own.
   const semanticBlock = semanticClaimBlock(cp?.semanticDrugClaims);
+  // The PREVENTION half: the lawful structure/function shapes (and the
+  // natural-state safe harbour) the generator should write BY CONSTRUCTION.
+  // Pack data (`compliancePack.approvedClaimTemplates` + the C22 lists) — this
+  // module renders them, it authors none.
+  const approvedBlock = approvedClaimBlock(cp);
   const compliance = cp
     ? `
 COMPLIANCE (structure/function claims ONLY — this is load-bearing):
@@ -92,6 +99,7 @@ ${complianceLines}
 - NEVER use disease/condition nouns anywhere. The deterministic gate scans for ALL of these on EVERY surface: ${activeNouns.join(', ')} — plus any other condition name. Reframe as a structure/function state ("supports healthy [system] function", "[parameter] balance").
 - Banned marketing phrases: ${cp.superlativeBans.join(', ')}.
 ${packLines}
+${approvedBlock}
 ${semanticBlock}
 ${allergenLines}`
     : `

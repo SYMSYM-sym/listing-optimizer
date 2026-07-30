@@ -48,7 +48,7 @@ export function activeDiseaseNouns(cp: CompliancePack, subcategories: string[]):
  * module the pack ASSEMBLER attached as a cross-check (`crossCheckCompliancePacks`,
  * built in knowledge/ — this module still names no category).
  */
-function reachableCompliancePacks(pack: KnowledgePack): CompliancePack[] {
+export function reachableCompliancePacks(pack: KnowledgePack): CompliancePack[] {
   const out: CompliancePack[] = [];
   const seen = new Set<CompliancePack>();
   for (const cp of [pack.compliancePack, ...(pack.crossCheckCompliancePacks ?? [])]) {
@@ -181,12 +181,16 @@ const nonEmptyTargets = (v: unknown): boolean =>
  *      `negationMetaPhrases`, `fictionPhrases`, `acceptedDisclaimerVariants`,
  *      `subcategoryKeywords`, `prescriptionDrugNames`,
  *      `semanticDrugClaims.determinerScopedTargets` (rule 1 stays armed on the
- *      plain target list without it). An empty value is a legitimate
- *      configuration, not a disarmed check;
+ *      plain target list without it) and `approvedClaimTemplates`, which is
+ *      PREVENTION ONLY — it is rendered into the system prompt and enforces
+ *      nothing, so its absence cannot fail a check open. It has its own
+ *      superset test against the rendered prompt instead. An empty value is a
+ *      legitimate configuration, not a disarmed check;
  *
  *  (b) FALSE-POSITIVE REDUCERS — `allergenCompoundExclusions`,
  *      `benignContextPhrases`, `semanticDrugClaims.safeContextPhrases` and
- *      `rules.style.allCapsRunExempt`. Emptying one of these makes the gate
+ *      `rules.style.allCapsRunExempt`, `lawfulQualifiers` and
+ *      `naturalStateSafePhrases`. Emptying one of these makes the gate
  *      STRICTER, not weaker: the failure mode is over-blocking lawful copy, and
  *      over-blocking is caught by `tests/falsePositives.gate.test.ts`, not by a
  *      fail-closed PACK rule. Requiring them here would report a pack that is
@@ -239,6 +243,30 @@ export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
     id: 'compliancePack.actionPairedNouns',
     disarms: 'the therapeutic-action tier of C6/A2 (e.g. "cures menopause")',
     present: (_p, cp) => nonEmptyList(cp.actionPairedNouns),
+  },
+  {
+    id: 'compliancePack.naturalStates',
+    disarms:
+      'the natural-state half of C22 — without it a therapeutic-action claim on a natural state, and the abnormal form of one, are both invisible',
+    present: (_p, cp) => nonEmptyList(cp.naturalStates),
+  },
+  {
+    id: 'compliancePack.normalSymptomologyNouns',
+    disarms:
+      'the normal-symptomology half of C22 — the mild form of a symptom would still be lawful, but its abnormal form would no longer be reported',
+    present: (_p, cp) => nonEmptyList(cp.normalSymptomologyNouns),
+  },
+  {
+    id: 'compliancePack.abnormalOnlySymptomNouns',
+    disarms:
+      'the abnormality rule over the symptom words a structure/function claim may lawfully address — without it "severe hot flashes" reads as ordinary copy',
+    present: (_p, cp) => nonEmptyList(cp.abnormalOnlySymptomNouns),
+  },
+  {
+    id: 'compliancePack.abnormalityMarkers',
+    disarms:
+      'both abnormality rules of C22 (a marker beside a natural state, and two markers naming an abnormal condition)',
+    present: (_p, cp) => nonEmptyList(cp.abnormalityMarkers),
   },
   {
     id: 'compliancePack.ingredientAttributeKeys',

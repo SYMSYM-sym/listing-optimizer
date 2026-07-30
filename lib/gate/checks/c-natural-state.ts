@@ -1,0 +1,309 @@
+import type { CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
+import {
+  deobfuscatedVariants,
+  normalize,
+  scanTerms,
+  subtractDisclaimers,
+  type NegationOptions,
+  type TermMatch,
+} from '../util';
+import { diseaseActionVerbs, reachableCompliancePacks } from './pack';
+import {
+  allGeneratedSurfaces,
+  disclaimerVariantsOf,
+  diseaseNegationOptions,
+  fail,
+  sentenceAround,
+} from './shared';
+
+/**
+ * C22 — NATURAL STATE / ABNORMALITY.
+ *
+ * The doctrine, taken from the FDA structure/function rule (21 CFR 101.93(f)
+ * and (g)) and its Small Entity Compliance Guide, and encoded here rather than
+ * approximated by a longer word list:
+ *
+ *  1. A structure/function claim is LAWFUL: a statement describing the role of
+ *     a nutrient or ingredient in affecting the NORMAL structure or function of
+ *     the body, or the mechanism by which it maintains that structure/function.
+ *  2. A DISEASE claim is unlawful: any claim to diagnose, treat, cure, mitigate
+ *     or prevent a disease. That half is C6's lexicon and is untouched here.
+ *  3. NATURAL STATES ARE NOT DISEASES. Ageing, the menopause, the menstrual
+ *     cycle, adolescence and pregnancy are natural states or processes, not
+ *     diseases — though each can be ASSOCIATED with abnormal conditions that
+ *     are. FDA's line is: NORMAL SYMPTOMOLOGY is permissible, an ABNORMAL
+ *     condition is not.
+ *  4. QUALIFIERS decide which side of that line a sentence falls on. "mild",
+ *     "occasional", "normal", "already within the normal range" and the
+ *     "associated with [natural state]" connector keep a claim lawful;
+ *     "severe", "chronic", "clinical", "pathological", "disorder", "disease",
+ *     "syndrome" and "diagnosed" push it over.
+ *
+ * THE THREE RULES, all pack-driven (`compliancePack.naturalStates`,
+ * `normalSymptomologyNouns`, `abnormalityMarkers`, `lawfulQualifiers`,
+ * `naturalStateSafePhrases`, `naturalStateProximityWindow`). This module holds
+ * the window arithmetic and the precedence, never a word:
+ *
+ *  R1 ABNORMALITY BESIDE A NATURAL STATE — an abnormality marker within
+ *     `window` characters of a natural state / normal symptom names the
+ *     ABNORMAL form of that state, which is a disease claim.
+ *  R2 TWO MARKERS — two DIFFERENT abnormality markers inside the same window
+ *     name an abnormal condition outright, with no natural state needed.
+ *  R3 THERAPEUTIC ACTION ON A NATURAL STATE — a therapeutic-action verb (the
+ *     pack's own class, `diseaseVerbs` + inflected `diseaseActionVerbRoots`) in
+ *     the SAME SENTENCE as a natural state is a disease claim, UNLESS a lawful
+ *     qualifier sits within `window` characters of the state with no action
+ *     verb between the two. That adjacency requirement is what separates
+ *     FDA's own worked example from a claim that merely happens to share a
+ *     sentence with a safe-harbour word.
+ *
+ * PRECEDENCE, which is the whole point of the check and is asserted directly in
+ * `tests/naturalStates.gate.test.ts`:
+ *
+ *     disease noun  >  abnormality marker  >  lawful qualifier
+ *
+ *  - a listed DISEASE NOUN is failed by C6 whatever surrounds it. C22 never
+ *    suppresses, exempts or otherwise reaches C6, so a lawful qualifier can
+ *    never launder a named disease;
+ *  - an ABNORMALITY MARKER (R1/R2) is evaluated BEFORE the qualifier escape and
+ *    is never subject to it — a marker beats a qualifier by construction;
+ *  - the LAWFUL QUALIFIER escape exists only inside R3.
+ *
+ * COVERAGE, stated plainly and not overstated: this is a proximity heuristic
+ * over de-obfuscated text, not a parser. It cannot tell who the subject of a
+ * sentence is, and a marker that sits inside a `naturalStateSafePhrases` span
+ * (research vocabulary, consult-a-professional warnings) is blanked before the
+ * scan the same way C21 blanks its safe context.
+ */
+
+const CHECK_ID = 'C22';
+
+const DEFAULT_WINDOW = 40;
+
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+interface NaturalStateConfig {
+  /**
+   * R1's noun side: every protected noun — natural states, the normal
+   * symptomology whose unqualified form names a disease, and the normal
+   * symptomology a structure/function claim may lawfully address.
+   */
+  marked: string[];
+  /**
+   * R3's noun side, deliberately NARROWER: natural states plus the symptom
+   * words whose UNQUALIFIED form names a disease. Acting on an ordinary normal
+   * symptom is exactly what a lawful structure/function claim does, so
+   * `abnormalOnlySymptomNouns` are checked for abnormality (R1) and nothing
+   * else.
+   */
+  actionable: string[];
+  markers: string[];
+  qualifiers: string[];
+  verbs: string[];
+  safe: RegExp | null;
+  window: number;
+  neg: NegationOptions;
+}
+
+const uniq = (lists: (string[] | undefined)[]): string[] => [
+  ...new Set(lists.flatMap((l) => l ?? []).map((t) => t.trim()).filter(Boolean)),
+];
+
+/** Longest-first alternation over pack tokens; inner whitespace stays flexible. */
+function alternation(tokens: string[]): RegExp | null {
+  const cleaned = [...new Set(tokens.map((t) => t.trim()).filter(Boolean))].sort(
+    (a, b) => b.length - a.length,
+  );
+  if (cleaned.length === 0) return null;
+  return new RegExp(cleaned.map((t) => escapeRe(t).replace(/\s+/g, '\\s+')).join('|'), 'gi');
+}
+
+const CONFIG_CACHE = new WeakMap<KnowledgePack, NaturalStateConfig | null>();
+
+/**
+ * ONE config, unioned over every compliance module the pack can reach — its own
+ * plus every cross-check module the assembler attached, exactly like the C6
+ * lexicon union and the C21 shape union. The rationale is the same: the
+ * doctrine does not change with the product.
+ */
+function configOf(pack: KnowledgePack): NaturalStateConfig | null {
+  const cached = CONFIG_CACHE.get(pack);
+  if (cached !== undefined) return cached;
+  const packs: CompliancePack[] = reachableCompliancePacks(pack);
+  const actionable = uniq([
+    ...packs.map((cp) => cp.naturalStates),
+    ...packs.map((cp) => cp.normalSymptomologyNouns),
+  ]);
+  const marked = uniq([actionable, ...packs.map((cp) => cp.abnormalOnlySymptomNouns)]);
+  const markers = uniq(packs.map((cp) => cp.abnormalityMarkers));
+  let config: NaturalStateConfig | null = null;
+  if (marked.length > 0 || markers.length > 0) {
+    config = {
+      marked,
+      actionable,
+      markers,
+      qualifiers: uniq(packs.map((cp) => cp.lawfulQualifiers)),
+      verbs: uniq(packs.map((cp) => diseaseActionVerbs(cp))),
+      safe: alternation(
+        uniq([
+          ...packs.map((cp) => cp.naturalStateSafePhrases),
+          ...packs.map((cp) => cp.negationMetaPhrases),
+          ...packs.map((cp) => cp.benignContextPhrases),
+        ]),
+      ),
+      window: Math.max(
+        DEFAULT_WINDOW,
+        ...packs.map((cp) =>
+          typeof cp.naturalStateProximityWindow === 'number' && cp.naturalStateProximityWindow > 0
+            ? cp.naturalStateProximityWindow
+            : 0,
+        ),
+      ),
+      neg: diseaseNegationOptions(pack.compliancePack ?? packs[0]!),
+    };
+  }
+  CONFIG_CACHE.set(pack, config);
+  return config;
+}
+
+/**
+ * Safety spans blanked out, LENGTH PRESERVED so every proximity window still
+ * lines up with the original text — the same technique C21 and the allergen
+ * compound exclusions use.
+ */
+function blankSafeSpans(text: string, safe: RegExp | null): string {
+  if (!safe) return text;
+  safe.lastIndex = 0;
+  return text.replace(safe, (m) => ' '.repeat(m.length));
+}
+
+const endOf = (m: TermMatch): number => m.index + m.term.length;
+
+/** Character gap between two matches; negative when they overlap. */
+function gapBetween(a: TermMatch, b: TermMatch): number {
+  return a.index <= b.index ? b.index - endOf(a) : a.index - endOf(b);
+}
+
+const spanOf = (text: string, a: TermMatch, b: TermMatch): string => {
+  const start = Math.min(a.index, b.index);
+  const end = Math.max(endOf(a), endOf(b));
+  return text.slice(Math.max(0, start - 20), end + 20).trim();
+};
+
+interface Hit {
+  context: string;
+  fix: string;
+}
+
+/**
+ * R3's escape hatch: a lawful qualifier ADJACENT to the state — inside the
+ * proximity window with no therapeutic-action verb between the two.
+ *
+ * Adjacency, not mere co-occurrence, is deliberate: a sentence that opens with
+ * a safe-harbour word and then makes a therapeutic claim
+ * ("… and cures <state>") must not be laundered by the opening word, and the
+ * intervening-verb test is the same positive-evidence rule the negation guard
+ * in `util.hasNegationContext` already applies.
+ */
+function qualifierProtects(
+  text: string,
+  state: TermMatch,
+  qualifiers: TermMatch[],
+  verbs: string[],
+  window: number,
+): boolean {
+  for (const q of qualifiers) {
+    if (gapBetween(state, q) > window) continue;
+    const start = Math.min(endOf(state), endOf(q));
+    const end = Math.max(state.index, q.index);
+    const between = end > start ? text.slice(start, end) : '';
+    if (between && scanTerms(between, verbs).length > 0) continue;
+    return true;
+  }
+  return false;
+}
+
+function scanVariant(text: string, cfg: NaturalStateConfig, seen: Set<string>, out: Hit[]): void {
+  const scanned = blankSafeSpans(text, cfg.safe);
+  const marked = scanTerms(scanned, cfg.marked, cfg.neg);
+  const markers = scanTerms(scanned, cfg.markers, cfg.neg);
+  if (marked.length === 0 && markers.length < 2) return;
+
+  // R1 — abnormality marker beside a natural state / normal symptom.
+  // Evaluated FIRST and never subject to the qualifier escape: an abnormality
+  // marker beats a lawful qualifier.
+  for (const s of marked) {
+    for (const m of markers) {
+      if (gapBetween(s, m) > cfg.window) continue;
+      const key = `1|${s.term}|${m.term}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        context: spanOf(text, s, m),
+        fix: `Abnormality marker '${m.term}' next to the natural state '${s.term}' — the abnormal form of a natural state is a disease claim; describe the normal, mild form instead`,
+      });
+    }
+  }
+
+  // R2 — two DIFFERENT abnormality markers inside one window name an abnormal
+  // condition on their own, with no natural state needed.
+  for (let i = 0; i < markers.length; i += 1) {
+    for (let j = i + 1; j < markers.length; j += 1) {
+      const a = markers[i]!;
+      const b = markers[j]!;
+      if (a.term === b.term) continue;
+      const gap = gapBetween(a, b);
+      if (gap < 0 || gap > cfg.window) continue;
+      const key = `2|${[a.term, b.term].sort().join('|')}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        context: spanOf(text, a, b),
+        fix: `'${a.term}' + '${b.term}' names an abnormal condition — that is a disease claim, not a structure/function claim`,
+      });
+    }
+  }
+
+  // R3 — therapeutic action on a natural state, with the lawful-qualifier
+  // escape. Runs last: R1/R2 have already reported anything an abnormality
+  // marker touches, so the escape can never reach a marker.
+  const actionable = cfg.verbs.length > 0 ? scanTerms(scanned, cfg.actionable, cfg.neg) : [];
+  if (actionable.length > 0) {
+    // Computed once per variant, not once per state.
+    const qualifiers = scanTerms(scanned, cfg.qualifiers);
+    for (const s of actionable) {
+      const sentence = sentenceAround(scanned, s.index);
+      const verb = scanTerms(sentence, cfg.verbs)[0];
+      if (!verb) continue;
+      if (qualifierProtects(scanned, s, qualifiers, cfg.verbs, cfg.window)) continue;
+      const key = `3|${s.term}|${verb.term}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        context: sentence.trim().slice(0, 200),
+        fix: `Therapeutic-action claim '${verb.term} … ${s.term}' — a natural state is not a disease to be acted on; describe the structure/function benefit, or qualify it as the mild/occasional form associated with that state`,
+      });
+    }
+  }
+}
+
+export function c22NaturalState(l: OptimizedListing, pack: KnowledgePack): Failure[] {
+  const cp = pack.compliancePack;
+  if (!cp) return [];
+  const cfg = configOf(pack);
+  if (!cfg) return [];
+  const disclaimers = disclaimerVariantsOf(cp).map(normalize);
+
+  const out: Failure[] = [];
+  for (const [field, textRaw] of allGeneratedSurfaces(l)) {
+    const text = subtractDisclaimers(normalize(textRaw ?? ''), disclaimers);
+    if (!text.trim()) continue;
+    const seen = new Set<string>();
+    const hits: Hit[] = [];
+    // ADDITIVE de-obfuscation: the untouched text is always variant #1, so the
+    // primary scan is never weakened by the extra passes.
+    for (const variant of deobfuscatedVariants(text)) scanVariant(variant, cfg, seen, hits);
+    for (const hit of hits) out.push(fail(CHECK_ID, field, hit.context, hit.fix));
+  }
+  return out;
+}

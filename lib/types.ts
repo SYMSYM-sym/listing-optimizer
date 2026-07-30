@@ -386,6 +386,66 @@ export interface CompliancePack {
    */
   prescriptionDrugNames?: string[];
   /**
+   * NATURAL STATES (C22). Ageing, menopause, the menstrual cycle, adolescence
+   * and pregnancy are natural states or processes, NOT diseases — 21 CFR
+   * 101.93(f)/(g) and the FDA Small Entity Compliance Guide for the
+   * structure/function rule. A term listed here is never a violation on its
+   * own; it becomes a disease claim only when an `abnormalityMarkers` entry
+   * sits within `naturalStateProximityWindow` characters of it, or when a
+   * therapeutic-ACTION verb sits in the same sentence with no
+   * `lawfulQualifiers` entry to keep it inside the safe harbour.
+   */
+  naturalStates?: string[];
+  /**
+   * NORMAL SYMPTOMOLOGY of a natural state (C22) — the mild, everyday form of
+   * a symptom, which FDA treats as permissible ("the mild memory loss
+   * associated with aging") and whose ABNORMAL form is a disease claim
+   * ("clinical memory loss"). Rides exactly the same C22 rules as
+   * `naturalStates`.
+   */
+  normalSymptomologyNouns?: string[];
+  /**
+   * NORMAL SYMPTOMOLOGY a structure/function claim MAY lawfully address (C22).
+   * Scanned by the abnormality-marker rule ONLY: "severe hot flashes" is a
+   * disease claim, "helps with hot flashes" is not. Applying the
+   * therapeutic-action rule here would block exactly the copy the safe harbour
+   * exists to permit.
+   */
+  abnormalOnlySymptomNouns?: string[];
+  /**
+   * ABNORMALITY MARKERS (C22): severe / chronic / clinical / disorder /
+   * diagnosed … Two rules use them — one marker beside a natural state or a
+   * normal symptom, and two DIFFERENT markers beside each other ("diagnosed
+   * medical condition"). A `lawfulQualifiers` entry never rescues a marker.
+   */
+  abnormalityMarkers?: string[];
+  /**
+   * The SAFE-HARBOUR qualifiers (C22 + prompt): mild / occasional / normal /
+   * already within the normal range / associated with … They suppress C22's
+   * therapeutic-action rule when no abnormality marker is present, and they
+   * are injected into the generation prompt. They are NOT a licence to name a
+   * disease: a listed disease noun is failed by C6 whatever qualifier
+   * surrounds it. PRECEDENCE: disease noun > abnormality marker > lawful
+   * qualifier.
+   */
+  lawfulQualifiers?: string[];
+  /**
+   * FALSE-POSITIVE REDUCER for C22: spans blanked (length-preserving) before
+   * the natural-state scan, the same technique `semanticDrugClaims.safeContextPhrases`
+   * uses for C21. Research vocabulary and consult-a-professional warnings live
+   * here. Emptying it makes the gate stricter.
+   */
+  naturalStateSafePhrases?: string[];
+  /** Character window C22 measures proximity over (default 40). */
+  naturalStateProximityWindow?: number;
+  /**
+   * APPROVED structure/function claim SHAPES injected into the system prompt —
+   * the PREVENTION half of the natural-state doctrine. Bracketed slots are
+   * placeholders the generator fills from the product's own facts.
+   */
+  approvedClaimTemplates?: string[];
+
+  /**
    * Genuine meta-phrases that SHOULD suppress a nearby disease term
    * ("not intended to diagnose, treat, cure, or prevent any disease").
    * Pack data — the negation guard holds no lexicon of its own.

@@ -1,4 +1,5 @@
 import type {
+  CompliancePack,
   ListingSnapshot,
   ProhibitedContentRules,
   ProhibitedMarketingRules,
@@ -54,6 +55,52 @@ export function semanticClaimBlock(sdc: SemanticDrugClaims | undefined): string 
   }
   if (lines.length === 0) return '';
   return `SEMANTIC DRUG CLAIMS (deterministically checked by C21 — a claim needs no disease word to be illegal):\n${lines.join('\n')}`;
+}
+
+/**
+ * APPROVED CLAIM TEMPLATES — the PREVENTION half of the natural-state doctrine
+ * C22 enforces, rendered FROM PACK DATA (`compliancePack.approvedClaimTemplates`).
+ *
+ * Telling the generator what is forbidden is only half a compliance brain. The
+ * FDA structure/function rule is a SAFE HARBOUR as well as a prohibition: a
+ * statement describing the role of a nutrient or ingredient in affecting the
+ * normal structure or function of the body is lawful, and so is the normal
+ * symptomology of a natural state when it is qualified as the mild or
+ * occasional form. These shapes are the safe harbour written out, so the model
+ * writes compliant copy by construction rather than being repaired into it.
+ *
+ * Every line is a lawful phrasing — nothing here names a banned term, which is
+ * what keeps `tests/promptHygiene.test.ts` green even though this block is
+ * rendered into the shared preamble.
+ */
+export function approvedClaimBlock(cp: CompliancePack | null | undefined): string {
+  const shapes = (cp?.approvedClaimTemplates ?? []).map((t) => t.trim()).filter(Boolean);
+  if (shapes.length === 0) return '';
+  const clean = (v: string[] | undefined): string[] =>
+    (v ?? []).map((x) => x.trim()).filter(Boolean);
+  const qualifiers = clean(cp?.lawfulQualifiers);
+  const states = clean(cp?.naturalStates);
+  const markers = clean(cp?.abnormalityMarkers);
+  const lines = [
+    'APPROVED CLAIM SHAPES (write EVERY benefit claim as one of these — bracketed slots are filled from the canonical facts above):',
+    ...shapes.map((t) => `- "${t}"`),
+  ];
+  if (states.length > 0) {
+    lines.push(
+      `- These are NATURAL STATES, not conditions to be acted on: ${states.join(', ')}. Write about the normal, everyday experience of one — never about acting on it.`,
+    );
+  }
+  if (qualifiers.length > 0) {
+    lines.push(
+      `- Keep every such sentence inside the safe harbour with one of: ${qualifiers.join(', ')}.`,
+    );
+  }
+  if (markers.length > 0) {
+    lines.push(
+      `- These words turn the same sentence into a medical claim — never pair one with a benefit: ${markers.join(', ')}.`,
+    );
+  }
+  return lines.join('\n');
 }
 
 export function snapshotBlock(snapshot: ListingSnapshot): string {

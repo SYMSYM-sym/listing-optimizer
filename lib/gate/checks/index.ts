@@ -5,6 +5,7 @@ export {
   crossPackActionPairedNouns,
   crossPackDiseaseNouns,
   diseaseActionVerbs,
+  reachableCompliancePacks,
   missingPackPieces,
   promptDiseaseNouns,
   packFailClosed,
@@ -48,6 +49,7 @@ export {
 } from './c-quality';
 
 export { c21SemanticDrugClaims } from './c-semantic';
+export { c22NaturalState } from './c-natural-state';
 export { c17Style, styleSurfaces, allCapsOffenders } from './c-style';
 export { c20Structure } from './c-structure';
 

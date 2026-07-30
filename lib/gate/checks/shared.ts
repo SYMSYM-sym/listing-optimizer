@@ -198,7 +198,7 @@ export function diseaseNegationOptions(cp: CompliancePack): NegationOptions {
 }
 
 /** The sentence `index` sits in (sentence punctuation or a line break bounds it). */
-function sentenceAround(text: string, index: number): string {
+export function sentenceAround(text: string, index: number): string {
   const before = text.slice(0, index);
   const start = Math.max(
     before.lastIndexOf('.'), before.lastIndexOf('!'), before.lastIndexOf('?'),

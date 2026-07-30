@@ -117,6 +117,18 @@ const EMPTIERS: Record<string, (p: KnowledgePack) => void> = {
   'compliancePack.actionPairedNouns': (p) => {
     p.compliancePack!.actionPairedNouns = [];
   },
+  'compliancePack.naturalStates': (p) => {
+    p.compliancePack!.naturalStates = [];
+  },
+  'compliancePack.normalSymptomologyNouns': (p) => {
+    p.compliancePack!.normalSymptomologyNouns = [];
+  },
+  'compliancePack.abnormalOnlySymptomNouns': (p) => {
+    p.compliancePack!.abnormalOnlySymptomNouns = [];
+  },
+  'compliancePack.abnormalityMarkers': (p) => {
+    p.compliancePack!.abnormalityMarkers = [];
+  },
   'compliancePack.ingredientAttributeKeys': (p) => {
     p.compliancePack!.ingredientAttributeKeys = [];
   },
