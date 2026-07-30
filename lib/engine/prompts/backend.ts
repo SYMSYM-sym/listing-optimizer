@@ -16,6 +16,6 @@ export function backendPrompt(snapshot: ListingSnapshot, surfaces?: TitleSurface
 
 TASK: Backend search terms, ≤230 UTF-8 bytes (hard cap 249).
 - ONLY synonyms, common misspellings, and other-language (e.g. Spanish) variants NOT present in title, title75, or itemHighlights.
-- Lowercase, space-separated single words or short phrases, no punctuation, no brand names, no ASINs, no disease terms.${forbidBlock}
+- Lowercase, space-separated single words or short phrases, no punctuation, no brand names, no ASINs, and no medical or condition vocabulary — keep every term factual and non-medical.${forbidBlock}
 Return JSON: { "backendSearchTerms" }`;
 }

@@ -19,7 +19,7 @@ ${packLines}
 - "comparison": { "rows": [ { "label": "...", "ours": "...", "typical": "..." } × ≥3 ] } — keys MUST be exactly label/ours/typical.
 - "faq": 5–10 Q&A pairs mirroring the same facts as the bullets.
 - Mark "claimBearing": true on any module/answer making a benefit claim; do NOT write disclaimer text (system appends it).
-- No price, no purchase or upsell CTAs, no urgency, no guarantees, no review claims.
+- No cost figures, no purchase or upsell CTAs, no urgency wording, no promise about outcomes or returns, no rating or review claims. State what the module DOES say — never quote a banned phrase in order to forbid it.
 
 Return JSON with this exact module shape (headline is REQUIRED on every module):
 {

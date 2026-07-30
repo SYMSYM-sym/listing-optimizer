@@ -544,7 +544,7 @@ const C19_PAYLOADS: [string, string][] = [
 const OBFUSCATED_PAYLOADS: [string, string][] = [
   ['C19 separator-padded best seller', 'Our b-e-s-t s-e-l-l-e-r blend for adults'],
   ['C19 separator-padded hurry', 'Do not wait, h-u-r-r-y, stock moves for adults'],
-  ['C19 leetspeak guarantee', 'A gu4rantee for every adult buyer'],
+  ['C19 leetspeak guarantee', 'A m0ney b4ck gu4rantee for every adult buyer'],
   ['C19 separator-padded money back', 'A m-o-n-e-y b-a-c-k promise for adults'],
   ['C18 separator-padded price', 'Only 39 d-o-l-l-a-r-s today for adults'],
   ['C18 leetspeak shipping offer', 'Enjoy fr33 shipping on every order for adults'],

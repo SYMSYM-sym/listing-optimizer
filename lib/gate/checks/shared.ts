@@ -332,6 +332,17 @@ function alternationSource(tokens: string[]): string {
     .join('|');
 }
 
+/**
+ * The largest `count` figure that may be read as a SERVING SIZE rather than a
+ * container count ("take 1 capsule daily", "2 gummies a day").
+ *
+ * The pack's `count` dimension covers both meanings, so these small figures are
+ * accepted against any canonical fact and are never treated as an internal
+ * conflict with the container count.
+ */
+export const SERVING_SIZE_MAX = 4;
+const SERVING_SIZE_SEEDS: number[] = Array.from({ length: SERVING_SIZE_MAX }, (_, i) => i + 1);
+
 export type Dimension = string;
 
 interface CompiledUnits {
@@ -601,15 +612,40 @@ export function factConsistencyOver(
   const out: Failure[] = [];
   const facts = l.facts ?? {};
   const potencyFact = parsePotencyFact(facts.potency, units);
-  const allowedCounts = new Set<number>(
+  /**
+   * The canonical COUNT facts that are actually DEFINED.
+   *
+   * A figure cannot CONTRADICT a fact that does not exist. The seed values
+   * 1-4 (a plausible serving size — see `SERVING_SIZE_MAX`) used to be mixed
+   * into this set, which made it non-empty even when every canonical count
+   * fact was `undefined`, so the `allowedCounts.size > 0` guard never fired
+   * and an ordinary listing was failed with
+   * "matches no canonical fact (unitCount=undefined, servings=undefined)".
+   * The seeds are added ONLY once a canonical fact exists to compare against.
+   */
+  const canonicalCounts = new Set<number>(
     [facts.unitCount, facts.servings, facts.daySupply, facts.formulaCount,
       ...(facts.servingSize ? extractUnitNumbers(facts.servingSize, units).map((n) => n.value) : []),
-      1, 2, 3, 4,
     ].filter((n): n is number => typeof n === 'number'),
   );
+  const allowedCounts =
+    canonicalCounts.size > 0
+      ? new Set<number>([...canonicalCounts, ...SERVING_SIZE_SEEDS])
+      : null;
   const allowedDays = new Set<number>(
     [facts.daySupply].filter((n): n is number => typeof n === 'number'),
   );
+  /**
+   * INTERNAL count conflict — the rule that survives when no canonical count
+   * fact exists. Two different container-count figures inside one listing
+   * ("60 capsules per bottle" and "30 capsules per bottle") contradict each
+   * other whether or not we hold a canonical fact, so the check stays armed.
+   * Figures at or below `SERVING_SIZE_MAX` are excluded: the `count` dimension
+   * carries BOTH the container count and the serving size ("take 1 capsule
+   * daily" next to "60 capsules") and those two are not in conflict — the same
+   * assumption the seed values above already encode.
+   */
+  const internalCounts = new Map<number, string>();
 
   for (const [field, textRaw] of surfaces) {
     const text = normalize(textRaw);
@@ -637,8 +673,14 @@ export function factConsistencyOver(
     }
 
     for (const n of nums) {
-      if (n.dimension === 'count' && allowedCounts.size > 0 && !allowedCounts.has(n.value)) {
-        out.push(fail(checkId, field, n.raw, `Count '${n.raw}' matches no canonical fact (unitCount=${facts.unitCount}, servings=${facts.servings})`));
+      if (n.dimension === 'count') {
+        if (allowedCounts) {
+          if (!allowedCounts.has(n.value)) {
+            out.push(fail(checkId, field, n.raw, `Count '${n.raw}' matches no canonical fact (unitCount=${facts.unitCount}, servings=${facts.servings})`));
+          }
+        } else if (n.value > SERVING_SIZE_MAX && !internalCounts.has(n.value)) {
+          internalCounts.set(n.value, `${field}: ${n.raw}`);
+        }
       }
       if (
         n.dimension === 'days' &&
@@ -649,6 +691,20 @@ export function factConsistencyOver(
         out.push(fail(checkId, field, n.raw, `Day figure '${n.raw}' disagrees with facts.daySupply=${facts.daySupply}`));
       }
     }
+  }
+
+  // No canonical count fact to measure against — the listing must at least
+  // agree with ITSELF.
+  if (!allowedCounts && internalCounts.size > 1) {
+    const cited = [...internalCounts.values()];
+    out.push(
+      fail(
+        checkId,
+        cited[0]!.split(':')[0]!,
+        cited.join(' vs '),
+        'Two different count figures in one listing — internal conflict (no canonical count fact to arbitrate)',
+      ),
+    );
   }
   return out;
 }

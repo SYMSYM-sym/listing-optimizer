@@ -367,7 +367,7 @@
     ]
   },
   "prohibitedMarketing": {
-    "_comment": "Amazon-prohibited MARKETING claims: urgency, guarantees, rank/best-seller, star ratings, review counts and false regulatory-approval claims. PACK DATA — gate A8 (A+ surfaces) and C19 (every surface) read these patterns; the gate holds no literal marketing lexicon. C19 additionally scans compliancePack.superlativeBans.",
+    "_comment": "Amazon-prohibited MARKETING claims: urgency, guarantees, rank/best-seller, star ratings, review counts and false regulatory-approval claims. PACK DATA — gate A8 (A+ surfaces) and C19 (every surface) read these patterns; the gate holds no literal marketing lexicon. C19 additionally scans compliancePack.superlativeBans. GUARANTEE PATTERNS target the CLAIM, not the word: \"money back guarantee\", \"satisfaction guaranteed\", \"guaranteed results\", \"results guaranteed\", \"lifetime guarantee\" and the first-person promise \"we/our guarantee\" all fail, while the bare noun in a non-promissory sentence (an image brief that says \"no guarantees or claims on pack\") does not. A bare \\bguarantee[ds]?\\b flagged every sense of the word and was a live false positive on ordinary copy. Note \"we cannot guarantee ...\" is deliberately NOT matched: only a positive first-person promise is a guarantee claim.",
     "patterns": [
       [
         "\\$\\s*\\d",
@@ -418,7 +418,19 @@
         "guarantee"
       ],
       [
-        "\\bguarantee[ds]?\\b",
+        "\\b(?:100\\s*%|full|lifetime|unconditional|iron[- ]?clad|no[- ]questions[- ]asked|price|happiness|refund|money[- ]back)\\s+guarantee[ds]?\\b",
+        "guarantee"
+      ],
+      [
+        "\\bguarantee[ds]?\\s+(?:results?|relief|satisfaction|success|delivery|weight\\s+loss|to\\s+\\w+)\\b",
+        "guarantee"
+      ],
+      [
+        "\\b(?:results?|satisfaction|relief|success|effectiveness|delivery)\\s+guaranteed\\b",
+        "guarantee"
+      ],
+      [
+        "\\b(?:we|our)\\s+(?:100%\\s+|fully\\s+|proudly\\s+|absolutely\\s+)?guarantee\\b",
         "guarantee"
       ],
       [

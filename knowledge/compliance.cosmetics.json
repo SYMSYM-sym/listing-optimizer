@@ -340,12 +340,13 @@
       "canonicalString": "Contains: Tree Nut Derivatives"
     }
   ],
+  "_superlativeBansComment": "The bare word \"guaranteed\" used to sit in this list, so every sense of it failed C19 on every surface (an image brief reading \"no guarantees or claims on pack\" was a live false positive). The CLAIM shapes are enforced by rules.prohibitedMarketing (money back / satisfaction guaranteed / guaranteed results / results guaranteed / lifetime guarantee / we guarantee); this list keeps only the phrase forms that are claims on their own.",
   "superlativeBans": [
     "#1",
     "best seller",
     "bestselling",
     "miracle",
-    "guaranteed",
+    "guaranteed results",
     "clinically proven cure"
   ],
   "fictionPhrases": [],

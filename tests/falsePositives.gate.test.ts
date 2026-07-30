@@ -482,3 +482,126 @@ describe('C-1 — the style gate now reads the backend field and the facts block
     expect(c17On(l, 'facts.price')).toEqual([]);
   });
 });
+
+/**
+ * L-1 — C19's guarantee rule targets the CLAIM, not the word.
+ *
+ * A real production run failed `[C19] imagePlan[4].notes` with the context
+ * `guarantee`: the pack pattern was `\bguarantee[ds]?\b`, which flags every
+ * sense of the word — including an image brief that says the pack must carry
+ * NO guarantee. The pattern set now names the claim shapes (money back /
+ * satisfaction guaranteed / guaranteed results / results guaranteed / lifetime
+ * guarantee) plus the first-person promise "we guarantee".
+ *
+ * JUDGEMENT CALL, recorded: "we guarantee freshness" FAILS. A first-person
+ * promise to the buyer is a guarantee claim whatever is being promised, and the
+ * substance of the promise is exactly what Amazon bans from listing copy.
+ * "we cannot guarantee ..." does NOT fail: only the positive promise matches,
+ * which is how the rule survives having no negation guard (C18/C19 apply none
+ * by design).
+ */
+describe('L-1 — C19 flags guarantee CLAIMS, not every use of the word', () => {
+  const c19On = (l: OptimizedListing, field: string): Failure[] =>
+    runGate(l, pack, ctx).failures.filter((f) => f.checkId === 'C19' && f.field === field);
+
+  const LEGITIMATE_GUARANTEE_COPY = [
+    'no guarantees or claims on pack',
+    'the printed panel shows no guarantee text',
+    'we cannot guarantee an exact colour match in print',
+  ];
+
+  it.each(LEGITIMATE_GUARANTEE_COPY)('the image brief "%s" produces NO C19 failure', (copy) => {
+    const l = mut((x) => { x.imagePlan[4]!.notes = copy; });
+    expect(c19On(l, 'imagePlan[4].notes')).toEqual([]);
+  });
+
+  it.each(LEGITIMATE_GUARANTEE_COPY)('"%s" produces NO C19 failure in a bullet either', (copy) => {
+    const l = mut((x) => { x.bullets[1] = `Label detail: ${copy}`; });
+    expect(c19On(l, 'bullets[1]')).toEqual([]);
+  });
+
+  const GUARANTEE_CLAIMS = [
+    '100% money back guarantee',
+    'satisfaction guaranteed',
+    'guaranteed results',
+    'results guaranteed',
+    'lifetime guarantee',
+    // documented judgement call — a first-person promise is a claim
+    'we guarantee freshness',
+  ];
+
+  it.each(GUARANTEE_CLAIMS)('the marketing guarantee "%s" still FAILS C19 in a bullet', (claim) => {
+    const l = mut((x) => { x.bullets[1] = `Every bottle: ${claim}`; });
+    expect(c19On(l, 'bullets[1]').length).toBeGreaterThan(0);
+  });
+
+  it.each(GUARANTEE_CLAIMS)('the marketing guarantee "%s" still FAILS C19 in an image brief', (claim) => {
+    const l = mut((x) => { x.imagePlan[4]!.notes = `overlay reads ${claim}`; });
+    expect(c19On(l, 'imagePlan[4].notes').length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * L-2 — a figure cannot CONTRADICT a canonical fact that does not exist.
+ *
+ * A real production run failed `[C12] attributes.size_name` with
+ * `Count '30 Count' matches no canonical fact (unitCount=undefined,
+ * servings=undefined)`. The allowed-count set was seeded with 1-4 (a plausible
+ * serving size), so it was never empty and the `size > 0` guard that was meant
+ * to skip the comparison when no canonical fact exists never fired. Absence of
+ * a fact was being treated as a conflict.
+ *
+ * The canonical comparison now runs only when a canonical count fact is
+ * DEFINED; with none, the listing must still agree with ITSELF.
+ */
+describe('L-2 — C12 only compares a count against a canonical fact that exists', () => {
+  const c12 = (l: OptimizedListing): Failure[] =>
+    runGate(l, pack, ctx).failures.filter((f) => f.checkId === 'C12');
+  const c12On = (l: OptimizedListing, field: string): Failure[] =>
+    c12(l).filter((f) => f.field === field);
+
+  /** Every count figure in the listing restated at `n`, canonical facts intact. */
+  const countsAt = (l: OptimizedListing, n: number): OptimizedListing =>
+    JSON.parse(
+      JSON.stringify(l).replace(/\b60\b(?=[\s-]?(?:capsules?|count))/gi, String(n)),
+    ) as OptimizedListing;
+
+  /** The production shape: a self-consistent 30-count listing with no canonical count fact. */
+  const noCanonicalCount = (n: number): OptimizedListing => {
+    const l = countsAt(clean, n);
+    delete l.facts.unitCount;
+    delete l.facts.servings;
+    delete l.facts.daySupply;
+    delete l.facts.formulaCount;
+    delete l.facts.servingSize;
+    l.attributes.size_name = `${n} Count`;
+    return l;
+  };
+
+  it('size_name "30 Count" with facts.unitCount undefined PASSES', () => {
+    const l = noCanonicalCount(30);
+    expect(l.facts.unitCount).toBeUndefined();
+    expect(c12On(l, 'attributes.size_name')).toEqual([]);
+    expect(c12(l)).toEqual([]);
+  });
+
+  it('the same listing with facts.unitCount = 60 still FAILS (a real contradiction)', () => {
+    const l = noCanonicalCount(30);
+    l.facts.unitCount = 60;
+    expect(c12On(l, 'attributes.size_name').length).toBeGreaterThan(0);
+  });
+
+  it('two conflicting counts and NO canonical fact still FAIL (internal conflict)', () => {
+    const l = noCanonicalCount(30);
+    l.attributes.size_name = '90 Count';
+    const failures = c12(l);
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures.map((f) => f.fix).join(' ')).toContain('internal conflict');
+  });
+
+  it('a plausible serving size next to the container count is NOT a conflict', () => {
+    const l = noCanonicalCount(30);
+    l.attributes.directions_for_use = 'Take 2 capsules daily with water.';
+    expect(c12(l)).toEqual([]);
+  });
+});
