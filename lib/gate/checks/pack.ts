@@ -359,6 +359,14 @@ export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
     present: (p) => nonEmptyList(p.rules?.prohibitedMarketing?.surfaces),
   },
   {
+    id: 'attributeSchema',
+    disarms:
+      'the attribute-completeness check (C23) — an empty schema means no required or filter-facet field can ever be reported missing',
+    present: (p) =>
+      Array.isArray(p.attributeSchema) &&
+      p.attributeSchema.some((f) => typeof f?.field === 'string' && f.field.trim() !== ''),
+  },
+  {
     id: 'rules.units.dimensions',
     disarms: 'the unit-anchored potency + fact-consistency checks (C10/C12/A5)',
     present: (p) => {

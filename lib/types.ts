@@ -439,6 +439,22 @@ export interface CompliancePack {
   /** Character window C22 measures proximity over (default 40). */
   naturalStateProximityWindow?: number;
   /**
+   * ADVISORY-SENTENCE escape for C22's therapeutic-action rule (R3) — a
+   * FALSE-POSITIVE REDUCER, never a manifest piece (emptying it makes the
+   * gate stricter). A sentence that pairs one of these cue verbs with one of
+   * `advisoryProfessionalNouns` (cue first, professional within the adjacency
+   * gap) is the mandated consult-a-professional safety warning, not a product
+   * claim: "Women who are pregnant or nursing … should talk with a physician"
+   * must never be flagged. The escape covers R3 ONLY — abnormality markers
+   * (R1/R2), the C6 noun scan and the C6 action-paired tier are untouched —
+   * and it is DENIED when a therapeutic-action verb shares the state's own
+   * comma-bounded clause segment, so "reverses aging, talk to your doctor"
+   * still fails.
+   */
+  advisoryCueVerbs?: string[];
+  /** Professional nouns the advisory cue must be followed by. See `advisoryCueVerbs`. */
+  advisoryProfessionalNouns?: string[];
+  /**
    * APPROVED structure/function claim SHAPES injected into the system prompt —
    * the PREVENTION half of the natural-state doctrine. Bracketed slots are
    * placeholders the generator fills from the product's own facts.

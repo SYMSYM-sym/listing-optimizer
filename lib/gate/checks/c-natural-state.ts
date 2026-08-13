@@ -103,6 +103,13 @@ interface NaturalStateConfig {
   safe: RegExp | null;
   window: number;
   neg: NegationOptions;
+  /**
+   * ADVISORY-SENTENCE escape for R3 (`compliancePack.advisoryCueVerbs` /
+   * `advisoryProfessionalNouns` — pack data, false-positive reducer). See
+   * `advisoryEscapes` for the exact rule and its deliberate limits.
+   */
+  advisoryCues: string[];
+  advisoryProfessionals: string[];
 }
 
 const uniq = (lists: (string[] | undefined)[]): string[] => [
@@ -160,6 +167,8 @@ function configOf(pack: KnowledgePack): NaturalStateConfig | null {
         ),
       ),
       neg: diseaseNegationOptions(pack.compliancePack ?? packs[0]!),
+      advisoryCues: uniq(packs.map((cp) => cp.advisoryCueVerbs)),
+      advisoryProfessionals: uniq(packs.map((cp) => cp.advisoryProfessionalNouns)),
     };
   }
   CONFIG_CACHE.set(pack, config);
@@ -223,6 +232,67 @@ function qualifierProtects(
   return false;
 }
 
+/**
+ * How far AFTER an advisory cue the professional noun may sit for the pair to
+ * read as one advisory phrase ("talk with … a physician"). Characters.
+ */
+const ADVISORY_PAIR_GAP = 60;
+
+/** Clause segmentation for the advisory DENIAL rule — commas always break. */
+const CLAUSE_SEGMENT_RE = /[,;:.!?()\n\u2014\u2013]/;
+
+/** The comma/clause-bounded segment `index` sits in. */
+function clauseSegmentAround(text: string, index: number): string {
+  let start = index;
+  while (start > 0 && !CLAUSE_SEGMENT_RE.test(text[start - 1]!)) start -= 1;
+  let end = index;
+  while (end < text.length && !CLAUSE_SEGMENT_RE.test(text[end]!)) end += 1;
+  return text.slice(start, end);
+}
+
+/**
+ * R3's ADVISORY escape — the mandated consult-a-professional safety warning is
+ * not a product claim and must NEVER be flagged.
+ *
+ * "Women who are pregnant or nursing, and anyone currently taking medication
+ * or managing a health concern, should talk with a physician before adding any
+ * new daily capsule to their routine" pairs the natural state "nursing" with
+ * the therapeutic-action verb "managing" in one sentence, which is exactly
+ * R3's shape — but the sentence's main clause is an ADVISORY, not a claim.
+ *
+ * The rule, chosen over a literal phrase list so every paraphrase is covered:
+ *
+ *  1. the SENTENCE (read from the UNBLANKED text, so a safe-phrase span cannot
+ *     hide the cue from this test) contains an advisory CUE
+ *     (`advisoryCueVerbs`) followed within `ADVISORY_PAIR_GAP` characters by a
+ *     PROFESSIONAL noun (`advisoryProfessionalNouns`) — "should talk with a
+ *     physician", "please consult your healthcare provider";
+ *  2. AND no therapeutic-action verb shares the STATE's own comma-bounded
+ *     clause segment. This is the anti-laundering half: in the mandated
+ *     warning the verb ("managing a health concern") and the state ("pregnant
+ *     or nursing") sit in DIFFERENT comma segments, while in a claim the verb
+ *     acts on the state directly — "reverses aging, talk to your doctor"
+ *     keeps "reverses" in the same segment as "aging" and is DENIED.
+ *
+ * Scope, stated exactly: this escapes R3 alone. R1/R2 (abnormality markers),
+ * the C6 disease-noun scan and the C6 action-paired tier never consult it, so
+ * "manages menopause symptoms — talk with your physician" still fails C6.
+ */
+function advisoryEscapes(text: string, state: TermMatch, cfg: NaturalStateConfig): boolean {
+  if (cfg.advisoryCues.length === 0 || cfg.advisoryProfessionals.length === 0) return false;
+  const sentence = sentenceAround(text, state.index);
+  const cues = scanTerms(sentence, cfg.advisoryCues);
+  if (cues.length === 0) return false;
+  const pros = scanTerms(sentence, cfg.advisoryProfessionals);
+  const paired = cues.some((c) =>
+    pros.some(
+      (p) => p.index >= c.index && p.index - (c.index + c.term.length) <= ADVISORY_PAIR_GAP,
+    ),
+  );
+  if (!paired) return false;
+  return scanTerms(clauseSegmentAround(text, state.index), cfg.verbs).length === 0;
+}
+
 function scanVariant(text: string, cfg: NaturalStateConfig, seen: Set<string>, out: Hit[]): void {
   const scanned = blankSafeSpans(text, cfg.safe);
   const marked = scanTerms(scanned, cfg.marked, cfg.neg);
@@ -276,6 +346,10 @@ function scanVariant(text: string, cfg: NaturalStateConfig, seen: Set<string>, o
       const verb = scanTerms(sentence, cfg.verbs)[0];
       if (!verb) continue;
       if (qualifierProtects(scanned, s, qualifiers, cfg.verbs, cfg.window)) continue;
+      // Advisory escape — read from the UNBLANKED variant (blanking is
+      // length-preserving, so the index lines up) because the cue phrase may
+      // itself be a blanked safe span.
+      if (advisoryEscapes(text, s, cfg)) continue;
       const key = `3|${s.term}|${verb.term}`;
       if (seen.has(key)) continue;
       seen.add(key);

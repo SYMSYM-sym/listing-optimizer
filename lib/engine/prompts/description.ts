@@ -27,6 +27,6 @@ TASK: Write the product description, ${headroom}.
 - Product name must appear.
 - Blank-line paragraph breaks. Plain text, no HTML.
 - Cover: what it is, who it's for, how to use, quality and safety.
-${packLines}- End claim paragraphs naturally; do NOT write any disclaimer text.
+${packLines}- Close claim paragraphs naturally; do NOT write any disclaimer text.
 Return JSON: { "description" }`;
 }

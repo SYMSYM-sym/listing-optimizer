@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildGroupPrompts } from '@/lib/engine/prompts';
 import { optimize } from '@/lib/engine/optimize';
-import { crossPackActionPairedNouns, crossPackDiseaseNouns } from '@/lib/gate/checks/pack';
+import {
+  crossPackActionPairedNouns,
+  crossPackDiseaseNouns,
+  diseaseActionVerbs,
+  reachableCompliancePacks,
+} from '@/lib/gate/checks/pack';
 import { termRegex } from '@/lib/gate/util';
 import { loadPack } from '@/lib/knowledge/loadPack';
 import { mapProduct } from '@/lib/ingest/providers/rainforest';
@@ -47,6 +52,33 @@ const PACK_IDS = ['supplements', 'cosmetics'] as const;
 const snapshot: ListingSnapshot = toSnapshot(
   mapProduct('B0TESTASIN', rainforestSample.product, rainforestSample),
 );
+
+/**
+ * The bare THERAPEUTIC-VERB union (diseaseVerbs + every inflection of
+ * diseaseActionVerbRoots, cross-pack) a TASK INSTRUCTION must never name.
+ *
+ * The live-run regression this closes: the images prompt used to instruct
+ * "describe what each ingredient is, not what it treats" — and the model
+ * echoed "treats" into a customer-adjacent brief, which the gate then rightly
+ * flagged. A verb the instruction names only to forbid still lands in the
+ * output, exactly like the noun class above. The same exclusions apply: the
+ * SYSTEM prompt and the style block must enumerate the enforced rules and are
+ * not scanned (see the header note), but nothing after `TASK:` may carry a
+ * bare therapeutic verb.
+ *
+ * Bare verbs are NOT added to the generated-output scan: a lone verb in copy
+ * is not a violation (the gate only fails a verb paired with a noun/state),
+ * so scanning output for them would fail lawful structure/function copy.
+ */
+function verbHits(pack: KnowledgePack, text: string): string[] {
+  const hits = new Set<string>();
+  for (const cp of reachableCompliancePacks(pack)) {
+    for (const verb of diseaseActionVerbs(cp)) {
+      if (verb.trim() && termRegex(verb).test(text)) hits.add(`therapeutic verb '${verb}'`);
+    }
+  }
+  return [...hits];
+}
 
 /** The banned vocabulary a generated surface is measured against. */
 function bannedHits(pack: KnowledgePack, text: string): string[] {
@@ -97,6 +129,12 @@ describe.each(PACK_IDS)('prompt hygiene — %s group prompts name no banned term
     expect(instruction.length).toBeGreaterThan(0);
     expect(bannedHits(pack, instruction)).toEqual([]);
   });
+
+  it.each(prompts)('the %s task instruction names no bare therapeutic verb', (_group, prompt) => {
+    const instruction = taskInstruction(prompt);
+    expect(instruction.length).toBeGreaterThan(0);
+    expect(verbHits(pack, instruction)).toEqual([]);
+  });
 });
 
 describe('prompt hygiene — the generated image plan carries no banned vocabulary', () => {
@@ -120,6 +158,18 @@ describe('prompt hygiene — the generated image plan carries no banned vocabula
    * The guard has to be able to FAIL: the exact brief the live run produced is
    * rejected by the same scan, so this file is not a tautology.
    */
+  /**
+   * The verb guard has to be able to FAIL too: the exact instruction the
+   * forensic run traced the echoed "treats" back to is rejected by the same
+   * scan, so the verb tier is not a tautology either.
+   */
+  it('the instruction that provoked the echoed verb ("not what it treats") IS caught', () => {
+    const pack = loadPack('supplements');
+    const hits = verbHits(pack, 'describe what each ingredient is, not what it treats');
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.join(' ')).toContain('treat');
+  });
+
   it('the live-run brief that started this ("avoid disease words") IS caught', () => {
     const pack = loadPack('supplements');
     const hits = bannedHits(

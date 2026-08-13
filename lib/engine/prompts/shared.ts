@@ -152,7 +152,8 @@ Attributes: ${JSON.stringify(snapshot.attributes)}`;
  */
 export function styleRulesBlock(style: StyleRules): string {
   const lines: string[] = [
-    `- Sentence case only. Do NOT use all-capital words of ${style.allCapsMinWordLen}+ characters for emphasis anywhere (no all-caps bullet hooks). These acronyms are the only exceptions: ${style.allCapsAllowlist.join(', ')}.`,
+    `- Sentence case only. Do NOT use all-capital words of ${style.allCapsMinWordLen}+ characters for emphasis anywhere (no all-caps bullet hooks). These acronyms and registered ingredient/strain marks are the only exceptions: ${style.allCapsAllowlist.join(', ')}.`,
+    '- Registered ingredient/strain trademarks keep their registered casing EXACTLY as printed on the label (write each such mark character for character; never convert one to sentence case or lowercase).',
   ];
   if (style.bulletMustStartCapital) {
     lines.push('- Every bullet begins with a capital letter.');

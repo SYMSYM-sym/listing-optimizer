@@ -171,6 +171,9 @@ const EMPTIERS: Record<string, (p: KnowledgePack) => void> = {
   'rules.units.dimensions': (p) => {
     p.rules.units.dimensions = {};
   },
+  attributeSchema: (p) => {
+    p.attributeSchema = [];
+  },
 };
 
 describe('FIX 1 — emptying ANY required pack piece is BLOCKING, never a silent pass', () => {

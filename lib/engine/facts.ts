@@ -1,4 +1,5 @@
 import type { Facts, KnowledgePack, ListingSnapshot, UnitRules } from '@/lib/types';
+import { SERVING_SIZE_MAX } from '@/lib/gate/checks/shared';
 
 /**
  * DETERMINISTIC Facts producer — the canonical numeric truths every surface
@@ -45,6 +46,36 @@ export function extractPotency(
   return undefined;
 }
 
+/**
+ * Unit-anchored CONTAINER-COUNT extraction — "120 Capsules", "120 Count",
+ * "120 ct", "120 Tablets". Every token comes off `rules.units.dimensions.count`
+ * (PACK DATA), so this module still names no dosage form.
+ *
+ * WHY: `facts.unitCount` used to be read from the structured unit-count
+ * attribute ONLY. A live snapshot whose attributes lacked that key — while its
+ * TITLE ended "…, 120 Capsules" — produced facts of `{price, formulaCount}`,
+ * and C12 then failed the truthful attribute "120 Count" for disagreeing with
+ * facts that never held the count at all. The title and the remaining
+ * snapshot attributes are now read as fallbacks, with two disciplines kept:
+ *  - unit-anchored only: a bare number is never a count;
+ *  - the LAST qualifying match wins in a title (the title-tail pattern —
+ *    "…, 120 Capsules" sits at the end), and figures at or below
+ *    `SERVING_SIZE_MAX` are ignored so serving phrasing ("2 Capsules Daily")
+ *    can never masquerade as the container count.
+ */
+export function extractUnitCount(text: string, countUnits: string[]): number | undefined {
+  const units = alternationSource(countUnits);
+  if (!units || !text) return undefined;
+  const re = new RegExp(`(?<![a-z0-9.])(\\d[\\d,]*)[\\s-]*(?:${units})(?![a-z])`, 'gi');
+  let out: number | undefined;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const value = Number.parseInt(m[1]!.replace(/,/g, ''), 10);
+    if (Number.isFinite(value) && value > SERVING_SIZE_MAX) out = value;
+  }
+  return out;
+}
+
 /** Parse "10 strains" / "10-in-1" style blend counts from label copy. */
 export function extractFormulaCount(text: string): number | undefined {
   const strain = text.match(/(\d+)\s*-?\s*strains?\b/i);
@@ -81,7 +112,19 @@ export function buildFacts(snapshot: ListingSnapshot, pack: KnowledgePack): Fact
   const units: UnitRules = pack.rules.units;
   const potencyUnits = units.dimensions?.potency ?? [];
 
-  const unitCount = parseLeadingNumber(a[f.unitCount]);
+  const countUnits = units.dimensions?.count ?? [];
+  // Attribute values that may carry the container count. The serving-size and
+  // directions attributes are excluded BY KEY (pack data): their counts are
+  // per-dose figures, not the container count.
+  const countAttrSources = Object.entries(a)
+    .filter(([key]) => key !== f.unitCount && key !== f.servingSize && key !== f.directions)
+    .map(([, value]) => value ?? '');
+  const unitCount =
+    parseLeadingNumber(a[f.unitCount]) ??
+    extractUnitCount(snapshot.title, countUnits) ??
+    countAttrSources
+      .map((source) => extractUnitCount(source, countUnits))
+      .find((n) => n !== undefined);
   const servings = parseLeadingNumber(a[f.servings]);
   const servingSize = a[f.servingSize]?.trim();
 

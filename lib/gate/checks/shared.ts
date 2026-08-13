@@ -296,19 +296,19 @@ export function scanSurfacesForBanned(
           seen.add(`n:${m.term}`);
           out.push(fail(checkId, field, m.context, `Remove banned disease term '${m.term}' — reframe as a structure/function state`));
         }
-        for (const verb of pass.verbs) {
-          const vre = termRegex(verb);
-          vre.lastIndex = 0;
-          let vm: RegExpExecArray | null;
-          while ((vm = vre.exec(variant)) !== null) {
-            if (hasNegationContext(variant, vm.index, neg)) continue;
-            const windowText = variant.slice(vm.index, vm.index + verb.length + 25);
-            const nounHit = scanTerms(windowText, pass.nouns)[0]?.term;
-            if (!nounHit) continue;
-            if (seen.has(`v:${verb}|${nounHit}`)) continue;
-            seen.add(`v:${verb}|${nounHit}`);
-            out.push(fail(checkId, field, variant.slice(Math.max(0, vm.index - 30), vm.index + 60), `Drug-claim pattern '${verb} … ${nounHit}' — prohibited`));
-          }
+        // ONE compiled alternation over the whole verb list (`scanTerms`),
+        // not one regex sweep per verb: the matches are identical (longest
+        // verb wins at a given index instead of near-duplicate reports for
+        // an inflection pair like treat/treats), and the full-text scans per
+        // gate run drop by an order of magnitude.
+        for (const vm of scanTerms(variant, pass.verbs)) {
+          if (hasNegationContext(variant, vm.index, neg)) continue;
+          const windowText = variant.slice(vm.index, vm.index + vm.term.length + 25);
+          const nounHit = scanTerms(windowText, pass.nouns)[0]?.term;
+          if (!nounHit) continue;
+          if (seen.has(`v:${vm.term}|${nounHit}`)) continue;
+          seen.add(`v:${vm.term}|${nounHit}`);
+          out.push(fail(checkId, field, variant.slice(Math.max(0, vm.index - 30), vm.index + 60), `Drug-claim pattern '${vm.term} … ${nounHit}' — prohibited`));
         }
       }
     }
@@ -622,9 +622,20 @@ export function factConsistencyOver(
    * and an ordinary listing was failed with
    * "matches no canonical fact (unitCount=undefined, servings=undefined)".
    * The seeds are added ONLY once a canonical fact exists to compare against.
+   *
+   * `facts.formulaCount` is deliberately NOT in this set. It is an "N-in-1"
+   * MARKETING number (blend/strain count), a different dimension from the
+   * container count entirely: a live run whose facts were
+   * `{price, formulaCount: 11}` failed the truthful attribute "120 Count"
+   * because the 11 made this set non-empty, so the no-canonical-fact guard
+   * below never fired. Container-count figures compare ONLY against
+   * unitCount / servings / daySupply / servingSize-derived values; a defined
+   * formulaCount alone arms nothing. ("11-in-1" / "11 formulas" copy carries
+   * no pack unit token, so it never enters this check from the other side
+   * either.)
    */
   const canonicalCounts = new Set<number>(
-    [facts.unitCount, facts.servings, facts.daySupply, facts.formulaCount,
+    [facts.unitCount, facts.servings, facts.daySupply,
       ...(facts.servingSize ? extractUnitNumbers(facts.servingSize, units).map((n) => n.value) : []),
     ].filter((n): n is number => typeof n === 'number'),
   );

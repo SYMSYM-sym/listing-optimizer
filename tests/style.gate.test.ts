@@ -332,9 +332,9 @@ describe('expanded compliance lexicon', () => {
     'sleep', 'mood', 'focus', 'balance',
   ];
 
-  it('keeps all 26 subcategory lists and every one is NON-EMPTY (fail-closed depends on it)', () => {
+  it('keeps all 27 subcategory lists and every one is NON-EMPTY (fail-closed depends on it)', () => {
     const map = cp.diseaseNounsBySubcategory;
-    expect(Object.keys(map)).toHaveLength(26);
+    expect(Object.keys(map)).toHaveLength(27);
     for (const [k, v] of Object.entries(map)) {
       expect(v.length, `subcategory '${k}' must be non-empty`).toBeGreaterThan(0);
     }

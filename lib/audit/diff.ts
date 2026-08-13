@@ -121,6 +121,25 @@ export function diff(
     });
   }
 
+  // --- optional schema attributes missing from the PROPOSED listing ---
+  // The other half of the C23 policy: required + filter-facet fields HARD-FAIL
+  // the gate; optional non-facet schema fields missing from the proposal are
+  // surfaced here as an audit GAP instead (the schema marks them omissible,
+  // but the generator is instructed to fill every field, so a hole is worth
+  // an operator's glance without blocking the run).
+  const optionalMissing = pack.attributeSchema.filter(
+    (f) => !f.required && !f.filterFacet && !(proposed.attributes?.[f.field] ?? '').trim(),
+  );
+  if (optionalMissing.length > 0) {
+    gaps.push({
+      field: 'attributes',
+      current: 'n/a',
+      proposed: `${optionalMissing.length} optional schema fields left empty: ${optionalMissing.map((f) => f.field).join(', ')}`,
+      why: 'Optional schema fields are still indexed surface; fill each with its real value or the explicit none-style value its schema example shows.',
+      severity: 'P2',
+    });
+  }
+
   // --- images / A+ ---
   if (current.images.length < 7) {
     gaps.push({ field: 'imagePlan', current: `${current.images.length} gallery images`, proposed: '7-slot creative plan (main, infographic, real facts panel, ingredients, how-to, trust, lifestyle)', why: 'Under-filled gallery loses conversion and AI-visual coverage.', severity: 'P2' });
