@@ -27,7 +27,11 @@ interface ScanSurface {
  * (prohibited marketing). Which of these groups is actually scanned is PACK
  * DATA (`surfaces`), so the gate stays category-agnostic.
  */
-function collectSurfaces(listing: OptimizedListing, want: Set<string>): ScanSurface[] {
+function collectSurfaces(
+  listing: OptimizedListing,
+  want: Set<string>,
+  priceAttributeKey?: string,
+): ScanSurface[] {
   const surfaces: ScanSurface[] = [];
   const s = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
   if (want.has('title')) surfaces.push({ field: 'title', text: s(listing.title) });
@@ -68,8 +72,15 @@ function collectSurfaces(listing: OptimizedListing, want: Set<string>): ScanSurf
     }
   }
   // Attribute VALUES render in the customer-facing detail table.
+  // The pack-declared PRICE attribute (rules.factFields.price, e.g.
+  // standard_price) is exempted BY KEY for the same reason facts.price is:
+  // it is the backend field whose JOB is to hold the price. C23 forces the
+  // model to fill it, so scanning it for price figures would make the schema
+  // unsatisfiable ($45.95 in standard_price is correct, not a violation).
+  // Every OTHER attribute is still fully scanned.
   if (want.has('attributes')) {
     for (const [key, value] of Object.entries(listing.attributes ?? {})) {
+      if (priceAttributeKey && key === priceAttributeKey) continue;
       surfaces.push({ field: `attributes.${key}`, text: s(value) });
     }
   }
@@ -163,7 +174,7 @@ export function c18ProhibitedContent(
   if (!cfg || !Array.isArray(cfg.patterns) || cfg.patterns.length === 0) return [];
 
   const disclaimers = disclaimersOf(pack.compliancePack);
-  const surfaces = collectSurfaces(listing, new Set(cfg.surfaces ?? []));
+  const surfaces = collectSurfaces(listing, new Set(cfg.surfaces ?? []), pack.rules.factFields?.price);
 
   const out: Failure[] = [];
   for (const { field, text } of surfaces) {
@@ -221,7 +232,7 @@ export function c19ProhibitedMarketing(
   if (patterns.length === 0 && superlatives.length === 0) return [];
 
   const disclaimers = disclaimersOf(cp);
-  const surfaces = collectSurfaces(listing, new Set(cfg?.surfaces ?? []));
+  const surfaces = collectSurfaces(listing, new Set(cfg?.surfaces ?? []), pack.rules.factFields?.price);
 
   const out: Failure[] = [];
   // Superlative bans are de-obfuscated the same way, and additionally scanned

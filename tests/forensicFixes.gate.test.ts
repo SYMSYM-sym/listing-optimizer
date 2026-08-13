@@ -407,3 +407,30 @@ describe('FIX 6 — C23 enforces attribute completeness', () => {
     expect(c23AttributeCompleteness(clean, loadPack('generic'))).toEqual([]);
   });
 });
+
+describe('FIX 7 — standard_price is the price FIELD, not a price violation (live run 2)', () => {
+  // After C23 forced the model to fill every schema field, it wrote
+  // standard_price = "$45.95" and C18/C19 flagged the price field for
+  // containing a price. The pack already declares the key
+  // (rules.factFields.price); the scan now exempts it — and ONLY it.
+  it('a $ figure in the declared price attribute is NOT a C18/C19 violation', () => {
+    const l = mut((x) => { x.attributes.standard_price = '$45.95'; });
+    const f = runGate(l, pack, ctx).failures.filter(
+      (x) => x.field === 'attributes.standard_price' && (x.checkId === 'C18' || x.checkId === 'C19'),
+    );
+    expect(f).toEqual([]);
+  });
+
+  it('a $ figure in ANY OTHER attribute still fails', () => {
+    const l = mut((x) => { x.attributes.special_ingredients = 'Best value at $45.95 per bottle'; });
+    const f = runGate(l, pack, ctx).failures.filter((x) => x.field === 'attributes.special_ingredients');
+    expect(f.length).toBeGreaterThan(0);
+  });
+
+  it('only C18/C19 exempt the price key — C17 still scans it (emoji proof)', () => {
+    const l = mut((x) => { x.attributes.standard_price = '$45.95 \u{1F389}'; });
+    const f = runGate(l, pack, ctx).failures.filter((x) => x.field === 'attributes.standard_price');
+    expect(f.some((x) => x.checkId === 'C17')).toBe(true);
+    expect(f.some((x) => x.checkId === 'C18' || x.checkId === 'C19')).toBe(false);
+  });
+});
