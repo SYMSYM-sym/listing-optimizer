@@ -758,6 +758,57 @@ ul.ops{margin:8px 0 0;padding-left:20px}
     h += '</table>';
   }
 
+  // -------------------------------------------------------------------------
+  // 16 · Competitor benchmark — WS9. Structural facts only, measured the same
+  //      way on every row including ours. There is no rival COPY here and no
+  //      rival brand name: their non-compliant framing is takedown risk rather
+  //      than inspiration, and their brand belongs on the negative keyword
+  //      list. A row we could not ingest is printed AS failed — a benchmark
+  //      that silently dropped it would read as "they have no A+".
+  // -------------------------------------------------------------------------
+  const benchmark = audit?.benchmark;
+  if (benchmark) {
+    h += '<h2>16 · Competitor benchmark</h2>';
+    h += `<p class=sub>${benchmark.ingested} of ${benchmark.requested} competitor ASIN(s) ingested. Structural comparison only — no rival copy is reproduced here, and a rival brand name belongs on the negative keyword list, not in your listing.</p>`;
+    h += '<table><tr><th>ASIN</th><th>Title chars</th><th>Bullets</th><th>Attributes</th><th>A+</th></tr>';
+    const bmRow = (label: string, r: typeof benchmark.subject, emphasis = false): string => {
+      if (r.status === 'failed') {
+        return `<tr><td class=v>${esc(label)}</td><td colspan=4 class=bad>not ingested — ${esc(r.note ?? '')}</td></tr>`;
+      }
+      const cell = (v: unknown): string => `<td class=v>${esc(v)}</td>`;
+      return (
+        `<tr><td class=v>${emphasis ? `<b>${esc(label)}</b>` : esc(label)}</td>` +
+        cell(r.titleLength) +
+        cell(r.bulletCount) +
+        cell(r.attributeCount) +
+        `<td class="${r.aplusPresent ? 'ok' : 'bad'}">${r.aplusPresent ? 'yes' : 'no'}</td></tr>`
+      );
+    };
+    h += bmRow(`${benchmark.subject.asin} (proposed)`, benchmark.subject, true);
+    h += bmRow(`${benchmark.current.asin} (current)`, benchmark.current);
+    for (const r of benchmark.rows) h += bmRow(r.asin, r);
+    h += '</table>';
+  }
+
+  // -------------------------------------------------------------------------
+  // 17 · Review language the compliance filter DROPPED — WS9.
+  //      Printed because an operator who pastes reviews and sees nothing
+  //      change will assume the feature is broken. It is not: these fragments
+  //      were rejected by the SAME lexicon the gate enforces, which is exactly
+  //      the "reviews may carry symptom words, your copy may not" rule.
+  // -------------------------------------------------------------------------
+  const rejected = audit?.reviewLanguageRejected ?? [];
+  if (rejected.length > 0) {
+    h += '<h2>17 · Review phrasing that was not used</h2>';
+    h +=
+      '<p class=sub>Reviewers may lawfully write things your listing may not. These fragments were screened out of the copy guidance by the same compliance lexicon the gate enforces.</p>';
+    h += '<table><tr><th>Fragment</th><th>Why it was not mirrored</th></tr>';
+    for (const r of rejected.slice(0, 40)) {
+      h += `<tr><td>${esc(r.fragment)}</td><td class=bad>${esc(r.why)}</td></tr>`;
+    }
+    h += '</table>';
+  }
+
   h += '</div>';
 
   // -------------------------------------------------------------------------

@@ -13,6 +13,7 @@ export function bulletsPrompt(
   packRules: string[] = [],
   canonicalProductName = '',
   rules?: RuleSet,
+  buyerBlock = '',
 ): string {
   const packLines = packRules.map((line) => `- ${line}\n`).join('');
   // Bullets reference the product; no check forces the name here, but a bullet
@@ -31,7 +32,7 @@ export function bulletsPrompt(
   // actually writes the compliant cluster the keyword reference points at, so
   // the mapping is stated to the bullet writer as well as to the keyword pass.
   const recapture = demandRecaptureBlock(rules?.keywordRules);
-  const blocks = [architecture, positioning, recapture].filter((b) => b !== '').join('\n\n');
+  const blocks = [architecture, positioning, recapture, buyerBlock].filter((b) => b !== '').join('\n\n');
   return `${snapshotBlock(snapshot)}
 
 ${styleBlock}

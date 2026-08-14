@@ -10,7 +10,7 @@ import type { GateContext } from '@/lib/gate/checks';
 import { runGate } from '@/lib/gate/runGate';
 import { logServer } from '@/lib/server/log';
 import type { LlmClient } from './llm';
-import { optimize, pinProductName, type GroupName } from './optimize';
+import { optimize, pinProductName, type GroupName, type OptimizeOptions } from './optimize';
 
 /**
  * Bounded repair loop. Maps each failure to the prompt group that OWNS it and
@@ -61,8 +61,10 @@ export async function runRepairLoop(
   ctx: GateContext,
   maxIterations: number,
   initial?: OptimizedListing,
+  /** WS9 — per-run operator context, carried into EVERY regeneration round. */
+  operator?: OptimizeOptions['operator'],
 ): Promise<RepairOutcome> {
-  let listing = initial ?? (await optimize(snapshot, pack, llm));
+  let listing = initial ?? (await optimize(snapshot, pack, llm, { operator }));
   let gateResult = runGate(listing, pack, ctx);
   let iterations = 0;
   // The FIRST pass chooses the canonical product name; every later round reuses
@@ -133,6 +135,7 @@ export async function runRepairLoop(
         groups: [...groups],
         base: listing,
         failureContext,
+        operator,
       }),
       canonicalProductName,
     );

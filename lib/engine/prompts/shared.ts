@@ -311,3 +311,28 @@ export function demandRecaptureBlock(kr: KeywordRules | undefined): string {
   if (!dr?.headline || mappings.length === 0) return '';
   return [dr.headline, ...mappings.map((m) => `- ${m}`)].join('\n');
 }
+
+/**
+ * WS9 — the BUYER-LANGUAGE block: phrasing mined from operator-supplied review
+ * text, already filtered through the compliance lexicons
+ * (`lib/knowledge/reviewLanguage.ts`).
+ *
+ * P11 asks the copy to mirror compliant buyer language so the lexical and the
+ * semantic layers reinforce each other. The mirroring has to be of PHRASING,
+ * never of claims: reviews may lawfully carry symptom words because that is
+ * customer speech, and the copy may not. The filter runs before this block is
+ * built, so what reaches the generator is the compliant half only — and the
+ * gate still scans everything written from it.
+ *
+ * Renders NOTHING when no review text was supplied, which is why behaviour is
+ * unchanged for every run that does not use the field.
+ */
+export function buyerLanguageBlock(phrases: string[] | undefined): string {
+  const clean = (phrases ?? []).map((p) => p.trim()).filter(Boolean).slice(0, 20);
+  if (clean.length === 0) return '';
+  return [
+    'BUYER LANGUAGE (real phrasing from this product\'s own reviews, already screened against the compliance rules above):',
+    ...clean.map((p) => `- "${p}"`),
+    '- Mirror the WORDING, never the claim: use these words for the same everyday situations the reviewer described, and keep every benefit statement inside the approved shapes above.',
+  ].join('\n');
+}

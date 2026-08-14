@@ -188,6 +188,23 @@ export function toMarkdown(listing: OptimizedListing, audit: Audit): string {
     lines.push(candidates.map((t) => `\`${t}\``).join(', '));
     lines.push('');
   }
+  // WS9 — the benchmark travels with the record. Structural facts only.
+  const bm = audit.benchmark;
+  if (bm) {
+    lines.push('### Competitor benchmark');
+    lines.push(`${bm.ingested} of ${bm.requested} competitor ASIN(s) ingested. No rival copy is reproduced.`);
+    lines.push('');
+    lines.push('| ASIN | Title chars | Bullets | Attributes | A+ |');
+    lines.push('|---|---|---|---|---|');
+    const row = (label: string, r: typeof bm.subject): string =>
+      r.status === 'failed'
+        ? `| ${label} | — | — | — | not ingested: ${(r.note ?? '').replace(/\|/g, '\\|')} |`
+        : `| ${label} | ${r.titleLength} | ${r.bulletCount} | ${r.attributeCount} | ${r.aplusPresent ? 'yes' : 'no'} |`;
+    lines.push(row(`${bm.subject.asin} (proposed)`, bm.subject));
+    lines.push(row(`${bm.current.asin} (current)`, bm.current));
+    for (const r of bm.rows) lines.push(row(r.asin, r));
+    lines.push('');
+  }
   if (!audit.verified) {
     lines.push('### ⛔ Blocking gate failures');
     for (const f of audit.gateResult.failures) {

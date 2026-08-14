@@ -31,6 +31,27 @@ npm run dev
 ```
 
 Env vars: see `.env.example`. `INGEST_PROVIDER=rainforest|firecrawl|paste`.
+### Optional operator inputs on `POST /api/optimize`
+
+```jsonc
+{
+  "snapshot": { /* ListingSnapshot */ },
+  "fictionPhrases": ["..."],        // R45 — known-false descriptors, merged into C11 for this run only
+  "reviewsText": "pasted reviews",  // WS9 — MINED for compliant phrasing; never used verbatim.
+                                    //       Screened against the same compliance lexicons the gate
+                                    //       enforces, so a symptom word a reviewer lawfully wrote can
+                                    //       never become a line of copy. Makes principle P11 scorable.
+  "competitorAsins": ["B0...", ""]  // WS9 — max 4. Ingested via the configured provider and rendered
+                                    //       as a STRUCTURAL benchmark (title length / bullet count /
+                                    //       attribute count / A+ presence). No rival copy is stored or
+                                    //       rendered. A failed ingestion becomes a failed ROW.
+}
+```
+
+Every field is optional and every one of them defaults to the behaviour that
+existed before it: with none supplied the prompts are byte-identical and P11
+stays `unknown`.
+
 ### Run store schema
 
 The optional Supabase `runs` table gains one nullable column for the publish

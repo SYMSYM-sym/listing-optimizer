@@ -46,6 +46,13 @@ export interface ScoreInputs {
   backendSearchTerms?: string;
   /** The seeded Q&A layer, when known. */
   qa?: { q: string; a: string }[];
+  /**
+   * WS9 — distinct content tokens mined from operator-supplied review text,
+   * ALREADY filtered through the compliance lexicons
+   * (`lib/knowledge/reviewLanguage.ts`). Absent => P11 stays `unknown`, which
+   * is what it has always been.
+   */
+  reviewTokens?: string[];
 }
 
 interface SnapshotView {
@@ -152,8 +159,28 @@ function judge(id: string, v: SnapshotView): { score: Verdict; rationale: string
       if (v.aplusText.length > 0) return { score: 'partial', rationale: 'A+ present but thin extractable text.' };
       return { score: 'none', rationale: 'No A+ text detected — AI/voice engines have nothing to read.' };
     }
-    case 'P11':
-      return { score: 'unknown', rationale: 'Review-language mirroring requires review data — not assessed.' };
+    case 'P11': {
+      // WS9 — scorable ONLY when the operator supplied review text. Without it
+      // the principle is not "failed", it is unassessable, and an unassessable
+      // principle is excluded from the denominator rather than scored zero.
+      const reviewTokens = v.inputs.reviewTokens;
+      if (reviewTokens === undefined) {
+        return { score: 'unknown', rationale: 'Review-language mirroring requires review data — not assessed.' };
+      }
+      if (reviewTokens.length === 0) {
+        return {
+          score: 'unknown',
+          rationale: 'The supplied review text yielded no compliant phrasing to mirror — nothing to measure against.',
+        };
+      }
+      const copy = tokenSet(v.allText);
+      const mirrored = reviewTokens.filter((t) => copy.has(t));
+      const ratio = mirrored.length / reviewTokens.length;
+      const rationale = `${mirrored.length}/${reviewTokens.length} compliant buyer-language tokens appear in the copy.`;
+      if (ratio >= 0.4) return { score: 'full', rationale };
+      if (ratio >= 0.15) return { score: 'partial', rationale };
+      return { score: 'none', rationale };
+    }
     case 'P12': {
       const qa = v.inputs.qa;
       if (qa === undefined) {

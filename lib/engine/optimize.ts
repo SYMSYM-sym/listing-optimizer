@@ -15,7 +15,7 @@ import { sanitizeBullets } from './bulletSanitize';
 import { buildFacts } from './facts';
 import { normalizeListingTypography } from './typography';
 import { generateGroup, type LlmClient } from './llm';
-import { buildGroupPrompts, buildSystemPrompt } from './prompts';
+import { buildGroupPrompts, buildSystemPrompt, type OperatorPromptContext } from './prompts';
 import {
   aplusGroupSchema,
   keywordsGroupSchema,
@@ -106,6 +106,11 @@ export interface OptimizeOptions {
   base?: OptimizedListing;
   /** Failure context per group, injected into regeneration prompts. */
   failureContext?: Partial<Record<GroupName, string>>;
+  /**
+   * WS9 — per-run operator context (compliant phrasing mined from supplied
+   * review text). Absent => the prompts are byte-for-byte what they were.
+   */
+  operator?: OperatorPromptContext;
 }
 
 export async function optimize(
@@ -118,7 +123,7 @@ export async function optimize(
   // Detected subcategories flow in on the snapshot (pipeline enriches it) so
   // the prompt teaches exactly the noun set the gate will enforce.
   const system = buildSystemPrompt(pack, facts, snapshot.subcategory ?? []);
-  const groupPrompts = buildGroupPrompts(pack, env.titlePolicy());
+  const groupPrompts = buildGroupPrompts(pack, env.titlePolicy(), opts.operator ?? {});
   const disclaimer = pack.compliancePack?.disclaimer ?? '';
   const groups = opts.groups ?? ALL_GROUPS;
   const run = <T>(g: GroupName, fn: () => Promise<T>, fallback: T | undefined): Promise<T> => {

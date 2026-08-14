@@ -2,6 +2,7 @@ import 'server-only';
 
 import type {
   Audit,
+  CompetitorIngestion,
   KnowledgePack,
   ListingSnapshot,
   OptimizedListing,
@@ -9,6 +10,7 @@ import type {
 import type { GateContext } from '@/lib/gate/checks';
 import { runGate } from '@/lib/gate/runGate';
 import { candidateTerms } from './candidateTerms';
+import { buildBenchmark } from './benchmark';
 import { diff } from './diff';
 import { keywordCoverage } from './keywordCoverage';
 import { buildSubstantiationRegister } from './substantiation';
@@ -28,14 +30,35 @@ import { scoreAgainstPrinciples } from './scoreAgainstPrinciples';
  * deliberately excluded from `verified`: two of them are questions about the
  * seller's evidence and about the CHECKER, not about the copy.
  */
+/**
+ * WS9 — per-run operator inputs that reach the AUDIT (as opposed to the
+ * prompts). Every field is optional and every one of them defaults to the
+ * behaviour that existed before it: no review tokens => P11 stays `unknown`,
+ * no competitors => no benchmark key at all.
+ */
+export interface AuditInputs {
+  /** Compliant tokens mined from operator-supplied review text (P11). */
+  reviewTokens?: string[];
+  /** Fragments the compliance filter dropped, for operator visibility. */
+  reviewRejected?: { fragment: string; why: string }[];
+  /** Competitor ASINs as they were ingested (or the reason they were not). */
+  competitors?: CompetitorIngestion[];
+}
+
 export function buildAudit(
   current: ListingSnapshot,
   proposed: OptimizedListing,
   pack: KnowledgePack,
   ctx: GateContext,
+  inputs: AuditInputs = {},
 ): Audit {
   const gateResult = runGate(proposed, pack, ctx);
-  const scorecard = scoreAgainstPrinciples(current, pack);
+  // WS9 — review tokens are a fact about the PRODUCT, not about one version of
+  // the copy, so they are supplied to BOTH sides. That keeps P11 comparable:
+  // the question "does this copy mirror how buyers talk" is asked identically
+  // of the listing that exists and the one being proposed.
+  const reviewInput = inputs.reviewTokens ? { reviewTokens: inputs.reviewTokens } : {};
+  const scorecard = scoreAgainstPrinciples(current, pack, reviewInput);
   // WS6 — the SAME scorer, run over the proposed listing. Two principles that
   // are unknowable from a scraped page ARE known here (the backend field and
   // the seeded Q&A layer), so they are supplied; every other judge is
@@ -43,8 +66,10 @@ export function buildAudit(
   const scorecardProposed = scoreAgainstPrinciples(
     proposedAsSnapshot(current, proposed),
     pack,
-    { backendSearchTerms: proposed.backendSearchTerms ?? '', qa: proposed.qa ?? [] },
+    { backendSearchTerms: proposed.backendSearchTerms ?? '', qa: proposed.qa ?? [], ...reviewInput },
   );
+  // WS9 — advisory, and undefined when the operator supplied no competitors.
+  const benchmark = buildBenchmark(current, proposed, inputs.competitors);
   // R33/R38 — the substantiation register is built BEFORE the diff, because
   // the diff turns its unevidenced HEADER claims into a P1 gap.
   const substantiationRegister = buildSubstantiationRegister(proposed, current, pack.compliancePack);
@@ -73,6 +98,10 @@ export function buildAudit(
     candidateTerms: candidateTerms(current, pack),
     // WS3 — a DERIVED view of the keyword artifact C28 has already verified.
     keywordCoverage: keywordCoverage(proposed),
+    ...(benchmark ? { benchmark } : {}),
+    ...(inputs.reviewRejected && inputs.reviewRejected.length > 0
+      ? { reviewLanguageRejected: inputs.reviewRejected }
+      : {}),
     rulesStale: staleness.stale,
     ...(staleness.notice ? { rulesStaleNotice: staleness.notice } : {}),
     attributeSchemaStale: schemaStaleness.stale,

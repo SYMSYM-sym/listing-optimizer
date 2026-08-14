@@ -8,6 +8,7 @@ export function descriptionPrompt(
   packRules: string[] = [],
   canonicalProductName = '',
   rules?: RuleSet,
+  buyerBlock = '',
 ): string {
   const headroom = hasCompliance
     ? '≤1700 chars (the system appends the verbatim compliance disclaimer and needs the headroom)'
@@ -30,7 +31,7 @@ ${styleBlock}
 
 ${canonical}
 TASK: Write the product description, ${headroom}.
-${recapture ? `${recapture}\n` : ''}- Product name must appear.
+${recapture ? `${recapture}\n` : ''}${buyerBlock ? `${buyerBlock}\n` : ''}- Product name must appear.
 - Blank-line paragraph breaks. Plain text, no HTML.
 - Cover: what it is, who it's for, how to use, quality and safety.
 ${packLines}- Close claim paragraphs naturally; do NOT write any disclaimer text.

@@ -1282,6 +1282,45 @@ export interface KeywordCoverage {
   notTargeted: { term: string; why: string }[];
 }
 
+/**
+ * WS9 — one row of the competitor benchmark.
+ *
+ * STRUCTURAL FACTS ONLY. There is no rival copy here and no rival brand name:
+ * their non-compliant framing is takedown risk rather than inspiration, and
+ * their brand belongs on the keyword NEGATIVE list, not in our deliverable.
+ */
+export interface CompetitorBenchmarkRow {
+  asin: string;
+  status: 'ok' | 'failed';
+  titleLength?: number;
+  bulletCount?: number;
+  attributeCount?: number;
+  aplusPresent?: boolean;
+  /** Why a `failed` row was not measured. */
+  note?: string;
+}
+
+export interface CompetitorBenchmark {
+  /** The PROPOSED listing, measured the same way. */
+  subject: CompetitorBenchmarkRow;
+  /** The CURRENT listing, measured the same way. */
+  current: CompetitorBenchmarkRow;
+  rows: CompetitorBenchmarkRow[];
+  requested: number;
+  ingested: number;
+}
+
+/**
+ * WS9 — one competitor ASIN as it reached the audit: ingested, or carrying the
+ * reason it was not. Ingesting someone else's listing fails routinely, so the
+ * failure is a first-class value rather than an exception that loses the run.
+ */
+export interface CompetitorIngestion {
+  asin: string;
+  snapshot?: ListingSnapshot;
+  error?: string;
+}
+
 export interface Audit {
   /** The CURRENT (scraped) listing, scored against the pack principles. */
   scorecard: Scorecard;
@@ -1333,6 +1372,18 @@ export interface Audit {
    * Optional so a run stored before the artifact existed still parses.
    */
   keywordCoverage?: KeywordCoverage;
+  /**
+   * WS9 — the competitor benchmark, present only when the operator supplied
+   * competitor ASINs. ADVISORY in the strictest sense: it is a set of facts
+   * about pages we do not control, and a failed row never affects `verified`.
+   */
+  benchmark?: CompetitorBenchmark;
+  /**
+   * WS9 — review fragments the compliance filter DROPPED, with the reason.
+   * Recorded so an operator can see WHY their review text seemed to do
+   * nothing, rather than guessing. Never copy; never a failure.
+   */
+  reviewLanguageRejected?: { fragment: string; why: string }[];
 }
 
 // ---------------------------------------------------------------------------
