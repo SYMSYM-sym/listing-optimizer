@@ -46,10 +46,29 @@ import {
  * disease-noun set, which is exactly the union the gate scans (core ∪ EVERY
  * subcategory list).
  */
+/**
+ * WS5.5 — the OPERATOR-CONFIRMED PANEL block.
+ *
+ * Returns '' when the operator confirmed nothing, so the assembled prompt is
+ * byte-for-byte what it was before this existed. The heading sentence is PACK
+ * DATA (`rules.operatorPanel.promptHeadline`) because it names a category
+ * artifact and this module may hold no category vocabulary.
+ */
+function operatorPanelBlock(
+  pack: KnowledgePack,
+  panel?: Readonly<Record<string, string>>,
+): string {
+  const headline = pack.rules?.operatorPanel?.promptHeadline?.trim();
+  if (!panel || Object.keys(panel).length === 0 || !headline) return '';
+  return `\n\n${headline}\n${JSON.stringify(panel, null, 2)}`;
+}
+
 export function buildSystemPrompt(
   pack: KnowledgePack,
   facts: Facts,
   subcategories: string[] = [],
+  /** WS5.5 — values the operator read off the label and confirmed (product truth). */
+  panelFacts?: Readonly<Record<string, string>>,
 ): string {
   const r = pack.rules;
   const cp = pack.compliancePack;
@@ -126,7 +145,7 @@ OPTIMIZATION PRINCIPLES (ground copy in these):
 ${principleLines}
 
 CANONICAL FACTS (every number you write MUST match these exactly; if a fact is absent, do not invent one):
-${JSON.stringify(facts, null, 2)}${dosePhrasing}
+${JSON.stringify(facts, null, 2)}${dosePhrasing}${operatorPanelBlock(pack, panelFacts)}
 ${compliance}
 
 ${styleRulesBlock(r.style)}

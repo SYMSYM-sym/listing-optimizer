@@ -38,6 +38,16 @@ export interface PipelineOptions {
    * run.
    */
   competitors?: CompetitorIngestion[];
+  /**
+   * WS5.5 — the Supplement-Facts-panel values the operator read off the label
+   * and CONFIRMED. Product truth for this run: they overlay the scraped
+   * attributes before the canonical facts are derived, they are announced to
+   * the generator as authoritative, and the audit re-derives the facts block
+   * from them so the gate measures every surface against the operator's
+   * numbers. Never persisted to the pack. Absent => byte-identical behaviour.
+   * See `lib/knowledge/panelFacts.ts`.
+   */
+  panelFacts?: Readonly<Record<string, string>>;
 }
 
 export async function runPipeline(
@@ -68,6 +78,7 @@ export async function runPipeline(
     maxRepairIterations,
     undefined,
     usedReviews ? { buyerPhrases: mined.phrases } : undefined,
+    opts.panelFacts,
   );
   // Worker ≠ checker: the audit module independently re-runs the gate and
   // owns `verified` (=== gateResult.pass).
@@ -76,6 +87,7 @@ export async function runPipeline(
     // input must leave P11 `unknown`, not score it zero.
     ...(usedReviews ? { reviewTokens: mined.tokens, reviewRejected: mined.rejected } : {}),
     ...(opts.competitors ? { competitors: opts.competitors } : {}),
+    ...(opts.panelFacts ? { panelFacts: opts.panelFacts } : {}),
   });
   const optimized = {
     ...listing,
@@ -93,6 +105,9 @@ export async function runPipeline(
     reviewRejected: usedReviews ? mined.rejected.length : 0,
     competitorsRequested: opts.competitors?.length ?? 0,
     competitorsIngested: audit.benchmark?.ingested ?? 0,
+    // Shape only — the operator's confirmed VALUES never reach the log
+    // (lib/server/log.ts contract), only how many were supplied.
+    panelFactsConfirmed: opts.panelFacts ? Object.keys(opts.panelFacts).length : 0,
   });
   return { optimized, audit, iterations, detection };
 }

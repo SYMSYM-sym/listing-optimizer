@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { anthropicClient } from '@/lib/engine/llm';
 import { ingestByAsin } from '@/lib/ingest';
 import { parseAsin } from '@/lib/ingest/parseAsin';
+import { normalizePanelFacts } from '@/lib/knowledge/panelFacts';
 import { runPipeline } from '@/lib/pipeline/run';
 import { checkAccess } from '@/lib/server/guard';
 import { logServer } from '@/lib/server/log';
@@ -70,6 +71,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     fictionPhrases?: string[];
     reviewsText?: string;
     competitorAsins?: string[];
+    /** WS5.5 — operator-confirmed label values; product truth for this run. */
+    panelFacts?: Record<string, string>;
   };
   try {
     body = (await req.json()) as typeof body;
@@ -94,6 +97,8 @@ export async function POST(req: Request): Promise<NextResponse> {
         fictionPhrases: body.fictionPhrases,
         // WS9: mined for compliant PHRASING, never used verbatim.
         reviewsText: typeof body.reviewsText === 'string' ? body.reviewsText : undefined,
+        // WS5.5 — normalized here and never persisted to the pack.
+        panelFacts: normalizePanelFacts(body.panelFacts),
         ...(competitors ? { competitors } : {}),
       },
     );

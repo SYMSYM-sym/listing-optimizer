@@ -63,8 +63,15 @@ export async function runRepairLoop(
   initial?: OptimizedListing,
   /** WS9 — per-run operator context, carried into EVERY regeneration round. */
   operator?: OptimizeOptions['operator'],
+  /**
+   * WS5.5 — the operator-confirmed panel, carried into EVERY regeneration
+   * round for the same reason `operator` is: a repair round that dropped it
+   * would regenerate copy against the SCRAPED facts and then be failed by a
+   * gate measuring the CONFIRMED ones, which is an unwinnable loop.
+   */
+  panelFacts?: OptimizeOptions['panelFacts'],
 ): Promise<RepairOutcome> {
-  let listing = initial ?? (await optimize(snapshot, pack, llm, { operator }));
+  let listing = initial ?? (await optimize(snapshot, pack, llm, { operator, panelFacts }));
   let gateResult = runGate(listing, pack, ctx);
   let iterations = 0;
   // The FIRST pass chooses the canonical product name; every later round reuses
@@ -136,6 +143,7 @@ export async function runRepairLoop(
         base: listing,
         failureContext,
         operator,
+        panelFacts,
       }),
       canonicalProductName,
     );

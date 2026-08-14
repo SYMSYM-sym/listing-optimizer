@@ -292,6 +292,23 @@ export interface QaPolicyNote {
   notes: string[];
 }
 
+/**
+ * WS5.5 — how the OPERATOR-CONFIRMED PANEL is announced to the generator.
+ *
+ * The engine may hold no category vocabulary (`tests/category.literals.test.ts`),
+ * and "the panel" is a category noun — so the sentence that tells the model the
+ * confirmed values outrank the scraped ones is PACK DATA, exactly like every
+ * other instruction the prompt renders.
+ */
+export interface OperatorPanelRules {
+  /** Rendered verbatim above the confirmed values in the system prompt. */
+  promptHeadline: string;
+  /** Operator-facing label for the input, rendered by the UI. */
+  inputLabel?: string;
+  /** One-line explanation of what confirming does, rendered by the UI. */
+  inputHelp?: string;
+}
+
 export interface PostPublishRules {
   /** P15 — the reindex/patience windows. */
   timingAdvisory?: TimingAdvisory;
@@ -568,6 +585,8 @@ export interface RuleSet {
   operatorChecklist?: OperatorChecklist;
   /** WS4 bullet slot jobs + anchor doctrine (prompt + audit lint; never a gate rule). */
   bulletArchitecture?: BulletArchitecture;
+  /** WS5.5 operator panel-confirmation wording (prompt + UI). */
+  operatorPanel?: OperatorPanelRules;
   /** WS3 keyword-system rules (gate C28 + the keyword/copy prompts). */
   keywordRules?: KeywordRules;
   /** WS6/WS7 post-publish guidance rendered by the ship sheet. */

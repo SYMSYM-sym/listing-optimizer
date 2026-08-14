@@ -899,6 +899,12 @@
     "and nothing here can fail a check — so it is deliberately not a REQUIRED_PACK_PIECES row.",
     "It lives in the pack so lib/export holds no marketplace procedure and a rule change is a data edit."
   ],
+  "operatorPanel": {
+    "_comment": "WS5.5 - the operator panel-confirmation step. The wording lives here because it names a category artifact and lib/engine may hold no category vocabulary (tests/category.literals.test.ts).",
+    "promptHeadline": "OPERATOR-CONFIRMED SUPPLEMENT FACTS PANEL (PRODUCT TRUTH for this run). The operator read these values off the physical label and confirmed them, so they OUTRANK anything scraped from the live listing and outrank the CANONICAL FACTS above wherever the two disagree. Write them exactly as given: never round them, never re-derive them, never improve on them, and never state a panel value the operator did not confirm.",
+    "inputLabel": "Supplement Facts panel - confirm values (optional)",
+    "inputHelp": "Paste or type the values you read off the physical label, one per line as key: value (for example serving_size: 1 Capsule). Confirmed values become product truth for this run: the copy is written from them and the gate checks every surface against them. Nothing here is saved to the knowledge pack."
+  },
   "postPublish": {
     "qaPolicy": {
       "headline": "Answers only.",

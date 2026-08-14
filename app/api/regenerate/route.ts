@@ -5,6 +5,7 @@ import { anthropicClient } from '@/lib/engine/llm';
 import { detectCategory } from '@/lib/knowledge/detectCategory';
 import { loadPack } from '@/lib/knowledge/loadPack';
 import { withOperatorFictionPhrases } from '@/lib/knowledge/operatorInputs';
+import { normalizePanelFacts } from '@/lib/knowledge/panelFacts';
 import { checkAccess } from '@/lib/server/guard';
 import { logServer } from '@/lib/server/log';
 import { updateRun } from '@/lib/store/runs';
@@ -28,6 +29,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     runId?: string;
     /** R45 — per-run operator known-false descriptors (C11). Never persisted. */
     fictionPhrases?: string[];
+    /** WS5.5 — operator-confirmed label values; product truth for this run. */
+    panelFacts?: Record<string, string>;
   };
   try {
     body = (await req.json()) as typeof body;
@@ -63,11 +66,18 @@ export async function POST(req: Request): Promise<NextResponse> {
       subcategories: detection.subcategories,
       snapshotText: `${body.snapshot.title} ${body.snapshot.category}`,
     };
+    // WS5.5 — the same per-run panel the optimize/audit routes accept. A
+    // regeneration must not be a way to fall back to the scraped facts after
+    // the operator has confirmed the label.
+    const panelFacts = normalizePanelFacts(body.panelFacts);
     const merged = await optimize(enriched, pack, anthropicClient(), {
       groups: [group],
       base: body.listing,
+      panelFacts,
     });
-    const audit = buildAudit(enriched, merged, pack, ctx);
+    const audit = buildAudit(enriched, merged, pack, ctx, {
+      ...(panelFacts ? { panelFacts } : {}),
+    });
     const optimized: OptimizedListing = {
       ...merged,
       state: audit.verified ? 'verified' : 'draft',

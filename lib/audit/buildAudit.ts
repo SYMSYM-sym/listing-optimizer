@@ -9,6 +9,7 @@ import type {
 } from '@/lib/types';
 import type { GateContext } from '@/lib/gate/checks';
 import { runGate } from '@/lib/gate/runGate';
+import { buildFacts } from '@/lib/engine/facts';
 import { candidateTerms } from './candidateTerms';
 import { buildBenchmark } from './benchmark';
 import { diff } from './diff';
@@ -43,6 +44,20 @@ export interface AuditInputs {
   reviewRejected?: { fragment: string; why: string }[];
   /** Competitor ASINs as they were ingested (or the reason they were not). */
   competitors?: CompetitorIngestion[];
+  /**
+   * WS5.5 — the values the operator read off the physical label and CONFIRMED.
+   *
+   * When supplied they are PRODUCT TRUTH for this run, so the canonical facts
+   * block is re-derived from them and the gate measures every surface against
+   * the operator's numbers rather than against whatever facts arrived attached
+   * to the listing. That matters most on `/api/audit`, where the listing is
+   * CLIENT-SUPPLIED: worker != checker means the checker must not take the
+   * worker's word for what the product is either.
+   *
+   * Absent => `proposed` is passed through by reference and every output is
+   * byte-identical to what it was.
+   */
+  panelFacts?: Readonly<Record<string, string>>;
 }
 
 export function buildAudit(
@@ -52,7 +67,14 @@ export function buildAudit(
   ctx: GateContext,
   inputs: AuditInputs = {},
 ): Audit {
-  const gateResult = runGate(proposed, pack, ctx);
+  // WS5.5 — PANEL FIRST. A confirmed panel replaces the canonical facts block
+  // before anything reads it, so C12 (and every other fact-anchored check)
+  // compares copy against the label the operator actually holds. Without one,
+  // this is the caller's own object, untouched.
+  const listing: OptimizedListing = inputs.panelFacts
+    ? { ...proposed, facts: buildFacts(current, pack, inputs.panelFacts) }
+    : proposed;
+  const gateResult = runGate(listing, pack, ctx);
   // WS9 — review tokens are a fact about the PRODUCT, not about one version of
   // the copy, so they are supplied to BOTH sides. That keeps P11 comparable:
   // the question "does this copy mirror how buyers talk" is asked identically
@@ -64,16 +86,16 @@ export function buildAudit(
   // the seeded Q&A layer), so they are supplied; every other judge is
   // bit-for-bit the one that graded the current listing.
   const scorecardProposed = scoreAgainstPrinciples(
-    proposedAsSnapshot(current, proposed),
+    proposedAsSnapshot(current, listing),
     pack,
-    { backendSearchTerms: proposed.backendSearchTerms ?? '', qa: proposed.qa ?? [], ...reviewInput },
+    { backendSearchTerms: listing.backendSearchTerms ?? '', qa: listing.qa ?? [], ...reviewInput },
   );
   // WS9 — advisory, and undefined when the operator supplied no competitors.
-  const benchmark = buildBenchmark(current, proposed, inputs.competitors);
+  const benchmark = buildBenchmark(current, listing, inputs.competitors);
   // R33/R38 — the substantiation register is built BEFORE the diff, because
   // the diff turns its unevidenced HEADER claims into a P1 gap.
-  const substantiationRegister = buildSubstantiationRegister(proposed, current, pack.compliancePack);
-  const gaps = diff(current, proposed, pack, substantiationRegister);
+  const substantiationRegister = buildSubstantiationRegister(listing, current, pack.compliancePack);
+  const gaps = diff(current, listing, pack, substantiationRegister);
   // Advisory only: staleness never enters `verified` and never becomes a failure.
   const staleness = rulesStaleness(pack.rules);
   // Second, INDEPENDENT advisory snapshot: the attribute template has its own
@@ -97,7 +119,7 @@ export function buildAudit(
     // brain/02 — ADVISORY proposals for the LEXICON owner, never about the copy.
     candidateTerms: candidateTerms(current, pack),
     // WS3 — a DERIVED view of the keyword artifact C28 has already verified.
-    keywordCoverage: keywordCoverage(proposed),
+    keywordCoverage: keywordCoverage(listing),
     ...(benchmark ? { benchmark } : {}),
     ...(inputs.reviewRejected && inputs.reviewRejected.length > 0
       ? { reviewLanguageRejected: inputs.reviewRejected }

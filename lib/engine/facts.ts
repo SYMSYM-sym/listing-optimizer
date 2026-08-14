@@ -106,8 +106,19 @@ export function parsePerDay(
   return undefined;
 }
 
-export function buildFacts(snapshot: ListingSnapshot, pack: KnowledgePack): Facts {
-  const a = snapshot.attributes;
+/**
+ * WS5.5 — `panel` is the OPERATOR-CONFIRMED label reading for this run. When
+ * supplied it OVERLAYS the scraped attributes of the same keys, so every fact
+ * derived below is the operator's value in preference to the page's. Absent =>
+ * `a` is the caller's own object, unchanged, and the whole producer is
+ * byte-identical to what it was. See `lib/knowledge/panelFacts.ts`.
+ */
+export function buildFacts(
+  snapshot: ListingSnapshot,
+  pack: KnowledgePack,
+  panel?: Readonly<Record<string, string>>,
+): Facts {
+  const a = panel ? { ...snapshot.attributes, ...panel } : snapshot.attributes;
   const f = pack.rules.factFields;
   const units: UnitRules = pack.rules.units;
   const potencyUnits = units.dimensions?.potency ?? [];

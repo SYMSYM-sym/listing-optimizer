@@ -111,6 +111,15 @@ export interface OptimizeOptions {
    * review text). Absent => the prompts are byte-for-byte what they were.
    */
   operator?: OperatorPromptContext;
+  /**
+   * WS5.5 — values the operator read off the physical label and CONFIRMED.
+   * They overlay the scraped attributes before the canonical facts are derived,
+   * so the facts block the prompts are given (and C12 later measures every
+   * surface against) is the operator's truth rather than the page's. Absent =>
+   * facts and prompts are byte-for-byte what they were.
+   * See `lib/knowledge/panelFacts.ts`.
+   */
+  panelFacts?: Readonly<Record<string, string>>;
 }
 
 export async function optimize(
@@ -119,10 +128,10 @@ export async function optimize(
   llm: LlmClient,
   opts: OptimizeOptions = {},
 ): Promise<OptimizedListing> {
-  const facts = buildFacts(snapshot, pack);
+  const facts = buildFacts(snapshot, pack, opts.panelFacts);
   // Detected subcategories flow in on the snapshot (pipeline enriches it) so
   // the prompt teaches exactly the noun set the gate will enforce.
-  const system = buildSystemPrompt(pack, facts, snapshot.subcategory ?? []);
+  const system = buildSystemPrompt(pack, facts, snapshot.subcategory ?? [], opts.panelFacts);
   const groupPrompts = buildGroupPrompts(pack, env.titlePolicy(), opts.operator ?? {});
   const disclaimer = pack.compliancePack?.disclaimer ?? '';
   const groups = opts.groups ?? ALL_GROUPS;
