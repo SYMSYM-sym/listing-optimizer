@@ -73,8 +73,8 @@ const responses: Record<string, unknown> = {
   },
   aplus: {
     modules: [
-      { id: 'brand-story', headline: 'The BrandX Story', body: 'BrandX Probiotic began with a simple idea: digestive support should fit real routines. Every batch of BrandX Probiotic is third-party tested and made in a cGMP facility in the USA.', claimBearing: false },
-      { id: 'hero', headline: 'BrandX Probiotic — Balance You Can Build On', body: 'BrandX Probiotic delivers a 50 Billion CFU blend of 10 strains with prebiotic fiber to support digestive balance and healthy gut flora.', claimBearing: true },
+      { id: 'brand-story', bannerAltText: 'BrandX brand story banner: third-party tested, made in a cGMP facility in the USA', headline: 'The BrandX Story', body: 'BrandX Probiotic began with a simple idea: digestive support should fit real routines. Every batch of BrandX Probiotic is third-party tested and made in a cGMP facility in the USA.', claimBearing: false },
+      { id: 'hero', bannerAltText: 'BrandX Probiotic hero banner: 50 Billion CFU blend of 10 strains', headline: 'BrandX Probiotic — Balance You Can Build On', body: 'BrandX Probiotic delivers a 50 Billion CFU blend of 10 strains with prebiotic fiber to support digestive balance and healthy gut flora.', claimBearing: true },
       { id: 'ingredients', headline: 'What Is Inside', body: 'A 10-strain probiotic blend at 50 Billion CFU with prebiotic fiber, in a vegan vegetable capsule with rice flour. Free from major allergens per the label. Non-GMO and gluten free.', claimBearing: false },
       { id: 'how-to-use', headline: 'One Capsule, Once a Day', body: 'Take one capsule daily with water, with or without food. Each bottle holds 60 capsules — a two-month supply. Shelf stable, no refrigeration required.', claimBearing: false },
       { id: 'who-its-for', headline: 'Who It Is For', body: 'Adults who want steady digestive comfort support: frequent travelers, busy professionals, and anyone building a consistent gut-health routine. Unlike typical refrigerated options, BrandX travels with you.', claimBearing: true },
@@ -97,14 +97,32 @@ const responses: Record<string, unknown> = {
   },
   images: {
     imagePlan: [
-      { slot: 1, purpose: 'main-white-background', spec: 'Pure white RGB 255/255/255 background; bottle fills ≥85% of frame; longest side ≥1000px', notes: 'Front label fully legible; no badges or text overlays' },
-      { slot: 2, purpose: 'value-prop-infographic', spec: '1000px+; brand palette; ≤5 icon callouts', notes: '50 Billion CFU blend, 10 strains, vegan, shelf stable, two-month supply' },
-      { slot: 3, purpose: 'supplement-facts-panel', spec: 'Real photograph of the printed Supplement Facts panel — never AI-generated or altered; sharp, evenly lit, fully readable', notes: 'Show full panel and ingredient list' },
-      { slot: 4, purpose: 'ingredient-story', spec: '1000px+; macro texture or strain-diagram illustration', notes: '10-strain blend with prebiotic fiber; name key strains' },
-      { slot: 5, purpose: 'how-to-use-routine', spec: '1000px+; 3-step layout', notes: 'One capsule daily, with or without food, morning routine framing' },
-      { slot: 6, purpose: 'trust-heritage', spec: '1000px+; factual badges only (third-party tested, cGMP, Non-GMO)', notes: 'Factual badges only, each one substantiated on the label' },
-      { slot: 7, purpose: 'lifestyle-outcome', spec: '1000px+; adult using product in daily/travel context', notes: 'Situational: packing a travel bag; steady-routine feeling' },
+      { slot: 1, purpose: 'main-white-background', spec: 'A real photograph of the actual bottle on a pure white background, RGB 255/255/255; bottle fills at least 85% of the frame; longest side 1000px or more; never AI-generated', notes: 'Front label fully legible; no badges, borders or overlay text', altText: 'BrandX Probiotic bottle, 60 vegan capsules, on a plain white background' },
+      { slot: 2, purpose: 'benefit-infographic', spec: '1000px or more; brand palette; up to five icon callouts; overlay text legible at phone size', notes: '50 Billion CFU blend, 10 strains, vegan, shelf stable, two-month supply', altText: 'Infographic: 50 Billion CFU blend of 10 strains, vegan, shelf stable' },
+      { slot: 3, purpose: 'whats-inside-and-dosage', spec: '1000px or more; flat lay of the bottle beside one capsule with the daily routine stated', notes: 'One capsule daily; 60 capsules per bottle', altText: 'One capsule beside the bottle, showing the one-a-day routine and 60 count' },
+      { slot: 4, purpose: 'named-entities-and-certifications', spec: '1000px or more; ingredient names written out in full with substantiated badges as legible marks', notes: 'Ten strains named individually; third-party tested, Non-GMO and gluten free badges', altText: 'Ten named probiotic strains with prebiotic fiber and third-party tested badge' },
+      { slot: 5, purpose: 'lifestyle-in-the-intent-environment', spec: '1000px or more; adult packing the bottle into a travel bag in natural light', notes: 'Situational: the routine continuing through a trip', altText: 'Bottle packed into a travel bag, showing the routine continuing on a trip' },
+      { slot: 6, purpose: 'facts-panel-photograph', spec: 'A real photograph of the printed panel on the physical label: sharp, evenly lit and fully readable, every row visible; never AI-generated and never AI-altered', notes: 'Show the full panel and the other-ingredients list', altText: 'Photograph of the printed supplement facts panel and ingredient list' },
+      { slot: 7, purpose: 'own-line-comparison', spec: '1000px or more; two-column layout comparing this formula against a generic unnamed alternative', notes: 'No rival brand named anywhere in the frame', altText: 'Comparison of this shelf stable 10-strain formula against a typical option' },
+      { slot: 8, purpose: 'routine-and-how-to-use', spec: '1000px or more; three-step layout showing morning routine placement and storage', notes: 'Take one capsule daily with water; store cool and dry', altText: 'Three step routine: one capsule daily with water, stored cool and dry' },
     ],
+    videoBrief: {
+      aspect: '9:16 vertical',
+      durationSeconds: 30,
+      shots: [
+        'Open on the bottle in a real kitchen, in frame within the first second',
+        'Hand picks up one capsule and takes it with water, in one unbroken shot',
+        'Cut to the bottle packed into a travel bag as the routine continues',
+        'Close on the front label with the count and the strain number readable',
+      ],
+      onScreenText: [
+        '50 Billion CFU blend, 10 strains',
+        'One capsule daily',
+        'Shelf stable, no refrigeration',
+        'Vegan, Non-GMO, gluten free',
+      ],
+      notes: 'Shot vertical throughout, never cropped from a wide edit. Assume it is watched muted.',
+    },
   },
   qa: {
     qa: [
@@ -170,7 +188,7 @@ export const mockLlm: LlmClient = async ({ user }) => {
             ? 'attributes'
             : user.includes('A+ content')
               ? 'aplus'
-              : user.includes('image/creative plan')
+              : user.includes('image plan plus a')
                 ? 'images'
                 : user.includes('Q&A pairs seeding')
                   ? 'qa'

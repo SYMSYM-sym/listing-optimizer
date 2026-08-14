@@ -466,6 +466,46 @@ export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
     },
   },
   {
+    id: 'rules.imageArchitecture.slots',
+    disarms:
+      'C29 entirely \u2014 with no slot architecture nothing verifies that the main-image brief states the background, the fill share and the pixel floor, or that the regulated panel slot demands a REAL photograph, and those two briefs are the ones that may never be AI-generated',
+    present: (p) => nonEmptyList(p.rules?.imageArchitecture?.slots),
+  },
+  {
+    id: 'rules.imageArchitecture.slotTokens',
+    disarms:
+      'the CONTENT half of C29 \u2014 slots with no required tokens are shape-checked only, so "nice product shot, good lighting" satisfies the main image and the panel loses its real-photograph requirement',
+    present: (p) =>
+      (p.rules?.imageArchitecture?.slots ?? []).some((s) =>
+        (s?.requiredTokens ?? []).some((g) => nonEmptyString(g?.label) && nonEmptyList(g?.anyOf)),
+      ),
+  },
+  {
+    id: 'rules.imageArchitecture.altMax',
+    disarms:
+      'C30 \u2014 without a cap an over-long ALT string ships silently, and an EMPTY one stops being reported at all, which is where a stale template naming a rival brand survives',
+    present: (p) => {
+      const n = p.rules?.imageArchitecture?.altMax;
+      return typeof n === 'number' && n >= 1;
+    },
+  },
+  {
+    id: 'rules.imageArchitecture.video',
+    disarms:
+      'the video half of C29 \u2014 the brief could go missing, be written for the wrong frame, or run to any length, and its on-screen strings would never be demanded at all',
+    present: (p) => {
+      const v = p.rules?.imageArchitecture?.video;
+      return (
+        !!v &&
+        nonEmptyString(v.aspect) &&
+        typeof v.minSeconds === 'number' &&
+        typeof v.maxSeconds === 'number' &&
+        v.minSeconds > 0 &&
+        v.maxSeconds >= v.minSeconds
+      );
+    },
+  },
+  {
     id: 'rules.units.dimensions',
     disarms: 'the unit-anchored potency + fact-consistency checks (C10/C12/A5)',
     present: (p) => {

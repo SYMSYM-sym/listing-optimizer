@@ -157,10 +157,18 @@ describe('prompt hygiene — the generated image plan carries no banned vocabula
   it.each(PACK_IDS)('%s: imagePlan purpose/spec/notes are clean', async (packId) => {
     const pack = loadPack(packId);
     const listing = await optimize(snapshot, pack, mockLlm);
-    expect(listing.imagePlan.length).toBeGreaterThanOrEqual(7);
+    expect(listing.imagePlan.length).toBeGreaterThanOrEqual(8);
     const offenders: string[] = [];
+    // WS8: ALT text and the video brief are customer-facing too, and the ALT
+    // string is the one an operator never looks at again.
+    for (const [i, text] of (listing.videoBrief?.onScreenText ?? []).entries()) {
+      for (const hit of bannedHits(pack, text)) offenders.push(`videoBrief.onScreenText[${i}]: ${hit}`);
+    }
+    for (const [i, text] of (listing.videoBrief?.shots ?? []).entries()) {
+      for (const hit of bannedHits(pack, text)) offenders.push(`videoBrief.shots[${i}]: ${hit}`);
+    }
     listing.imagePlan.forEach((slot, i) => {
-      for (const key of ['purpose', 'spec', 'notes'] as const) {
+      for (const key of ['purpose', 'spec', 'notes', 'altText'] as const) {
         const text = String(slot?.[key] ?? '');
         for (const hit of bannedHits(pack, text)) {
           offenders.push(`imagePlan[${i}].${key}: ${hit} — ${text}`);

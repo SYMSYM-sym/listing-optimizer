@@ -396,6 +396,23 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   // 6 · A+ content modules
   // -------------------------------------------------------------------------
   h += '<h2>6 · A+ content modules</h2>';
+  // WS8 — A+ DISCLOSURES (pack data). Three things an operator otherwise finds
+  // out after building the pack: the Brand Story is a separate brand-level
+  // carousel this copy does not populate, banners carry their own ALT (the
+  // invisible surface where a stale template's rival brand name survives), and
+  // the carousel is TRIMMED on render so a long card set does not all display.
+  // Premium A+ is declared out of scope here rather than silently unsupported.
+  const aplusNotes = rules.imageArchitecture?.aplusNotes;
+  if (aplusNotes) {
+    for (const note of [
+      aplusNotes.brandStoryCard,
+      aplusNotes.bannerAlt,
+      aplusNotes.carouselTrim,
+      aplusNotes.premiumScope,
+    ]) {
+      if (note) h += `<div class=kwnote>${esc(note)}</div>`;
+    }
+  }
   const modules = aplus?.modules ?? [];
   modules.forEach((m, i) => {
     h += card({
@@ -418,6 +435,16 @@ ul.ops{margin:8px 0 0;padding-left:20px}
       value: m.body ?? '',
       copyable,
     });
+    if (m.bannerAltText) {
+      h += card({
+        label: `Module ${i + 1} (${m.id}) — banner ALT`,
+        field: `aplus_${m.id}_banner_alt`,
+        value: m.bannerAltText,
+        meta: `≤${rules.imageArchitecture?.altMax ?? 100} chars`,
+        note: 'Set on the banner image itself. Invisible on the page — check the LIVE value on day one.',
+        copyable,
+      });
+    }
   });
   const rows = aplus?.comparison?.rows ?? [];
   if (rows.length > 0) {
@@ -541,7 +568,42 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   }
 
   // -------------------------------------------------------------------------
-  // 12 · Keyword reference — WS3. The one section on this sheet that is about
+  // 11b · Visual production pack — WS8. PROMPTS, never rendered assets: the
+  //       operator controls the render and the spend. Slot 1 and the regulated
+  //       panel slot carry machine-checked requirements (C29), and every ALT
+  //       string is length-checked (C30) — so what is printed here is verified,
+  //       not merely present.
+  // -------------------------------------------------------------------------
+  const imagePlan = l.imagePlan ?? [];
+  const altMax = rules.imageArchitecture?.altMax ?? 100;
+  if (imagePlan.length > 0) {
+    h += `<h2>12 · Visual production pack — ${imagePlan.length} slots + video</h2>`;
+    h +=
+      '<p class=sub>Briefs only. Render them yourself: two of these images may never be AI-generated or AI-altered, and the panel photograph is a compliance document.</p>';
+    h += `<table><tr><th>#</th><th>Purpose</th><th>Spec</th><th>Notes</th><th>ALT (\u2264${altMax})</th></tr>`;
+    for (const slot of imagePlan) {
+      const alt = slot?.altText ?? '';
+      const altClass = alt.length > altMax ? 'bad' : 'v';
+      h +=
+        `<tr><td>${esc(slot?.slot)}</td><td class=v>${esc(slot?.purpose)}</td>` +
+        `<td>${esc(slot?.spec)}</td><td>${esc(slot?.notes)}</td>` +
+        `<td class="${altClass}">${esc(alt)}<div class=note>${alt.length}/${altMax}</div></td></tr>`;
+    }
+    h += '</table>';
+  }
+  const brief = l.videoBrief;
+  if (brief) {
+    h +=
+      `<div class=f><div class=fh><div><b>Video brief</b> <code>videoBrief</code></div>` +
+      `<div class=meta>${esc(brief.aspect)} · ${esc(brief.durationSeconds)}s</div></div>` +
+      `<ol>${(brief.shots ?? []).map((b) => `<li>${esc(b)}</li>`).join('')}</ol>` +
+      `<div class=note>On-screen text (scanned exactly like a bullet): ${esc((brief.onScreenText ?? []).join(' | '))}</div>` +
+      (brief.notes ? `<div class=note>${esc(brief.notes)}</div>` : '') +
+      '</div>';
+  }
+
+  // -------------------------------------------------------------------------
+  // 13 · Keyword reference — WS3. The one section on this sheet that is about
   //      what the listing DELIBERATELY does not say as much as what it does.
   //      Every row here was machine-verified by gate C28 against the exact
   //      strings the cards above serve, so a "placed" row is a measurement,
@@ -551,7 +613,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   // -------------------------------------------------------------------------
   const coverage = audit?.keywordCoverage;
   const keywordRules = rules.keywordRules;
-  h += '<h2>12 · Keyword reference</h2>';
+  h += '<h2>13 · Keyword reference</h2>';
   if (!coverage || coverage.total === 0) {
     h += '<p class=sub>No keyword reference is attached to this run.</p>';
   } else {
@@ -606,7 +668,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   }
 
   // -------------------------------------------------------------------------
-  // 13 · Score, BEFORE and AFTER — WS6.
+  // 14 · Score, BEFORE and AFTER — WS6.
   //
   //      Until this section existed the sheet (and the results panel) showed
   //      ONE number, and that number graded the listing the operator was about
@@ -623,7 +685,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   const before = audit?.scorecard;
   const after = audit?.scorecardProposed;
   if (before || after) {
-    h += '<h2>13 · Score — before &rarr; after</h2>';
+    h += '<h2>14 · Score — before &rarr; after</h2>';
     h +=
       '<div class=f><div class=fh><div><b>Principle score</b></div>' +
       `<div class=meta>current <b>${before ? before.total : '—'}</b> &rarr; proposed <b>${after ? after.total : '—'}</b> / 100</div></div>` +
@@ -650,7 +712,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   }
 
   // -------------------------------------------------------------------------
-  // 14 · Post-publish — WS6 (P15 timing) and WS7 (marketplace/ops).
+  // 15 · Post-publish — WS6 (P15 timing) and WS7 (marketplace/ops).
   //
   //      GUIDANCE TIER, stated plainly at the top of the section: every item
   //      here is an account-side action this app can surface and cannot
@@ -659,7 +721,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   const postPublish = rules.postPublish;
   const timing = postPublish?.timingAdvisory;
   if (timing?.headline || (postPublish?.marketplaceChecklist ?? []).length > 0) {
-    h += '<h2>14 · After you publish</h2>';
+    h += '<h2>15 · After you publish</h2>';
     h +=
       '<p class=sub>Everything in this section happens in your Seller Central account and in your own records. ' +
       'This app surfaces it; it cannot do it, and nothing here was checked.</p>';

@@ -119,7 +119,7 @@ describe('WS7 — the sheet renders it, and it is not a hard-coded block', () =>
       expect(bareHtml).not.toContain(`<code>${row.id}</code>`);
     }
     // ...and the P15 timing advisory, which shares the section, is untouched.
-    expect(bareHtml).toContain('14 · After you publish');
+    expect(bareHtml).toContain('15 · After you publish');
   });
 
   it('the rendered rows track the PACK — edit the data, the sheet changes', () => {

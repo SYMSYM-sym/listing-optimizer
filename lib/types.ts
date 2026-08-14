@@ -402,6 +402,67 @@ export interface KeywordRules {
   sheetNote?: string;
 }
 
+/**
+ * WS8 — a TOKEN GROUP a slot's brief must satisfy (pack data, gate C29).
+ *
+ * `anyOf` is an OR-list of accepted spellings of ONE requirement; ALL groups
+ * on a slot must be satisfied. The list is spellings, not synonyms of intent:
+ * "pure white" and "rgb 255" are the same requirement written two ways, and a
+ * brief that says neither has not stated the requirement at all.
+ */
+export interface ImageSpecTokenGroup {
+  /** What the group is checking, used verbatim in the failure text. */
+  label: string;
+  anyOf: string[];
+}
+
+/** WS8 — one slot of the image architecture (pack data). */
+export interface ImageSlotSpec {
+  slot: number;
+  /** Canonical purpose label, rendered into the images prompt. */
+  purpose: string;
+  /** How to brief the slot — rendered verbatim into the prompt. */
+  guidance: string;
+  /**
+   * Requirements the EMITTED brief must actually carry (gate C29). Empty or
+   * absent means the slot's content is unchecked — which is why the manifest
+   * requires at least one slot to carry tokens.
+   */
+  requiredTokens?: ImageSpecTokenGroup[];
+}
+
+/** WS8 — the 9:16 video brief spec (pack data). */
+export interface VideoBriefSpec {
+  aspect: string;
+  minSeconds: number;
+  maxSeconds: number;
+  /** Rendered verbatim into the images prompt. */
+  guidance: string[];
+}
+
+/**
+ * WS8 — A+ notes the sheet renders (pack data).
+ *
+ * These are DISCLOSURES rather than instructions: what the brand-story card
+ * needs beyond its text, that banner images carry their own ALT, that the
+ * carousel is trimmed, and where the scope of this app stops.
+ */
+export interface AplusNotes {
+  brandStoryCard: string;
+  bannerAlt: string;
+  carouselTrim: string;
+  premiumScope: string;
+}
+
+/** WS8 — the visual production architecture (pack data). */
+export interface ImageArchitecture {
+  slots: ImageSlotSpec[];
+  /** ALT-text character cap per image (gate C30). */
+  altMax: number;
+  video: VideoBriefSpec;
+  aplusNotes?: AplusNotes;
+}
+
 export interface RuleSet {
   titleMaxLegacy: number; // 200
   title75Max: number; // 75
@@ -445,6 +506,8 @@ export interface RuleSet {
   keywordRules?: KeywordRules;
   /** WS6/WS7 post-publish guidance rendered by the ship sheet. */
   postPublish?: PostPublishRules;
+  /** WS8 image/video architecture (images prompt + gate C29/C30 + the sheet). */
+  imageArchitecture?: ImageArchitecture;
   /** R48 positioning anchor (prompt + ship-sheet strategy note). */
   positioningAnchor?: PositioningAnchor;
   /** AM-1 / C24 dosage-attribute guard. */
@@ -941,6 +1004,16 @@ export interface AplusModule {
   body: string;
   subcopy?: string;
   claimBearing: boolean;
+  /**
+   * WS8 — ALT text for this module's banner image (≤ `rules.imageArchitecture.altMax`).
+   *
+   * A+ banners carry ALT exactly as gallery images do, and a live listing's
+   * ALT is where an old agency template's competitor names sit: invisible on
+   * the page and a real trademark exposure. Optional because a text-only
+   * module has no banner; when present it is length-checked by C30 and scanned
+   * for banned vocabulary like any other customer surface.
+   */
+  bannerAltText?: string;
 }
 
 export interface AplusContent {
@@ -965,6 +1038,25 @@ export interface ImageSlot {
    * as a FAILURE, so optionality here is backward compatibility, never a skip.
    */
   altText?: string;
+}
+
+/**
+ * WS8 — the 9:16 VIDEO BRIEF.
+ *
+ * PROMPTS, NOT ASSETS: the app writes the brief and the operator controls the
+ * render and the spend. Every string here is customer-adjacent — the on-screen
+ * text is read by the same OCR that reads the images — so `shots` and
+ * `onScreenText` are scanned by the gate exactly like a bullet.
+ */
+export interface VideoBrief {
+  /** e.g. '9:16 vertical'. */
+  aspect: string;
+  durationSeconds: number;
+  /** Beat-by-beat outline, problem to solution. */
+  shots: string[];
+  /** Every string that appears ON SCREEN. Scanned like copy, because it is. */
+  onScreenText: string[];
+  notes: string;
 }
 
 export interface QAItem {
@@ -1043,8 +1135,14 @@ export interface OptimizedListing {
   /** Verbatim category disclaimer constant. */
   fdaDisclaimer: string;
   aplusContent: AplusContent;
-  /** ~7 slots per amazon-rules; no price/ratings/CTAs. */
+  /** 8 slots + ALT text per amazon-rules; no price/ratings/CTAs. */
   imagePlan: ImageSlot[];
+  /**
+   * WS8 — the 9:16 video brief that accompanies the still slots.
+   * Optional on the TYPE so a run stored before it existed still parses; gate
+   * C29 treats a missing brief on a freshly generated listing as a FAILURE.
+   */
+  videoBrief?: VideoBrief;
   /**
    * WS3 — the KEYWORD REFERENCE for this listing (playbook Phase 7).
    *

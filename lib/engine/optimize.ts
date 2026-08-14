@@ -235,8 +235,14 @@ export async function optimize(
         base && { attributes: base.attributes }),
       run('aplus', () => generateGroup(llm, 'aplus', system, withCtx('aplus', groupPrompts.aplus(snapshot, canonicalProductName)), aplusGroupSchema, 6000),
         base && { modules: base.aplusContent.modules.map((m) => ({ ...m, body: stripDisclaimer(m.body, disclaimer) })), comparison: base.aplusContent.comparison, faq: base.aplusContent.faq.map((f) => ({ ...f, a: stripDisclaimer(f.a, disclaimer) })) }),
-      run('images', () => generateGroup(llm, 'images', system, withCtx('images', groupPrompts.images(snapshot)), imagesGroupSchema, 2500),
-        base && { imagePlan: base.imagePlan }),
+      run('images', () => generateGroup(llm, 'images', system, withCtx('images', groupPrompts.images(snapshot)), imagesGroupSchema, 3500),
+        base && {
+          imagePlan: base.imagePlan.map((s) => ({ ...s, altText: s.altText ?? '' })),
+          // WS8: a repair round that does not regenerate the images group must
+          // carry the stored brief forward unchanged, not invent an empty one —
+          // C29 would then report a missing brief the round never touched.
+          videoBrief: base.videoBrief ?? { aspect: '', durationSeconds: 0, shots: [], onScreenText: [], notes: '' },
+        }),
       run('qa', () => generateGroup(llm, 'qa', system, withCtx('qa', groupPrompts.qa(snapshot, canonicalProductName)), qaGroupSchema, 3500),
         base && { qa: base.qa.map((f) => ({ ...f, a: stripDisclaimer(f.a, disclaimer) })) }),
     ]);
@@ -298,6 +304,7 @@ export async function optimize(
     fdaDisclaimer: disclaimer,
     aplusContent,
     imagePlan: images.imagePlan,
+    videoBrief: images.videoBrief,
     qa: qa.qa.map((f) => ({
       ...f,
       a: f.claimBearing && disclaimer ? appendDisclaimer(f.a, disclaimer) : f.a,

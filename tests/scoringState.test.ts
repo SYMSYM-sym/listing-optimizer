@@ -183,7 +183,7 @@ describe('WS6 — P15 timing advisory in the post-publish section', () => {
   it('renders the pack advisory, headline and every note', () => {
     const html = buildShipSheet({ optimized: listing, audit, pack });
     const advisory = pack.rules.postPublish!.timingAdvisory!;
-    expect(html).toContain('14 · After you publish');
+    expect(html).toContain('15 · After you publish');
     expect(html).toContain(advisory.headline.replace(/&/g, '&amp;'));
     for (const note of advisory.notes) {
       expect(html).toContain(note.slice(0, 40).replace(/&/g, '&amp;'));
@@ -200,7 +200,7 @@ describe('WS6 — P15 timing advisory in the post-publish section', () => {
     const bare = JSON.parse(JSON.stringify(pack)) as typeof pack;
     delete bare.rules.postPublish;
     const html = buildShipSheet({ optimized: listing, audit, pack: bare });
-    expect(html).not.toContain('14 · After you publish');
+    expect(html).not.toContain('15 · After you publish');
   });
 });
 

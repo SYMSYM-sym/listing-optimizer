@@ -37,12 +37,14 @@ import {
   c26ActiveIngredientSubset,
   c27OutputHygiene,
   c28KeywordPlacement,
+  c29ImagePlanContent,
+  c30ImageAltText,
   packFailClosed,
   type GateContext,
 } from './checks';
 
 /**
- * The verify gate: C1–C12 + C15–C28 + A1–A9 + PACK (C13/C14 are
+ * The verify gate: C1–C12 + C15–C30 + A1–A9 + PACK (C13/C14 are
  * source-project-only and intentionally omitted). PASS only if zero failures.
  * The gate REPORTS — it never mutates content to force a pass.
  */
@@ -80,6 +82,8 @@ export function runGate(
     ...c26ActiveIngredientSubset(listing, pack),
     ...c27OutputHygiene(listing, pack),
     ...c28KeywordPlacement(listing, pack),
+    ...c29ImagePlanContent(listing, pack),
+    ...c30ImageAltText(listing, pack),
     ...a1AplusDisclaimer(listing, pack),
     ...a2AplusBannedTerms(listing, pack),
     ...a3AplusBrandLeakage(listing),

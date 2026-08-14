@@ -334,9 +334,19 @@ describe('PACK fail-closed', () => {
       x.attributes = {};
       x.fdaDisclaimer = '';
       x.qa = [{ q: 'How long are they?', a: 'Twelve inches end to end.', claimBearing: false }];
+      // WS8: the video brief and the ALT strings are SCANNED surfaces now, so a
+      // fixture that leaves the regulated-category brief in place is no longer a
+      // "genuinely non-regulated listing" — the suspicion backstop reads them.
       x.imagePlan = [
-        { slot: 1, purpose: 'main image', spec: 'white background', notes: 'no overlay text' },
+        { slot: 1, purpose: 'main image', spec: 'white background', notes: 'no overlay text', altText: 'SteelPro Kitchen Tongs on a white background' },
       ];
+      x.videoBrief = {
+        aspect: '9:16 vertical',
+        durationSeconds: 20,
+        shots: ['Open on the tongs beside a hot pan', 'One shot of the locking hinge'],
+        onScreenText: ['SteelPro Kitchen Tongs', 'Locking hinge'],
+        notes: 'Shot vertical throughout.',
+      };
       x.aplusContent = {
         fdaDisclaimer: '',
         modules: [

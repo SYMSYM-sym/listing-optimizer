@@ -199,10 +199,29 @@ export function listingOf(p: NonRegulatedProduct): OptimizedListing {
         { q: 'What is in the box?', a: 'The unit, a short manual and the accessories listed above.', claimBearing: false },
       ],
     },
+    // WS8 — the 8-slot visual pack. Slots 1 and 6 carry the requirements gate
+    // C29 verifies; the rest are free-form briefs.
     imagePlan: [
-      { slot: 1, purpose: 'main-white-background', spec: '2000px long side; pure white; product fills the frame', notes: 'No overlay text' },
-      { slot: 2, purpose: 'in-context lifestyle', spec: '1600px; natural light; product in use', notes: 'Show scale against a familiar object' },
+      { slot: 1, purpose: 'main-white-background', spec: 'A real photograph of the actual product on a pure white background, RGB 255/255/255; product fills at least 85% of the frame; longest side 1000px or more; never AI-generated', notes: 'No overlay text, no badges', altText: `${name} on a plain white background` },
+      { slot: 2, purpose: 'benefit-infographic', spec: '1600px; up to five icon callouts; overlay text legible at phone size', notes: 'Lead with the one thing it does better', altText: `${name} key features at a glance` },
+      { slot: 3, purpose: 'whats-included', spec: '1600px; flat lay of everything in the box', notes: 'Show every part that ships', altText: `Everything included with the ${p.productName}` },
+      { slot: 4, purpose: 'materials-and-build', spec: '1600px; macro detail of the material and the joins', notes: 'Name the material in the overlay', altText: `Close detail of the ${p.productName} build and materials` },
+      { slot: 5, purpose: 'in-context lifestyle', spec: '1600px; natural light; product in use in its real setting', notes: 'Show scale against a familiar object', altText: `${name} in use at home` },
+      { slot: 6, purpose: 'regulated-label-panel-photograph', spec: 'A real photograph of the printed label on the product or its box: sharp, evenly lit and fully readable; never AI-generated and never AI-altered', notes: 'Show the whole printed label', altText: `Photograph of the printed ${p.productName} label` },
+      { slot: 7, purpose: 'own-line-comparison', spec: '1600px; two-column layout against a generic unnamed alternative', notes: 'Name no rival brand anywhere in the frame', altText: `${name} compared with a typical alternative` },
+      { slot: 8, purpose: 'how-to-use', spec: '1600px; three-step layout showing setup and everyday use', notes: 'Keep each step to one short line', altText: `Three steps to set up and use the ${p.productName}` },
     ],
+    videoBrief: {
+      aspect: '9:16 vertical',
+      durationSeconds: 25,
+      shots: [
+        'Open on the product in its real setting, in frame within the first second',
+        'One unbroken shot of the main action it is bought for',
+        'Close on the material detail and the finish',
+      ],
+      onScreenText: [`${name}`, 'Built for everyday use', 'Wipes clean'],
+      notes: 'Shot vertical throughout, never cropped from a wide edit. Assume it is watched muted.',
+    },
     qa: [
       { q: 'Does it arrive assembled?', a: 'Yes, it arrives ready to use.', claimBearing: false },
       { q: 'How is it cleaned?', a: 'A damp cloth is enough for everyday marks.', claimBearing: false },

@@ -194,7 +194,7 @@ describe('ship sheet — verified run', () => {
    * on the sheet — just in the section that can carry them properly.
    */
   it('the account-side obligations moved to the post-publish section, not off the sheet', () => {
-    const post = html.slice(html.indexOf('<h2>14 · After you publish'));
+    const post = html.slice(html.indexOf('<h2>15 · After you publish'));
     expect(post).toContain('cGMP');
     expect(post).toContain('rating defence');
     expect(post).toContain('4.0');

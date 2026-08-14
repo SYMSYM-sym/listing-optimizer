@@ -67,7 +67,21 @@ export function customerSurfaces(l: OptimizedListing): [string, string][] {
     out.push([`imagePlan[${i}].purpose`, str(slot?.purpose)]);
     out.push([`imagePlan[${i}].spec`, str(slot?.spec)]);
     out.push([`imagePlan[${i}].notes`, str(slot?.notes)]);
+    // WS8: ALT text is CUSTOMER-FACING and invisible on the page — the exact
+    // combination that lets a stale template's rival brand name or a banned
+    // term sit there unnoticed. It is scanned like every other surface.
+    out.push([`imagePlan[${i}].altText`, str(slot?.altText)]);
   });
+  // WS8: the video brief's on-screen strings are read by the same OCR that
+  // reads the images, so they are copy and are scanned as copy.
+  const video = l.videoBrief;
+  if (video && typeof video === 'object') {
+    (video.shots ?? []).forEach((b, i) => out.push([`videoBrief.shots[${i}]`, str(b)]));
+    (video.onScreenText ?? []).forEach((t, i) =>
+      out.push([`videoBrief.onScreenText[${i}]`, str(t)]),
+    );
+    out.push(['videoBrief.notes', str(video.notes)]);
+  }
   return out;
 }
 
@@ -134,6 +148,8 @@ export function aplusSurfaces(a: AplusContent | null | undefined): [string, stri
     out.push([`aplus.modules[${id}].headline`, str(m?.headline)]);
     out.push([`aplus.modules[${id}].body`, str(m?.body)]);
     if (m?.subcopy) out.push([`aplus.modules[${id}].subcopy`, str(m.subcopy)]);
+    // WS8: banner ALT is customer-facing text on a customer-facing module.
+    if (m?.bannerAltText) out.push([`aplus.modules[${id}].bannerAltText`, str(m.bannerAltText)]);
   });
   (a.comparison?.rows ?? []).forEach((r, i) => {
     out.push([`aplus.comparison[${i}].label`, str(r?.label)]);

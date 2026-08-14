@@ -29,24 +29,46 @@ import type { ListingSnapshot, OptimizedListing } from '@/lib/types';
  *
  * It rewrites nothing and is used only for scoring.
  */
+/**
+ * NULL-SAFE coercion at the boundary.
+ *
+ * The scorer used to read only a SCRAPED snapshot, whose fields the ingester
+ * had already normalized to strings. It now also reads a GENERATED listing,
+ * and a malformed generation (a `null` bullet, a numeric one) must produce a
+ * low score and a gate failure — never a TypeError, which escapes `buildAudit`
+ * and takes the whole request down. A thrown audit is a fail-OPEN in practice:
+ * the caller never receives `verified:false` at all.
+ */
+const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
+
 export function proposedAsSnapshot(
   current: ListingSnapshot,
   proposed: OptimizedListing,
 ): ListingSnapshot {
   const a = proposed.aplusContent;
   const aplusText = [
-    ...(a?.modules ?? []).map((m) => `${m?.headline ?? ''} ${m?.body ?? ''} ${m?.subcopy ?? ''}`),
-    ...(a?.comparison?.rows ?? []).map((r) => `${r?.label ?? ''} ${r?.ours ?? ''} ${r?.typical ?? ''}`),
-    ...(a?.faq ?? []).map((f) => `${f?.q ?? ''} ${f?.a ?? ''}`),
+    ...(Array.isArray(a?.modules) ? a.modules : []).map(
+      (m) => `${str(m?.headline)} ${str(m?.body)} ${str(m?.subcopy)}`,
+    ),
+    ...(Array.isArray(a?.comparison?.rows) ? a.comparison.rows : []).map(
+      (r) => `${str(r?.label)} ${str(r?.ours)} ${str(r?.typical)}`,
+    ),
+    ...(Array.isArray(a?.faq) ? a.faq : []).map((f) => `${str(f?.q)} ${str(f?.a)}`),
   ]
     .join(' \n ')
     .trim();
+  const attributes: Record<string, string> = {};
+  for (const [k, v] of Object.entries(
+    proposed.attributes && typeof proposed.attributes === 'object' ? proposed.attributes : {},
+  )) {
+    attributes[k] = str(v);
+  }
   return {
     ...current,
-    title: proposed.title75 || proposed.title || '',
-    bullets: [...(proposed.bullets ?? [])],
-    description: proposed.description ?? '',
-    attributes: { ...(proposed.attributes ?? {}) },
+    title: str(proposed.title75) || str(proposed.title),
+    bullets: (Array.isArray(proposed.bullets) ? proposed.bullets : []).map(str),
+    description: str(proposed.description),
+    attributes,
     raw: { ...(typeof current.raw === 'object' && current.raw !== null ? current.raw : {}), aplusText },
   };
 }

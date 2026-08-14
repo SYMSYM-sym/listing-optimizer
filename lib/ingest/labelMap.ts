@@ -89,7 +89,7 @@ export function mapAttributes(
   for (const { name, value } of raw) {
     const field = mapLabel(name);
     if (field && !field.startsWith('_')) {
-      // first occurrence wins (attributes[] beats specifications[] duplicates)
+      // first occurrence wins (attributes[] shots specifications[] duplicates)
       if (!(field in attributes)) attributes[field] = value;
     } else if (!field) {
       unmapped.push({ name, value });

@@ -955,5 +955,152 @@
         "detail": "Marketplace listing policy changed twice in a single half-year during the source project. Monthly: re-run the assistant interrogation diagnostic, re-check the approved TIC provider list (it is refreshed monthly and providers drop off it), and confirm the browse node and product-type token have not drifted. Any cached list is a liability the moment it is written down, this document included."
       }
     ]
+  },
+  "_imageArchitectureComment": [
+    "WS8 — the VISUAL PRODUCTION architecture (playbook Phase 11).",
+    "PROMPTS ONLY: this project writes briefs, the operator renders them and controls the spend.",
+    "requiredTokens are what gate C29 verifies the EMITTED brief actually says. Each group is one",
+    "requirement written in every spelling we accept; ALL groups on a slot must be satisfied.",
+    "Two images may NEVER be AI-generated or AI-altered whatever else changes: the main bottle",
+    "Two images may NEVER be AI-generated or AI-altered whatever else changes: the main product photograph and the printed label panel. Where the category is regulated the panel is a compliance document and the parity",
+    "anchor the enforcement AI compares the copy against, which is why its slot carries the",
+    "real-photograph requirement as a machine-checked token group rather than as advice."
+  ],
+  "imageArchitecture": {
+    "altMax": 100,
+    "slots": [
+      {
+        "slot": 1,
+        "purpose": "main-white-background",
+        "guidance": "The real bottle photograph on a pure white background. State the background as pure white RGB 255/255/255, the product filling at least 85% of the frame, and a longest side of at least 1000px. Say plainly that it is a real photograph of the actual bottle and never AI-generated. No badges, no overlay text, no borders.",
+        "requiredTokens": [
+          {
+            "label": "pure white background",
+            "anyOf": [
+              "pure white",
+              "rgb 255",
+              "white background",
+              "255/255/255"
+            ]
+          },
+          {
+            "label": "product fills at least 85% of the frame",
+            "anyOf": [
+              "85%",
+              "85 percent",
+              "85 per cent"
+            ]
+          },
+          {
+            "label": "longest side at least 1000px",
+            "anyOf": [
+              "1000px",
+              "1000 px",
+              "1000 pixels",
+              "1,000px",
+              "1,000 px"
+            ]
+          },
+          {
+            "label": "a real photograph, never AI-generated",
+            "anyOf": [
+              "real photograph",
+              "real photo",
+              "actual bottle",
+              "never ai-generated",
+              "not ai-generated",
+              "never ai generated"
+            ]
+          }
+        ]
+      },
+      {
+        "slot": 2,
+        "purpose": "benefit-infographic",
+        "guidance": "Benefit infographic carrying the headline spec, phrased as the label attaches it. Legible overlay text at phone size: if a phone camera app can copy the text off the image, the assistant can read it too."
+      },
+      {
+        "slot": 3,
+        "purpose": "whats-inside-and-dosage",
+        "guidance": "What is inside and how much of it: the format, the count, and the daily routine. Overlay text states figures only as the label states them."
+      },
+      {
+        "slot": 4,
+        "purpose": "named-entities-and-certifications",
+        "guidance": "Every named component written out in full, with substantiated certification marks as legible badges. Name the entities: they are what an assistant lifts when a shopper asks what is in it."
+      },
+      {
+        "slot": 5,
+        "purpose": "lifestyle-in-the-intent-environment",
+        "guidance": "Lifestyle frame shot in the environment the buyer is actually in when the need arises, not a generic studio scene."
+      },
+      {
+        "slot": 6,
+        "purpose": "regulated-label-panel-photograph",
+        "guidance": "A real photograph of the printed information panel on the physical label - the facts panel, ingredient list and warnings where the category has them, otherwise the printed back label. Sharp, evenly lit, fully readable, every row visible. Never AI-generated and never AI-altered: where the category is regulated this image is a compliance document and the anchor the marketplace scan compares the copy against.",
+        "requiredTokens": [
+          {
+            "label": "a photograph of the printed panel or label",
+            "anyOf": [
+              "printed panel",
+              "facts panel",
+              "panel photograph",
+              "photograph of the panel",
+              "printed label",
+              "back label",
+              "label panel"
+            ]
+          },
+          {
+            "label": "a real photograph, never AI-generated or altered",
+            "anyOf": [
+              "real photograph",
+              "real photo",
+              "never ai-generated",
+              "not ai-generated",
+              "never ai-altered",
+              "not ai-altered",
+              "never ai generated"
+            ]
+          },
+          {
+            "label": "fully legible",
+            "anyOf": [
+              "legible",
+              "readable",
+              "sharp",
+              "fully readable"
+            ]
+          }
+        ]
+      },
+      {
+        "slot": 7,
+        "purpose": "own-line-comparison",
+        "guidance": "Own-line comparison or problem-to-solution frame. Compare against a generic unnamed alternative only: naming a rival brand is a trademark exposure."
+      },
+      {
+        "slot": 8,
+        "purpose": "routine-and-how-to-use",
+        "guidance": "The routine: when to take it, with what, and how it fits a day. Storage note if the format needs one."
+      }
+    ],
+    "video": {
+      "aspect": "9:16 vertical",
+      "minSeconds": 15,
+      "maxSeconds": 60,
+      "guidance": [
+        "Problem to solution, in that order, with the product on screen inside the first three seconds.",
+        "Every on-screen string is customer-facing copy and is scanned exactly like a bullet: no cost figures, no rating or review marks, no promise about outcomes or returns, no urgency wording, and no named condition.",
+        "Assume it is watched muted: the on-screen text has to carry the whole message on its own.",
+        "Shoot for the vertical frame from the start rather than cropping a wide edit down to it."
+      ]
+    },
+    "aplusNotes": {
+      "brandStoryCard": "The Brand Story module is a separate carousel that renders across every ASIN in the brand, ABOVE the product A+ module. It carries its own card set, its own background image and its own headline; the copy below is the product A+ and does not populate it. Build the Brand Story once at brand level and it appears on every listing you own.",
+      "bannerAlt": "Every A+ banner image carries its own ALT text, capped at the same 100 characters as a gallery image. It is invisible on the page, which is exactly why a stale agency template naming a rival brand survives there for years. Set it on day one and check the live values.",
+      "carouselTrim": "A+ image carousels are trimmed on render: a card set built at full length will not all display, and the cards past the cut are not indexed either. Front-load the cards that matter and treat the tail as expendable rather than assuming all of them show.",
+      "premiumScope": "Premium A+ (the wider layout, in-module video and hover/hotspot cards) is deliberately OUT OF SCOPE for this app: it changes the module set and the asset specs, and generating copy against a tier the account may not hold would produce a pack that cannot be pasted. The modules below are the standard tier."
+    }
   }
 }

@@ -75,6 +75,8 @@ export const aplusGroupSchema = z
           body: z.string().min(30),
           subcopy: z.string().optional(),
           claimBearing: claimBearingField,
+          /** WS8 — ALT for the module banner; length is gate C30's job. */
+          bannerAltText: z.string().optional(),
         })),
       )
       .min(5)
@@ -116,6 +118,15 @@ export const aplusGroupSchema = z
     message: 'A+ must include hero module',
   });
 
+/**
+ * WS8 — 8 still slots + the 9:16 video brief.
+ *
+ * STRUCTURE ONLY, as everywhere at this boundary: the CONTENT of a brief (the
+ * white-background/fill/pixel tokens, the real-photograph requirement) is
+ * verified by gate C29 against the pack's slot specs, and the ALT cap by C30.
+ * A schema that enforced the cap here would let a repair round satisfy Zod and
+ * still ship an over-long ALT, because the schema runs before assembly.
+ */
 export const imagesGroupSchema = z.object({
   imagePlan: z
     .array(
@@ -124,9 +135,20 @@ export const imagesGroupSchema = z.object({
         purpose: z.string().min(3),
         spec: z.string().min(10),
         notes: z.string(),
+        altText: z.string().default(''),
       }),
     )
-    .length(7),
+    .length(8),
+  videoBrief: z.object({
+    aspect: z.string().min(3),
+    durationSeconds: z.preprocess(
+      (v) => (typeof v === 'string' ? Number.parseInt(v, 10) : v),
+      z.number().int().min(1).max(600),
+    ),
+    shots: z.array(z.string().min(5)).min(3),
+    onScreenText: z.array(z.string().min(1)).min(2),
+    notes: z.string().default(''),
+  }),
 });
 
 export const qaGroupSchema = z.object({

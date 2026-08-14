@@ -67,11 +67,25 @@ export function toMarkdown(listing: OptimizedListing, audit: Audit): string {
     lines.push(`  A: ${f.a}`);
   }
   lines.push('');
-  lines.push('## Image / Slot Plan');
+  lines.push('## Visual production pack');
+  lines.push('| # | Purpose | Spec | Notes | ALT |');
+  lines.push('|---|---|---|---|---|');
+  const cell = (v: string): string => v.replace(/\|/g, '\\|').replace(/\n/g, ' ');
   for (const s of listing.imagePlan) {
-    lines.push(`${s.slot}. **${s.purpose}** — ${s.spec} (${s.notes})`);
+    lines.push(`| ${s.slot} | ${cell(s.purpose)} | ${cell(s.spec)} | ${cell(s.notes)} | ${cell(s.altText ?? '')} |`);
   }
   lines.push('');
+  // WS8 — the 9:16 brief travels with the record; its on-screen strings are
+  // copy and were scanned as copy.
+  const brief = listing.videoBrief;
+  if (brief) {
+    lines.push(`### Video brief — ${brief.aspect}, ${brief.durationSeconds}s`);
+    for (const b of brief.shots ?? []) lines.push(`- ${b}`);
+    lines.push('');
+    lines.push(`**On-screen text:** ${(brief.onScreenText ?? []).join(' | ')}`);
+    if (brief.notes) lines.push(brief.notes);
+    lines.push('');
+  }
   // WS3 — the keyword reference travels with the RECORD as well as the sheet:
   // whoever reads this file later needs to know what the listing deliberately
   // avoided, and how the demand behind an avoided term is still captured.
