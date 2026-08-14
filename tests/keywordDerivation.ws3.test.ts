@@ -1,6 +1,10 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { LlmClient } from '@/lib/engine/llm';
-import { deriveKeywordPlacement, MODEL_OWNED_STATUSES } from '@/lib/engine/keywordPlacement';
+import {
+  ABSENCE_CLAIM_STATUSES,
+  deriveKeywordPlacement,
+  MODEL_OWNED_STATUSES,
+} from '@/lib/engine/keywordPlacement';
 import { optimize } from '@/lib/engine/optimize';
 import { keywordsGroupSchemaFor } from '@/lib/engine/schemas';
 import { buildGroupPrompts } from '@/lib/engine/prompts';
@@ -201,20 +205,31 @@ describe('(b) R50 — a rival brand marked negative fails from every surface, af
     expect(runGate(l, pack, ctx).pass).toBe(true);
   });
 
-  it('derivation NEVER rewrites an intent status — the four are model-owned', () => {
+  /**
+   * E4 NARROWED THIS FROM FOUR STATUSES TO TWO, and the two that stayed are
+   * the two that state an INTENT. `negative` ("exclude this rival") and
+   * `captured-via` ("reach this demand through another cluster") are
+   * judgements no substring search can make, so derivation never touches them
+   * EVEN WHEN THE TERM IS SITTING IN THE COPY — which is exactly when a
+   * derivation bug would silently promote one to `placed` and launder a rival
+   * brand. `candidate` / `not-targeted` moved to the derived side because they
+   * state a FACT ABOUT THE COPY; `(g)` below holds that leg.
+   */
+  it('derivation NEVER rewrites an intent status — the two are model-owned', () => {
     const l = clone();
     const rows: KeywordTerm[] = [
-      // every one of these terms IS in the copy, which is exactly when a
-      // derivation bug would silently promote it to `placed`
       { term: 'vegan', tier: 'negative', status: 'negative', surfaces: [], why: 'planted' },
-      { term: 'shelf stable', tier: 'candidate', status: 'candidate', surfaces: [], why: 'planted' },
-      { term: 'prebiotic', tier: 'strategy', status: 'not-targeted', surfaces: [], why: 'planted' },
       { term: 'digestive balance', tier: 'demand', status: 'captured-via', surfaces: [], why: 'planted', via: 'cluster' },
     ];
+    // both terms ARE in the copy — the hostile case for an intent status
+    for (const r of rows) expect(allSurfaces().some((n) => surfaceHas(l, n, r.term)), r.term).toBe(true);
     const derived = deriveKeywordPlacement(rows, l, pack);
-    expect(derived.map((r) => r.status)).toEqual(['negative', 'candidate', 'not-targeted', 'captured-via']);
+    expect(derived.map((r) => r.status)).toEqual(['negative', 'captured-via']);
     expect(derived.every((r) => r.surfaces.length === 0)).toBe(true);
+    expect(derived.every((r) => r.note === undefined)).toBe(true);
     for (const s of derived.map((r) => r.status)) expect(MODEL_OWNED_STATUSES).toContain(s);
+    // ...and the partition is a PARTITION: no status sits on both sides.
+    for (const s of MODEL_OWNED_STATUSES) expect(ABSENCE_CLAIM_STATUSES).not.toContain(s);
   });
 });
 

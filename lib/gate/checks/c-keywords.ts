@@ -39,7 +39,16 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  *                    scanned on every surface, the invisible ones included.
  *   `candidate`    — a term held back for PPC / off-site / the next copy cycle.
  *                    It must NOT be in the current published copy, or the
- *                    "not yet" is a fiction.
+ *                    "not yet" is a fiction. A live run wrote this status over
+ *                    the product's OWN ingredient names and this leg reported
+ *                    77 of them in one artifact — correctly, every time: the
+ *                    terms were in the title, the attributes, the A+ and the
+ *                    FAQ. The incoherence is fixed where it is made, at the
+ *                    derivation boundary (`lib/engine/keywordPlacement.ts` now
+ *                    derives this status like any other placement claim and
+ *                    records the correction on `note`), NOT here. This leg is
+ *                    byte-for-byte unchanged, which is what still catches a
+ *                    STORED or hand-edited artifact.
  *   `captured-via` — the term is deliberately ABSENT and the demand is reached
  *                    through a compliant cluster instead, so BOTH halves are
  *                    checked: the route MUST be documented in `via` (K4), and
@@ -50,7 +59,11 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  *                    term: an undocumented captured-via is a banned term with a
  *                    label on it, and a documented one whose term is in the copy
  *                    is the same thing with better paperwork.
- *   `not-targeted` — NOT scanned; a deliberate strategy call.
+ *   `not-targeted` — NOT scanned here; the same absence claim as `candidate`
+ *                    with a different strategy behind it, and it is derived at
+ *                    the same boundary for the same reason. This check's
+ *                    silence on it is deliberate and unchanged: the pair are
+ *                    distinguished by INTENT, which no scan can read.
  *
  * WHERE THE ROWS COME FROM NOW, and why this check did not shrink. The
  * `surfaces` list and the placement status are no longer written by the model:
@@ -59,11 +72,15 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  * because each regeneration produced a fresh set of confident wrong claims.
  * `lib/engine/keywordPlacement.ts` DERIVES them from the finished copy using
  * the very reader below, so the artifact reaching this check is true by
- * construction. Not one rule here was relaxed for it: the placement leg stays
- * because a STORED or hand-edited artifact never went through that derivation,
- * and the negative / backend-leak / captured-via / four-test / closed-world /
- * fail-closed legs are all untouched. What disappeared is a class of failure,
- * not a class of enforcement.
+ * construction. That derivation covers every status that states A FACT ABOUT
+ * THE COPY — `placed`, `backend`, and (since E4) the two absence claims
+ * `candidate` and `not-targeted`; only `negative` and `captured-via`, which
+ * state an INTENT, are carried through untouched. Not one rule here was
+ * relaxed for any of it: the placement leg stays because a STORED or
+ * hand-edited artifact never went through that derivation, and the negative /
+ * backend-leak / candidate / captured-via / four-test / closed-world /
+ * minNegatives / fail-closed legs are all untouched. What disappeared is a
+ * class of failure, not a class of enforcement.
  *
  * THE FOUR-TEST SCREEN (K4), reusing the gate's OWN lexicons. A term the
  * compliance pack already bans can never be `placed` or `backend`, whatever

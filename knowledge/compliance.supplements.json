@@ -1635,7 +1635,7 @@
     "helps maintain",
     "promotes"
   ],
-  "_naturalStateSafePhrasesComment": "FALSE-POSITIVE REDUCER for C22 only. These spans are blanked out (length-preserving) before the natural-state scan runs, exactly as `semanticDrugClaims.safeContextPhrases` are blanked before C21. They cover the two contexts in which an abnormality marker is ordinary retail or safety language rather than a claim: research vocabulary ('clinical study', 'clinically tested') and the standard consult-a-professional warning ('if you have a diagnosed medical condition, consult your physician'). Blanking is span-local: it never rescues a marketing claim written outside one of these phrases, so 'for diagnosed medical conditions' still fails. Emptying it makes the gate stricter.",
+  "_naturalStateSafePhrasesComment": "FALSE-POSITIVE REDUCER for C22 only. These spans are blanked out (length-preserving) before the natural-state scan runs, exactly as `semanticDrugClaims.safeContextPhrases` are blanked before C21. They cover the two contexts in which an abnormality marker is ordinary retail or safety language rather than a claim: research vocabulary ('clinical study', 'clinically tested') and the standard consult-a-professional warning ('if you have a diagnosed medical condition, consult your physician'). THE QUALIFIER SLOT IS ENUMERATED, NEVER WILDCARDED: a live run on B00IO89MYA wrote the MANDATED safety warning (the `safety_warning` attribute is REQUIRED by the attribute template) as 'If you are pregnant, nursing, have a known medical condition, or take medication' and C22 R1 failed it, because 'have a diagnosed medical condition' and 'have a medical condition' were both listed while 'have a KNOWN medical condition' was not — the same required warning, one adjective different, and no repair could clear it without deleting text the template requires. The ordinary qualifiers a safety warning puts in that slot are listed beside them. Blanking stays span-local: it never rescues a marketing claim written outside one of these phrases, so 'for diagnosed medical conditions' and 'for known medical conditions' both still fail. Emptying it makes the gate stricter.",
   "naturalStateSafePhrases": [
     "clinical study",
     "clinical studies",
@@ -1655,6 +1655,10 @@
     "have a diagnosed medical condition",
     "have a medical condition",
     "if you have a diagnosed medical condition",
+    "have a known medical condition",
+    "if you have a known medical condition",
+    "have an existing medical condition",
+    "have a pre-existing medical condition",
     "not intended to diagnose",
     "talk with a physician",
     "talk with your physician",

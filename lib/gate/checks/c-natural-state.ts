@@ -193,10 +193,48 @@ function gapBetween(a: TermMatch, b: TermMatch): number {
   return a.index <= b.index ? b.index - endOf(a) : a.index - endOf(b);
 }
 
+/**
+ * How much text either side of the matched pair the reported context carries.
+ */
+const CONTEXT_PAD = 20;
+
+/** A character that can sit INSIDE a word, so cutting beside it splits one. */
+const WORD_CHAR = /[\p{L}\p{N}]/u;
+
+/**
+ * THE REPORTED CONTEXT IS CUT ON WORD BOUNDARIES.
+ *
+ * The pad is a fixed character count, so its edge lands wherever it lands — and
+ * on a live run it landed one character into the first word of the sentence:
+ *
+ *   C22 | description | "f you are pregnant, nursing, have a known medical
+ *       |             |  condition, or take medication"
+ *
+ * The finding was real (see the safe-phrase note in the pack) but the evidence
+ * an operator was shown opened mid-word, which reads like a broken tool and
+ * costs the reader a second guessing which word was cut. A context is EVIDENCE:
+ * it must quote the copy, and a fragment of a word is not a quote of it. Each
+ * edge is therefore pushed OUTWARD to the nearest boundary — outward, never
+ * inward, so widening the quote can never drop a character the finding rests
+ * on. Nothing about detection changes: this function only formats what R1/R2
+ * already decided.
+ */
+const snapBack = (text: string, i: number): number => {
+  let k = Math.max(0, i);
+  while (k > 0 && WORD_CHAR.test(text[k - 1]!)) k -= 1;
+  return k;
+};
+
+const snapForward = (text: string, i: number): number => {
+  let k = Math.min(text.length, i);
+  while (k < text.length && WORD_CHAR.test(text[k]!)) k += 1;
+  return k;
+};
+
 const spanOf = (text: string, a: TermMatch, b: TermMatch): string => {
   const start = Math.min(a.index, b.index);
   const end = Math.max(endOf(a), endOf(b));
-  return text.slice(Math.max(0, start - 20), end + 20).trim();
+  return text.slice(snapBack(text, start - CONTEXT_PAD), snapForward(text, end + CONTEXT_PAD)).trim();
 };
 
 interface Hit {

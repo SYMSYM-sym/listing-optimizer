@@ -25,6 +25,15 @@ import { demandRecaptureBlock, keywordVocabularyBlock, snapshotBlock } from './s
  * system calls none: a term earns its tier from evidence that can be pointed
  * at, never from a number an API returned. The instruction says so explicitly
  * so the model does not invent one.
+ *
+ * E4 — WHAT `candidate` AND `not-targeted` ACTUALLY MEAN, said here because a
+ * live run got it wrong 77 times in one artifact. Both words describe a term
+ * that is ABSENT FROM THE COPY PRINTED ABOVE; the run that failed wrote them
+ * over the product's own ingredient names, which are in the title, the
+ * attributes, the A+ and the FAQ because the listing is about them. That is a
+ * claim about the copy, so code now measures it and corrects the row — and the
+ * instruction below states the meaning plainly, because a status the model
+ * understands is one code has to correct less often.
  */
 export interface KeywordSurfacesView {
   title: string;
@@ -127,6 +136,7 @@ ${recapture}
 - QUALITATIVE ONLY. Never cite, invent or imply a search-volume figure: a row earns its tier from evidence you can point at (what the category leaders lead with, what the label states, what a shopper would type), never from a number.
 - DO NOT list surfaces, and do not say where a term sits. The placement map is computed from the copy above after you answer (see the STATUS note above) — a list you write here would only be overwritten, so spend the words on WHICH terms belong in the reference and WHY.
 - Choose the status from the vocabulary above. The judgements are yours: what must appear nowhere (every rival brand name and every term the compliance rules above forbid), what is deliberately left alone, what is held back for a later cycle, and what demand is recaptured through a compliant cluster named in "via".
+- THE TWO ABSENCE WORDS ARE FOR TERMS THE COPY ABOVE DOES NOT CARRY. "Held back for a later cycle" and "deliberately left alone" both say the term is NOT in this listing. Every ingredient you can read in the copy above, every spec it states and every phrase it uses IS in this listing — such a row is a placement, and code records it as one from the copy itself. Spend those two statuses on terms you are choosing to leave out.
 - "why" is required on every row: ONE short sentence of evidence${whyLimit}. It is evidence, not an essay.
 - A row that says a rival's brand name, or any term the compliance rules above forbid, belongs on the negative list. Every negative row states its reason in "why".
 ${ownBrand}

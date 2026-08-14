@@ -33,8 +33,17 @@ export function keywordCoverage(l: Pick<OptimizedListing, 'keywords'>): KeywordC
       tier: r.tier,
       surfaces: [...(r.surfaces ?? [])],
       why: r.why ?? '',
+      // Present when derivation CORRECTED the row into this list (an own-brand
+      // `negative`, or an absence claim the copy contradicted). Carried through
+      // for the same reason the candidate downgrade is: a correction the
+      // operator cannot see is a silent rewrite.
+      ...(r.note ? { note: r.note } : {}),
     })),
-    backendOnly: of('backend').map((r) => ({ term: r.term, why: r.why ?? '' })),
+    backendOnly: of('backend').map((r) => ({
+      term: r.term,
+      why: r.why ?? '',
+      ...(r.note ? { note: r.note } : {}),
+    })),
     negatives: of('negative').map((r) => ({ term: r.term, why: r.why ?? '' })),
     recaptured: of('captured-via').map((r) => ({ term: r.term, via: r.via ?? '', why: r.why ?? '' })),
     candidates: of('candidate').map((r) => ({

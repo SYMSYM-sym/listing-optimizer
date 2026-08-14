@@ -36,15 +36,15 @@ import type {
  * is DELETED — not corrected, not re-prompted — and the map is computed.
  *
  * THE SPLIT OF LABOUR:
- *   MODEL  — the terms themselves (`term`, `tier`, `why`) and the four
+ *   MODEL  — the terms themselves (`term`, `tier`, `why`) and the TWO
  *            INTENT-BEARING statuses only it can judge:
  *              `negative`     — rival brands and banned vocabulary (R50),
- *              `not-targeted` — a deliberate strategy call,
- *              `candidate`    — held back for a later cycle,
  *              `captured-via` — banned demand reached through a compliant
  *                               route, named in `via` (K4).
- *            None of those is a claim about the copy; each is a judgement,
- *            and a judgement is exactly what a model is for.
+ *            Neither is a claim about the copy; each is a judgement, and a
+ *            judgement is exactly what a model is for. `candidate` and
+ *            `not-targeted` sat in this list until E4 and never belonged
+ *            there — see the third note below, which is the whole of why.
  *   CODE   — `surfaces` and the PLACEMENT status of every other row, read off
  *            the finished copy through C28's OWN pack-driven surface readers
  *            (`keywordSurfaceText`), with the SAME disclaimer subtraction the
@@ -63,7 +63,8 @@ import type {
  *
  * NEVER A SILENT LIE. A term the finished copy carries nowhere is DOWNGRADED
  * to `candidate` and the downgrade is recorded in `note` — it is not quietly
- * dropped and it is certainly not left saying `placed`.
+ * dropped and it is certainly not left saying `placed`. (A row that ALREADY
+ * claims absence keeps its own word for it; see the third note.)
  *
  * PACK-DRIVEN AND CLOSED-WORLD. Every surface name comes from
  * `rules.keywordRules`; a name this module cannot read is skipped HERE (so
@@ -124,8 +125,68 @@ import type {
  */
 
 /**
+ * THE THIRD LIVE DEFECT — E2 DREW THE PARTITION IN THE WRONG PLACE, AND
+ * `candidate` / `not-targeted` WERE ON THE WRONG SIDE OF IT.
+ *
+ * Production, ASIN B00IO89MYA, SEVENTY-SEVEN failures of one shape:
+ *
+ *   C28 | keywords[2] | candidate term "cat's claw" already appears on 'title'
+ *   C28 | keywords[3] | candidate term 'quercetin' already appears on 'title'
+ *       |             | /'bullet1'/'description'/'attributes'/'aplus'/'faq'/'qa'
+ *   C28 | keywords[4] | candidate term 'vitamin c' already appears on … (x8)
+ *
+ * Those are the product's OWN INGREDIENT NAMES. They are in the title because
+ * the title must name them; they are in the attributes because the attribute
+ * template requires them; they are in the A+ and the FAQ because that is what
+ * the copy is about. The model labelled them `candidate` — a status whose
+ * whole meaning is "a term NOT currently in the copy, worth considering for a
+ * later cycle" — while the copy it had just been shown was full of them.
+ *
+ * THIS IS THE IDENTICAL CLASS E2 FIXED, ONE STATUS-WORD FURTHER ALONG. E2's
+ * argument was that a model must not be asked to assert A FACT ABOUT THE COPY
+ * that code can compute exactly. Re-derive the partition from what each status
+ * actually ASSERTS and two of the four E2 exempted turn out to be facts:
+ *
+ *   `negative`     — an INTENT: "exclude this rival brand". Model-owned.
+ *                    Correctly exempt; C28 scans it for absence everywhere.
+ *   `captured-via` — an INTENT: "reach this demand through another cluster
+ *                    instead", with the route named in `via`. Model-owned.
+ *                    Correctly exempt; C28 scans it for absence too, and
+ *                    deriving it would downgrade every lawfully recaptured row
+ *                    and destroy K4.
+ *   `candidate`    — a CLAIM ABOUT THE COPY: "this term is not currently
+ *                    used". Code can compute that exactly. DERIVED.
+ *   `not-targeted` — also a CLAIM ABOUT THE COPY: "we are not going after this
+ *                    term". If the term is all over the copy, it IS targeted,
+ *                    whatever the row says. DERIVED.
+ *
+ * WHAT DERIVATION DOES TO THE TWO ABSENCE-CLAIM STATUSES, and what it
+ * deliberately does NOT do. The term is looked for exactly as any other row's
+ * term is:
+ *   - on ≥1 VISIBLE surface  => `placed`, with the derived surface list;
+ *   - only in the BACKEND    => `backend`;
+ *   - NOWHERE                => THE MODEL'S OWN LABEL IS KEPT, surfaces empty.
+ * That last leg is the point of the pair existing. "Held back for the next
+ * copy cycle" and "deliberately left alone" are DIFFERENT strategy calls about
+ * a term that is equally absent either way, and no amount of substring search
+ * can tell them apart — so code decides the half it can measure (is the term
+ * there?) and leaves the half it cannot (which kind of absence is meant) with
+ * the only party that can judge it. Collapsing every absent row to `candidate`
+ * would be the same error in the other direction: code overwriting a judgement
+ * with a guess.
+ *
+ * NEVER SILENTLY. A label this module changes is recorded on `note`, exactly
+ * as the own-brand reclassification is. A label it KEEPS is not annotated,
+ * because nothing was changed.
+ *
+ * C28 IS NOT TOUCHED BY ANY OF THIS. Its `candidate` leg still fails a term
+ * that is in the copy — which is precisely why a stored or hand-edited
+ * artifact that never went through this derivation is still caught.
+ */
+
+/**
  * The statuses the MODEL owns. Each states an INTENT about a term rather than
- * a fact about the copy, so none of them is derivable and none is overwritten.
+ * a fact about the copy, so neither is derivable and neither is overwritten.
  * `captured-via` belongs here for a second reason: its whole meaning is that
  * the term is deliberately ABSENT, so deriving it would downgrade every
  * lawfully recaptured row and destroy K4.
@@ -133,13 +194,22 @@ import type {
  * ONE EXCEPTION, and it is a coherence check rather than an override:
  * `negative` on a term that IS this run's own brand identity is not a
  * judgement the model is entitled to make — see the note above.
+ *
+ * THE ONE SOURCE OF TRUTH for the partition: this constant and
+ * `ABSENCE_CLAIM_STATUSES` below are read by the derivation AND by the prompt
+ * that tells the model which statuses are its own
+ * (`lib/engine/prompts/shared.ts`), so the two can never drift apart.
  */
-export const MODEL_OWNED_STATUSES: readonly KeywordStatus[] = [
-  'negative',
-  'not-targeted',
-  'candidate',
-  'captured-via',
-];
+export const MODEL_OWNED_STATUSES: readonly KeywordStatus[] = ['negative', 'captured-via'];
+
+/**
+ * The statuses that make a CLAIM ABOUT THE COPY — "this term is absent from
+ * it" — while still carrying a judgement code cannot make (WHICH KIND of
+ * absence). Derived like any other row, with one difference: when the claim is
+ * TRUE the model's own word for the absence is preserved rather than
+ * normalised to `candidate`. See the note above for why both halves matter.
+ */
+export const ABSENCE_CLAIM_STATUSES: readonly KeywordStatus[] = ['candidate', 'not-targeted'];
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
@@ -353,6 +423,11 @@ export function deriveKeywordPlacement(
       return { ...row, surfaces: [] };
     }
 
+    // An ABSENCE-CLAIM row (`candidate` / `not-targeted`) is derived like any
+    // other — the claim it makes is about the copy, and the copy is right
+    // here. Its label survives ONLY the leg where the claim turns out true.
+    const absenceClaim = ABSENCE_CLAIM_STATUSES.includes(status);
+
     // Never a silent deletion: the correction is recorded on the row so the
     // audit and the ship sheet show what code changed, and why.
     const correction = selfBrand
@@ -360,7 +435,11 @@ export function deriveKeywordPlacement(
         ` or its canonical product name), so it cannot be a rival-brand negative — a listing must` +
         ` carry its own brand. The row was reclassified from 'negative' and its placement read off` +
         ` the finished copy.`
-      : '';
+      : absenceClaim
+        ? `Derived: the row said '${status}', which states this term is NOT in the copy — but the` +
+          ` finished copy carries it. The status and the surfaces were read off the copy instead,` +
+          ` because where a term sits is a fact code measures rather than a judgement.`
+        : '';
 
     const visibleHits = visible.filter((name) => carries(name, term));
     const backendHits = backend.filter((name) => carries(name, term));
@@ -388,6 +467,12 @@ export function deriveKeywordPlacement(
         ...(correction ? { note: correction } : {}),
       };
     }
+    // THE TERM IS GENUINELY ABSENT. An absence-claim row was RIGHT, so nothing
+    // is changed and nothing is annotated: `candidate` and `not-targeted` are
+    // two different strategy calls about an equally absent term, and which one
+    // is meant is precisely the half of this that code cannot measure.
+    if (absenceClaim) return { ...row, surfaces: [] };
+
     return {
       ...row,
       status: 'candidate' as KeywordStatus,

@@ -1,4 +1,4 @@
-import { MODEL_OWNED_STATUSES } from '../keywordPlacement';
+import { ABSENCE_CLAIM_STATUSES, MODEL_OWNED_STATUSES } from '../keywordPlacement';
 import type {
   BulletArchitecture,
   KeywordRules,
@@ -280,11 +280,20 @@ export function keywordVocabularyBlock(kr: KeywordRules | undefined): string {
   const backend = (kr?.backendSurfaces ?? []).filter((s) => s.trim() !== '');
   const statuses = (kr?.statuses ?? []).filter((s) => s.trim() !== '');
   if (visible.length === 0 || statuses.length === 0) return '';
+  // THE PARTITION HAS ONE SOURCE OF TRUTH — the two constants the derivation
+  // itself reads (`lib/engine/keywordPlacement.ts`). Nothing is re-listed here,
+  // so the sentence the model is given can never describe a split the code does
+  // not implement.
   const modelOwnedStatuses = statuses.filter((s) =>
     (MODEL_OWNED_STATUSES as readonly string[]).includes(s),
   );
+  const absenceStatuses = statuses.filter((s) =>
+    (ABSENCE_CLAIM_STATUSES as readonly string[]).includes(s),
+  );
   const derivedStatuses = statuses.filter(
-    (s) => !(MODEL_OWNED_STATUSES as readonly string[]).includes(s),
+    (s) =>
+      !(MODEL_OWNED_STATUSES as readonly string[]).includes(s) &&
+      !(ABSENCE_CLAIM_STATUSES as readonly string[]).includes(s),
   );
   return [
     'KEYWORD REFERENCE VOCABULARY (pack data — the gate enforces exactly this):',
@@ -292,13 +301,21 @@ export function keywordVocabularyBlock(kr: KeywordRules | undefined): string {
     `- Invisible (indexed) surface name: ${backend.join(', ') || '(none)'}.`,
     `- Statuses: ${statuses.join(' | ')}.`,
     '- Tiers: 1 = own-the-lane head terms for the single intent cluster this listing owns; 2 = named entities (each component by its full name, the headline spec, the formula callout) because those are what an assistant quotes back; 3 = qualifier and trust terms (diet flags, origin, count, supply) that act as filters and tie-breakers; 4 = conversational buyer-language phrases. A row that is not tier 1-4 carries one of these tier labels instead: backend, demand, strategy, candidate, negative.',
-    // WS3 — the STATUS SPLIT, from pack data. The placement statuses are
-    // COMPUTED from the finished copy (`lib/engine/keywordPlacement.ts`); the
-    // rest are judgements about intent and are carried through untouched. The
-    // model used to be asked which surfaces its own copy had used, and on all
-    // three live ASINs it was wrong 21-22 times per run, so it is not asked.
-    `- STATUS: ${derivedStatuses.join(' / ') || '(none)'} ${derivedStatuses.length === 1 ? 'is' : 'are'} COMPUTED from the finished copy after you answer — never declare one and never list surfaces; a term the copy carries visibly is recorded with the exact surfaces carrying it, a term only in the invisible field is recorded as invisible-only, and a term the copy carries nowhere is moved to the held-back row rather than left claiming a placement.`,
-    `- These statuses are YOURS and are never overwritten: ${modelOwnedStatuses.join(', ') || '(none)'}. A row on the invisible surface must appear there and NOWHERE visible. A row on the negative list must appear nowhere at all.`,
+    // WS3 — the STATUS SPLIT, from pack data, in the THREE parts the derivation
+    // actually implements. The placement statuses are COMPUTED from the
+    // finished copy (`lib/engine/keywordPlacement.ts`); the absence-claim pair
+    // is a claim ABOUT that copy and is checked against it; only the two
+    // intent statuses are carried through untouched. The model used to be asked
+    // which surfaces its own copy had used, and on all three live ASINs it was
+    // wrong 21-22 times per run, so it is not asked.
+    `- STATUS: ${derivedStatuses.join(' / ') || '(none)'} ${derivedStatuses.length === 1 ? 'is' : 'are'} COMPUTED from the finished copy after you answer — never declare one and never list surfaces; a term the copy carries visibly is recorded with the exact surfaces carrying it, and a term only in the invisible field is recorded as invisible-only.`,
+    // E4 — the live 77-failure class: the model wrote `candidate` over the
+    // product's OWN ingredient names while the copy above was full of them.
+    // Both words describe a term that is ABSENT, so the absence is now measured
+    // and the row corrected; the choice BETWEEN the two words is still the
+    // model's, because no substring search can make it.
+    `- ${absenceStatuses.join(' and ') || '(none)'} ${absenceStatuses.length === 1 ? 'describes a term that is' : 'both describe a term that is'} ABSENT FROM THE COPY ABOVE — a term you are naming for a later cycle, or one you are deliberately leaving alone. READ THE COPY BEFORE YOU USE EITHER: a term you can see in it (every ingredient you named, every spec you wrote) is IN the listing, and a row saying otherwise is corrected against the copy and the correction recorded. Which of the two words fits an absent term is YOUR call and is never overwritten.`,
+    `- These statuses are YOURS and are never overwritten: ${modelOwnedStatuses.join(', ') || '(none)'}. A row on the negative list must appear nowhere at all, and a recaptured row names its compliant route. A row on the invisible surface must appear there and NOWHERE visible.`,
   ].join('\n');
 }
 

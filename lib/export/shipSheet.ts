@@ -688,7 +688,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
       h += `<div class=kwnote>${esc(keywordRules.sheetNote)}</div>`;
     }
     const placed = arr<NonNullable<Audit['keywordCoverage']>['placed'][number]>(coverage.placed);
-    const backendOnly = arr<{ term: string; why: string }>(coverage.backendOnly);
+    const backendOnly = arr<{ term: string; why: string; note?: string }>(coverage.backendOnly);
     const negatives = arr<{ term: string; why: string }>(coverage.negatives);
     const recaptured = arr<{ term: string; via: string; why: string }>(coverage.recaptured);
     const candidatesKw = arr<{ term: string; home: string; why: string; note?: string }>(coverage.candidates);
@@ -698,14 +698,18 @@ ul.ops{margin:8px 0 0;padding-left:20px}
       for (const r of placed) {
         h +=
           `<tr><td class=v>${esc(r.term)}</td><td>${esc(String(r.tier))}</td>` +
-          `<td class=v>${esc(r.surfaces.join(', '))}</td><td>${esc(r.why)}</td></tr>`;
+          `<td class=v>${esc(r.surfaces.join(', '))}</td><td>${esc([r.why, r.note].filter(Boolean).join(' — '))}</td></tr>`;
       }
       h += '</table>';
     }
     if (backendOnly.length > 0) {
       h +=
         '<div class=f><div class=fh><div><b>Backend only</b> <code>keywords.backend</code></div></div>' +
-        `<div class=bx>${esc(coverage.backendOnly.map((r) => r.term).join(', '))}</div>` +
+        `<div class=bx>${esc(backendOnly.map((r) => r.term).join(', '))}</div>` +
+        backendOnly
+          .filter((r) => r.note)
+          .map((r) => `<div class=note>${esc(r.term)}: ${esc(r.note!)}</div>`)
+          .join('') +
         '<div class=note>Verified present in the search-terms field and absent from every visible surface. Never repeat one in customer copy — the bytes are the point.</div></div>';
     }
     if (negatives.length > 0) {

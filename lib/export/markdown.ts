@@ -101,13 +101,16 @@ export function toMarkdown(listing: OptimizedListing, audit: Audit): string {
       lines.push('### Placed (surfaces DERIVED from the copy, then gate-verified)');
       lines.push('| Term | Tier | Derived placement | Why |');
       lines.push('|---|---|---|---|');
-      for (const r of arr<{ term: string; tier: unknown; surfaces: string[]; why: string }>(coverage.placed)) {
-        lines.push(`| ${r.term} | ${String(r.tier)} | ${arr<string>(r.surfaces).join(', ')} | ${r.why} |`);
+      for (const r of arr<{ term: string; tier: unknown; surfaces: string[]; why: string; note?: string }>(coverage.placed)) {
+        lines.push(`| ${r.term} | ${String(r.tier)} | ${arr<string>(r.surfaces).join(', ')} | ${[r.why, r.note].filter(Boolean).join(' — ')} |`);
       }
       lines.push('');
     }
     if (arr<unknown>(coverage.backendOnly).length > 0) {
       lines.push(`**Backend only (verified absent from every visible surface):** ${arr<{ term: string }>(coverage.backendOnly).map((r) => r.term).join(', ')}`);
+      for (const r of arr<{ term: string; note?: string }>(coverage.backendOnly)) {
+        if (r.note) lines.push(`- ${r.term} — ${r.note}`);
+      }
       lines.push('');
     }
     if (arr<unknown>(coverage.negatives).length > 0) {

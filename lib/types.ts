@@ -1200,8 +1200,11 @@ export type KeywordTier = 1 | 2 | 3 | 4 | 'backend' | 'demand' | 'strategy' | 'c
  *  backend      — indexed invisibly: must be in the backend field and NOWHERE visible.
  *  captured-via — banned demand recaptured through a compliant cluster; not scanned,
  *                 but the compliant route MUST be documented in `via` (K4).
- *  not-targeted — a deliberate strategy call; not scanned.
+ *  not-targeted — a deliberate strategy call; not scanned by C28. DERIVED: it
+ *                 claims the term is absent, so the derivation checks that and
+ *                 corrects the row when the copy carries the term.
  *  candidate    — future PPC / off-site / next copy cycle; must NOT be in current copy.
+ *                 DERIVED for the same reason, and by the same rule.
  *  negative     — must appear NOWHERE, visible or backend. Competitor brand names
  *                 live here (R50), as do banned terms and unverifiable superlatives.
  */
@@ -1227,9 +1230,10 @@ export interface KeywordTerm {
    * ("declared placed on 'title' but does not appear there"), which no repair
    * round could converge on because each regeneration produced a fresh set of
    * confident wrong claims. It is a fact code can compute exactly, so code
-   * computes it — worker != checker. Empty for every intent-bearing status
-   * (`negative`, `not-targeted`, `candidate`, `captured-via`), which place
-   * nothing by definition.
+   * computes it — worker != checker. Empty for the two INTENT-bearing statuses
+   * (`negative`, `captured-via`), which place nothing by definition, and for
+   * any `candidate` / `not-targeted` row whose absence claim derivation
+   * confirmed — see `MODEL_OWNED_STATUSES` / `ABSENCE_CLAIM_STATUSES`.
    */
   surfaces: string[];
   /** The evidence/rationale (`evidence` or `why` in the kit's schema). */
@@ -1239,9 +1243,11 @@ export interface KeywordTerm {
   /** `candidate` ONLY: where the term lives until it enters copy (PPC / off-site). */
   home?: string;
   /**
-   * DERIVED. Set only when derivation CHANGED the row — today, when a term the
-   * copy carries nowhere is downgraded to `candidate`. It exists so a downgrade
-   * is visible in the deliverable rather than a silent edit.
+   * DERIVED. Set only when derivation CHANGED the row: a term the copy carries
+   * nowhere downgraded to `candidate`, a `negative` row naming the subject's
+   * OWN brand reclassified, or a `candidate` / `not-targeted` row whose term
+   * turned out to be IN the copy corrected to its real placement. It exists so
+   * a correction is visible in the deliverable rather than a silent edit.
    */
   note?: string;
 }
@@ -1420,10 +1426,16 @@ export interface SubstantiationClaim {
 export interface KeywordCoverage {
   total: number;
   byStatus: Record<string, number>;
-  /** Terms machine-verified to appear on every surface they declare. */
-  placed: { term: string; tier: KeywordTier; surfaces: string[]; why: string }[];
+  /**
+   * Terms machine-verified to appear on every surface they declare. `note` is
+   * present when derivation CORRECTED the row into this list — an own-brand
+   * `negative`, or a `candidate` / `not-targeted` row whose absence claim the
+   * finished copy contradicted. A correction is never silent, so it travels
+   * into the deliverable with the row it changed.
+   */
+  placed: { term: string; tier: KeywordTier; surfaces: string[]; why: string; note?: string }[];
   /** Indexed invisibly: in the backend field and nowhere a customer reads. */
-  backendOnly: { term: string; why: string }[];
+  backendOnly: { term: string; why: string; note?: string }[];
   /** Verified to appear NOWHERE — rival brand names included (R50). */
   negatives: { term: string; why: string }[];
   /** K4 — banned demand and the compliant cluster it reaches the listing through. */

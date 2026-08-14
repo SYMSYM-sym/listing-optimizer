@@ -571,7 +571,7 @@
     "helps maintain",
     "promotes"
   ],
-  "_naturalStateSafePhrasesComment": "False-positive reducer for C22 only: spans blanked (length-preserving) before the natural-state scan, covering research vocabulary and the standard consult-a-professional warning. Blanking is span-local and never rescues a claim written outside one of these phrases.",
+  "_naturalStateSafePhrasesComment": "False-positive reducer for C22 only: spans blanked (length-preserving) before the natural-state scan, covering research vocabulary and the standard consult-a-professional warning. The qualifier slot in 'have a <X> medical condition' is ENUMERATED, never wildcarded — see the supplements pack for the live run that made the list longer. Blanking is span-local and never rescues a claim written outside one of these phrases.",
   "naturalStateSafePhrases": [
     "clinical study",
     "clinical studies",
@@ -591,6 +591,10 @@
     "have a diagnosed medical condition",
     "have a medical condition",
     "if you have a diagnosed medical condition",
+    "have a known medical condition",
+    "if you have a known medical condition",
+    "have an existing medical condition",
+    "have a pre-existing medical condition",
     "not intended to diagnose"
   ],
   "naturalStateProximityWindow": 40,
