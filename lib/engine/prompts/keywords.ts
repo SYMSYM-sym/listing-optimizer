@@ -91,6 +91,15 @@ export function keywordsPrompt(
     typeof kr?.whyMaxChars === 'number' && kr.whyMaxChars > 0
       ? `, at most ${kr.whyMaxChars} characters`
       : '';
+  // The OWN-BRAND line, from PACK DATA (this module holds no lexicon). A live
+  // run put the subject product's own brand on the negative list, and C28 then
+  // correctly failed it for appearing in the brand attributes it must appear
+  // in, so the run could not converge. Code rejects the classification at the
+  // derivation boundary; this stops it being proposed in the first place.
+  const ownBrand =
+    typeof kr?.ownBrandNote === 'string' && kr.ownBrandNote.trim() !== ''
+      ? `- ${kr.ownBrandNote.trim()}`
+      : '';
   const surfaces = [
     'THE FINISHED COPY (read it — this is the listing your reference describes, and the placement map is computed from these exact strings):',
     `title: ${emitted.title}`,
@@ -120,6 +129,7 @@ ${recapture}
 - Choose the status from the vocabulary above. The judgements are yours: what must appear nowhere (every rival brand name and every term the compliance rules above forbid), what is deliberately left alone, what is held back for a later cycle, and what demand is recaptured through a compliant cluster named in "via".
 - "why" is required on every row: ONE short sentence of evidence${whyLimit}. It is evidence, not an essay.
 - A row that says a rival's brand name, or any term the compliance rules above forbid, belongs on the negative list. Every negative row states its reason in "why".
+${ownBrand}
 - Cover the listing properly WITHIN THAT BUDGET: the head terms, the named entities, the qualifier and trust terms, the buyer-language phrases, the invisible-only variants, and the terms this listing deliberately leaves alone. Spend the rows on the terms that decide the listing; a near-duplicate of a row you have already written earns nothing.
 
 Return JSON: { "keywords": [{ "term", "tier", "status", "why", "via", "home" } ...] }

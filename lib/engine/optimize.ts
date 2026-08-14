@@ -436,9 +436,17 @@ export async function optimize(
   // not the keyword group: the carried-forward rows are re-resolved against the
   // NEW strings, so the artifact can never describe a listing that no longer
   // exists. See `lib/engine/keywordPlacement.ts`.
+  //
+  // The SNAPSHOT is handed to the derivation because it is the only non-model
+  // source of the product's OWN BRAND IDENTITY. A live run marked the subject
+  // product's own brand `negative` — "must appear nowhere" — and C28 then
+  // correctly found it in `brand_name`/`manufacturer`, where a compliant
+  // listing MUST carry it, so the repair loop could never converge. That row is
+  // reclassified truthfully at the derivation boundary, with the correction
+  // recorded on `note`. See `lib/engine/keywordPlacement.ts`.
   return {
     ...copy,
-    keywords: deriveKeywordPlacement(normalizeKeywords(keywords.keywords), copy, pack),
+    keywords: deriveKeywordPlacement(normalizeKeywords(keywords.keywords), copy, pack, snapshot),
     ...(degradedGroups.length > 0 ? { degradedGroups } : {}),
   };
 }

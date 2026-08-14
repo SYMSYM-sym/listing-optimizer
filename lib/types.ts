@@ -479,6 +479,19 @@ export interface KeywordRules {
    * why it is not a `REQUIRED_PACK_PIECES` row.
    */
   demandRecapture?: { headline: string; mappings: string[] };
+  /**
+   * The line that tells the model its OWN brand is never a negative term.
+   *
+   * A live run classified the subject product's own brand name as `negative`
+   * ("must appear nowhere"), and C28 then correctly failed it for appearing in
+   * `brand_name`/`manufacturer` — where a compliant listing MUST carry it. Code
+   * rejects that classification at the derivation boundary
+   * (`lib/engine/keywordPlacement.ts`); this line stops it being PROPOSED.
+   * Prompt-only, like `demandRecapture`: nothing here is enforced, so it is not
+   * a `REQUIRED_PACK_PIECES` row — what is enforced is the reclassification and
+   * the negative floor that counts only surviving negatives.
+   */
+  ownBrandNote?: string;
   /** Operator-facing note rendered above the keyword section of the ship sheet. */
   sheetNote?: string;
 }

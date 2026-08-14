@@ -26,7 +26,16 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  *   `negative`     — must appear NOWHERE at all. This is where rival brand names
  *                    live (R50): invisible on the page and a real trademark
  *                    exposure, so it gets a deterministic check of its own
- *                    rather than relying on someone remembering.
+ *                    rather than relying on someone remembering. The SUBJECT
+ *                    product's own brand is not a rival and can never be one:
+ *                    a live run marked it `negative` and this check correctly
+ *                    failed it for appearing in `brand_name`/`manufacturer`,
+ *                    where a compliant listing MUST carry it. That is fixed
+ *                    where the incoherence is (the derivation boundary in
+ *                    `lib/engine/keywordPlacement.ts` reclassifies the row and
+ *                    records the correction on `note`) — NOT here. This leg is
+ *                    unchanged: whatever reaches it saying `negative` is still
+ *                    scanned on every surface, the invisible ones included.
  *   `candidate`    — a term held back for PPC / off-site / the next copy cycle.
  *                    It must NOT be in the current published copy, or the
  *                    "not yet" is a fiction.
@@ -430,6 +439,12 @@ export function c28KeywordPlacement(l: OptimizedListing, pack: KnowledgePack): F
     }
   });
 
+  // THE FLOOR COUNTS ONLY SURVIVING NEGATIVES. `negatives` was incremented in
+  // the loop above, over the FINAL artifact — so a row the derivation
+  // reclassified (the subject product's own brand can never be a rival, see
+  // lib/engine/keywordPlacement.ts) no longer carries `negative` here and is
+  // not counted. A run whose only negatives were self-references therefore
+  // FAILS this floor rather than satisfying it with its own name.
   const min = typeof kr.minNegatives === 'number' ? kr.minNegatives : 0;
   if (negatives < min) {
     out.push(
