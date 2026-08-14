@@ -1,4 +1,5 @@
 import type { KnowledgePack, ListingSnapshot } from '@/lib/types';
+import { APLUS_BODY_MIN_CHARS, APLUS_HEADLINE_MIN_CHARS } from '../schemas';
 import { canonicalNameBlock, snapshotBlock } from './shared';
 
 export function aplusPrompt(
@@ -36,7 +37,7 @@ ${styleBlock}
 
 ${canonical}
 TASK: A+ content — real extractable text (AI/voice engines read it).
-- 5–7 modules. EVERY module MUST include a non-empty "headline" string (min ~3 chars). Never omit "headline"; do not rename it to title/heading/header.
+- 5–7 modules. EVERY module MUST include a non-empty "headline" string (at least ${APLUS_HEADLINE_MIN_CHARS} characters) AND a non-empty "body" string of at least ${APLUS_BODY_MIN_CHARS} characters — the LAST module as fully as the first. Never omit "headline" or "body"; do not rename them (no title/heading/header, no text/copy/content).
 - Required module ids (use these ids exactly; the product name must appear in the first two): ${ids.map((id) => `"${id}"`).join(', ')}.
 ${packLines}- "comparison": { "rows": [ { "label": "...", "ours": "...", "typical": "..." } × ≥${pack.rules.aplusComparisonMinRows} ] } — keys MUST be exactly label/ours/typical.
 - "faq": 5–10 Q&A pairs mirroring the same facts as the bullets.

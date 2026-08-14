@@ -51,9 +51,51 @@ export const backendGroupSchema = z.object({
   backendSearchTerms: z.string().min(10),
 });
 
+/**
+ * D3 — every attribute VALUE is a string, and a number is accepted AS one.
+ *
+ * Live evidence, on every run:
+ *   {"event":"llm.reparse","group":"attributes","error":"ZodError",
+ *    "issuePaths":["attributes.servings_per_container","attributes.unit_count"]}
+ *
+ * Those two fields are the only rows the pack declares `valueType: "number"`,
+ * and their example column reads `[N]` — so the prompt asked for a number and
+ * the schema (`z.record(z.string(), z.string())`) demanded a string. The model
+ * was right both times; the boundary disagreed with itself.
+ *
+ * The prompt now says the value is a JSON string on every row, and a scalar
+ * arrives here as one: a finite number or a boolean is rendered with its own
+ * canonical spelling and NOTHING else is. `null`, an array and an object are
+ * still rejected — a coercion that accepted them would turn malformed output
+ * ("[object Object]", "") into an attribute an operator then pastes into a
+ * live listing, and C23 would count the field as filled.
+ */
+const attributeValue = z.preprocess((v) => {
+  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : v;
+  if (typeof v === 'boolean') return String(v);
+  return v;
+}, z.string());
+
 export const attributesGroupSchema = z.object({
-  attributes: z.record(z.string(), z.string()),
+  attributes: z.record(z.string(), attributeValue),
 });
+
+/**
+ * D4 — the A+ module floors, in ONE place.
+ *
+ * Live evidence, on every run:
+ *   {"event":"llm.reparse","group":"aplus","error":"ZodError",
+ *    "issuePaths":["modules.5.body"]}
+ *
+ * The schema required `body` to be at least 30 characters; the prompt stated
+ * the module COUNT and the headline floor and said nothing at all about the
+ * body, so the sixth module came back with a one-line body (or none) and the
+ * run burned a reparse round on a rule it was never given. Both numbers are
+ * exported and rendered into the prompt, so the instruction and the contract
+ * cannot drift apart again.
+ */
+export const APLUS_HEADLINE_MIN_CHARS = 3;
+export const APLUS_BODY_MIN_CHARS = 30;
 
 export const aplusGroupSchema = z
   .object({
@@ -72,8 +114,8 @@ export const aplusGroupSchema = z
           };
         }, z.object({
           id: z.string(),
-          headline: z.string().min(3),
-          body: z.string().min(30),
+          headline: z.string().min(APLUS_HEADLINE_MIN_CHARS),
+          body: z.string().min(APLUS_BODY_MIN_CHARS),
           subcopy: z.string().optional(),
           claimBearing: claimBearingField,
           /** WS8 — ALT for the module banner; length is gate C30's job. */
