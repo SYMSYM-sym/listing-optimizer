@@ -4,6 +4,8 @@ import { mapProduct } from '@/lib/ingest/providers/rainforest';
 import { toSnapshot } from '@/lib/ingest/toSnapshot';
 import { loadPack } from '@/lib/knowledge/loadPack';
 import { optimize } from '@/lib/engine/optimize';
+import { buyerLanguageBlock } from '@/lib/engine/prompts';
+import { mineReviewLanguage } from '@/lib/knowledge/reviewLanguage';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
 import type { OptimizedListing } from '@/lib/types';
@@ -12,6 +14,15 @@ const snapshot = toSnapshot(
   mapProduct('B0TESTASIN', rainforestSample.product, rainforestSample),
 );
 const pack = loadPack('supplements');
+
+/** Real-shaped review text: some of it lawful to mirror, some of it not. */
+const REVIEWS = [
+  'I keep it in my travel bag and the routine never slips on a work trip.',
+  'It cured my irritable bowel syndrome in two weeks.',
+  'One capsule with breakfast and I am done for the day.',
+  'No refrigeration needed which is the whole reason I switched.',
+  'Best seller for a reason, an absolute miracle.',
+].join('\n');
 
 vi.mock('@/lib/server/guard', () => ({
   checkAccess: vi.fn(() => null),
@@ -92,6 +103,87 @@ describe('POST /api/regenerate', () => {
     expect(data.audit.verified).toBe(data.audit.gateResult.pass);
     expect(data.group).toBe('title');
     expect(data.detection.packId).toBe('supplements');
+  });
+
+  // =========================================================================
+  // G4 — THE OPERATOR'S REVIEW LANGUAGE SURVIVES A PER-GROUP REGENERATION
+  // =========================================================================
+  //
+  // THE DEFECT. This route carried `fictionPhrases` and `panelFacts` and DROPPED
+  // the WS9 review text. A regenerated group is written from scratch, so the one
+  // group the operator asked to redo came back written WITHOUT the buyer-language
+  // mirroring every other group had been written with — a listing that half
+  // speaks the operator's buyers' language, with nothing anywhere saying so.
+  //
+  // BOTH DIRECTIONS. Present: the prompt changes exactly the way optimize's does
+  // (the BUYER LANGUAGE block, carrying the mined phrasing and nothing the
+  // compliance filter rejected). Absent: byte-identical to the pre-fix build.
+  describe('WS9 review text (G4)', () => {
+    /** Records every prompt the route hands the model. */
+    function recordingLlm(): { prompts: string[]; llm: typeof mockLlm } {
+      const prompts: string[] = [];
+      const llm = (async (req: Parameters<typeof mockLlm>[0]) => {
+        prompts.push(req.user);
+        return mockLlm(req);
+      }) as typeof mockLlm;
+      return { prompts, llm };
+    }
+
+    async function promptsFor(body: Record<string, unknown>): Promise<string[]> {
+      const { prompts, llm } = recordingLlm();
+      vi.mocked(anthropicClient).mockReturnValue(llm as never);
+      const res = await post({ snapshot, listing: base, group: 'bullets', ...body });
+      expect(res.status).toBe(200);
+      return prompts;
+    }
+
+    it('PRESENT: the regenerated group is shown the mined buyer language', async () => {
+      const mined = mineReviewLanguage(pack, REVIEWS);
+      expect(mined.phrases.length).toBeGreaterThan(0);
+      const prompts = await promptsFor({ reviewsText: REVIEWS });
+      const joined = prompts.join('\n');
+      expect(joined).toContain('BUYER LANGUAGE');
+      expect(joined).toContain(mined.phrases[0]!);
+      expect(joined).toContain('Mirror the WORDING, never the claim');
+    });
+
+    it('PRESENT: the same block the OPTIMIZE path renders, not a second dialect', async () => {
+      const mined = mineReviewLanguage(pack, REVIEWS);
+      const block = buyerLanguageBlock(mined.phrases);
+      expect(block.trim()).not.toBe('');
+      const prompts = await promptsFor({ reviewsText: REVIEWS });
+      expect(prompts.some((p) => p.includes(block.trim()))).toBe(true);
+    });
+
+    it('PRESENT: a fragment the compliance filter REJECTED never reaches the prompt', async () => {
+      const mined = mineReviewLanguage(pack, REVIEWS);
+      expect(mined.rejected.length).toBeGreaterThan(0);
+      const joined = (await promptsFor({ reviewsText: REVIEWS })).join('\n');
+      for (const r of mined.rejected) expect(joined).not.toContain(r.fragment);
+    });
+
+    it('ABSENT: the prompts are byte-identical to the pre-fix build', async () => {
+      const withoutKey = await promptsFor({});
+      const explicitlyEmpty = await promptsFor({ reviewsText: '   \n  ' });
+      expect(withoutKey.join('\n')).not.toContain('BUYER LANGUAGE');
+      // Emptiness is not presence: whitespace must not flip the input on.
+      expect(explicitlyEmpty).toEqual(withoutKey);
+    });
+
+    it('the AUDIT is given the same evidence, so P11 is scored rather than left unknown', async () => {
+      const { llm } = recordingLlm();
+      vi.mocked(anthropicClient).mockReturnValue(llm as never);
+      const withText = await (
+        await post({ snapshot, listing: base, group: 'bullets', reviewsText: REVIEWS })
+      ).json();
+      const without = await (
+        await post({ snapshot, listing: base, group: 'bullets' })
+      ).json();
+      const p11 = (r: { audit: { scorecard: { perPrinciple: { id: string; score: string }[] } } }) =>
+        r.audit.scorecard.perPrinciple.find((p) => p.id === 'P11')!.score;
+      expect(p11(without)).toBe('unknown');
+      expect(p11(withText)).not.toBe('unknown');
+    });
   });
 
   it('persists via updateRun when runId is supplied', async () => {

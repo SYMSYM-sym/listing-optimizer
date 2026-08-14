@@ -6,6 +6,7 @@ import { detectCategory } from '@/lib/knowledge/detectCategory';
 import { loadPack } from '@/lib/knowledge/loadPack';
 import { withOperatorFictionPhrases } from '@/lib/knowledge/operatorInputs';
 import { normalizePanelFacts } from '@/lib/knowledge/panelFacts';
+import { mineReviewLanguage } from '@/lib/knowledge/reviewLanguage';
 import { checkAccess } from '@/lib/server/guard';
 import { logServer } from '@/lib/server/log';
 import { updateRun } from '@/lib/store/runs';
@@ -31,6 +32,19 @@ export async function POST(req: Request): Promise<NextResponse> {
     fictionPhrases?: string[];
     /** WS5.5 — operator-confirmed label values; product truth for this run. */
     panelFacts?: Record<string, string>;
+    /**
+     * WS9 — the raw review text the operator pasted for the ORIGINAL run.
+     *
+     * It is the third per-run operator input and it was the only one this route
+     * dropped: `fictionPhrases` and `panelFacts` were carried and this was not,
+     * so regenerating one group silently rebuilt that group's copy WITHOUT the
+     * buyer-language mirroring every other group had been written with — the
+     * one group in the listing that no longer spoke the way the operator's
+     * buyers do, with nothing anywhere saying so. Threaded exactly as the other
+     * two are: mined here, given to the prompts, and given to the audit so P11
+     * is scored against the same evidence. Absent => byte-identical.
+     */
+    reviewsText?: string;
   };
   try {
     body = (await req.json()) as typeof body;
@@ -70,13 +84,22 @@ export async function POST(req: Request): Promise<NextResponse> {
     // regeneration must not be a way to fall back to the scraped facts after
     // the operator has confirmed the label.
     const panelFacts = normalizePanelFacts(body.panelFacts);
+    // WS9 — mined through the gate's OWN compliance lexicons, exactly as the
+    // pipeline mines it, so a symptom word a reviewer lawfully wrote can never
+    // become a line of our copy. `usedReviews` distinguishes "the operator
+    // pasted nothing" from "the operator pasted text that mined to nothing":
+    // an ABSENT input must leave P11 `unknown` rather than score it zero.
+    const mined = mineReviewLanguage(pack, body.reviewsText);
+    const usedReviews = typeof body.reviewsText === 'string' && body.reviewsText.trim() !== '';
     const merged = await optimize(enriched, pack, anthropicClient(), {
       groups: [group],
       base: body.listing,
       panelFacts,
+      ...(usedReviews ? { operator: { buyerPhrases: mined.phrases } } : {}),
     });
     const audit = buildAudit(enriched, merged, pack, ctx, {
       ...(panelFacts ? { panelFacts } : {}),
+      ...(usedReviews ? { reviewTokens: mined.tokens, reviewRejected: mined.rejected } : {}),
     });
     const optimized: OptimizedListing = {
       ...merged,

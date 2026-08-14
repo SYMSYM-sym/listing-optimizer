@@ -110,7 +110,7 @@ describe('operator inputs — parsing', () => {
     expect(normalizePanelFacts(panel)).toEqual(panel);
   });
 
-  it('a fully filled form produces every key, and regenerate carries only the two that still apply', () => {
+  it('a fully filled form produces every key, and regenerate carries the three that still apply', () => {
     const filled = form({
       reviewsText: 'It fits my morning routine.',
       competitorAsins: 'B0TESTASIN',
@@ -123,9 +123,14 @@ describe('operator inputs — parsing', () => {
       fictionPhrases: ['triple-strength complex'],
       panelFacts: { unit_count: '90 Count' },
     });
-    // A regeneration must not escape C11 phrases or the confirmed panel; the
-    // route accepts neither review text nor competitors, so neither is sent.
+    // A regeneration must not escape C11 phrases or the confirmed panel, and it
+    // must not LOSE the operator's review language: a regenerated group written
+    // without the mined buyer phrasing stops mirroring the operator's buyers
+    // while every other group still does. COMPETITORS are still not sent —
+    // they feed the benchmark, which a single-group regeneration does not
+    // re-ingest, and the route does not accept them.
     expect(regenerateOperatorInputs(filled)).toEqual({
+      reviewsText: 'It fits my morning routine.',
       fictionPhrases: ['triple-strength complex'],
       panelFacts: { unit_count: '90 Count' },
     });

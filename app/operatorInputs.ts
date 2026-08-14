@@ -119,15 +119,24 @@ export function buildOperatorInputs(form: OperatorInputForm): OperatorInputBody 
 /**
  * The subset a REGENERATE call carries.
  *
- * A regeneration must not be a way to escape a per-run input the operator set:
- * the phrases still apply (C11 reads them) and the confirmed panel is still
- * product truth. Review text and competitors are not here because they feed
- * the ORIGINAL generation and the benchmark, both of which a single-group
- * regeneration does not redo — the route accepts neither.
+ * A regeneration must not be a way to escape — or to LOSE — a per-run input the
+ * operator set. Three of the four apply: the phrases still apply (C11 reads
+ * them), the confirmed panel is still product truth, and the REVIEW TEXT still
+ * shapes the prompt, because a regenerated group is written from scratch and a
+ * group written without the mined buyer language is a group that no longer
+ * mirrors the operator's buyers while every other group still does. That was
+ * the defect: review text was omitted here and in the route, so per-group
+ * regeneration silently dropped it and nothing said so.
+ *
+ * COMPETITORS are still not sent, and that is a different case rather than an
+ * oversight: they feed the BENCHMARK, which is a measurement of pages a
+ * single-group regeneration does not re-ingest, and the route does not accept
+ * them. Their absence changes no copy.
  */
 export function regenerateOperatorInputs(form: OperatorInputForm): OperatorInputBody {
-  const { fictionPhrases, panelFacts } = buildOperatorInputs(form);
+  const { reviewsText, fictionPhrases, panelFacts } = buildOperatorInputs(form);
   return {
+    ...(reviewsText ? { reviewsText } : {}),
     ...(fictionPhrases ? { fictionPhrases } : {}),
     ...(panelFacts ? { panelFacts } : {}),
   };
