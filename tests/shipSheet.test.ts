@@ -178,12 +178,26 @@ describe('ship sheet — verified run', () => {
     expect(banner).toContain('Do NOT re-submit');
   });
 
-  it('the operator checklist renders the ops placeholders and the browse-node caveat', () => {
-    const section = html.slice(html.indexOf('<h2>9 · Operator checklist'));
+  it('the operator checklist renders the publish order and the browse-node caveat', () => {
+    const section = html.slice(
+      html.indexOf('<h2>9 · Operator checklist'),
+      html.indexOf('<h2>10 ·'),
+    );
     expect(section).toContain('Publish order');
     expect(section).toContain('Product Classifier');
-    expect(section).toContain('cGMP');
-    expect(section).toContain('Rating floor');
+  });
+
+  /**
+   * WS7 moved the two hand-written ops reminders out of `opsPlaceholders` and
+   * into the structured post-publish checklist, which states the rule, its
+   * effective date and what happens if it is missed. The topics must still be
+   * on the sheet — just in the section that can carry them properly.
+   */
+  it('the account-side obligations moved to the post-publish section, not off the sheet', () => {
+    const post = html.slice(html.indexOf('<h2>14 · After you publish'));
+    expect(post).toContain('cGMP');
+    expect(post).toContain('rating defence');
+    expect(post).toContain('4.0');
   });
 });
 

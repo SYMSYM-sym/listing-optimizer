@@ -669,6 +669,33 @@ ul.ops{margin:8px 0 0;padding-left:20px}
     h += `<ul class=ops>${(timing.notes ?? []).map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>`;
   }
 
+  // --- WS7: the MARKETPLACE / OPS checklist (pack data) ---
+  //
+  // It replaces two hand-written `opsPlaceholders` lines that named a topic
+  // without stating the rule, its effective date, or the consequence of
+  // missing it. Each row now carries a LANE (what it protects), the DATE where
+  // the rule has one, and a VOLATILE marker where the underlying list moves —
+  // because the one thing worse than not having the approved-provider list is
+  // having last quarter's copy of it and believing it.
+  const marketplace = postPublish?.marketplaceChecklist ?? [];
+  if (marketplace.length > 0) {
+    if (postPublish?.marketplaceChecklistNote) {
+      h += `<div class=stale>${esc(postPublish.marketplaceChecklistNote)}</div>`;
+    }
+    h += '<table><tr><th>#</th><th>Lane</th><th>Action</th><th>Why / how</th></tr>';
+    for (const item of marketplace) {
+      const flags: string[] = [];
+      if (item.dated) flags.push(item.dated);
+      if (item.volatile) flags.push('re-verify live — this list moves');
+      const flagHtml =
+        flags.length > 0 ? `<div class=note>\u26a0 ${esc(flags.join(' · '))}</div>` : '';
+      h +=
+        `<tr><td><code>${esc(item.id)}</code></td><td>${esc(item.lane)}</td>` +
+        `<td><b>${esc(item.title)}</b>${flagHtml}</td><td>${esc(item.detail)}</td></tr>`;
+    }
+    h += '</table>';
+  }
+
   h += '</div>';
 
   // -------------------------------------------------------------------------

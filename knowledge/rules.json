@@ -658,10 +658,8 @@
     ],
     "propagationNote": "Allow up to 48 hours for saved changes to propagate to the live detail page. Do NOT re-submit the same edit while it is propagating: duplicate submissions queue behind one another and a stale one can overwrite a newer value.",
     "browseNodeNote": "The recommended browse node is a SUGGESTION only — confirm the node is accepted in the Product Classifier before saving, and enter it LAST.",
-    "opsPlaceholders": [
-      "TIC / cGMP filing — record the manufacturing facility registration and the cGMP filing reference for this SKU in your own compliance file before publish. Operator-supplied: this app never generates it. (Extended in WS7.)",
-      "Rating floor — confirm the SKU clears your programme rating floor (minimum star rating and review count) before enrolling it in promotions or advertising. Operator-supplied: ratings are not part of a generated listing. (Extended in WS7.)"
-    ]
+    "opsPlaceholders": [],
+    "_opsPlaceholdersNote": "WS7 SUPERSEDED this list. It held two hand-written reminders (a TIC/cGMP line and a rating line) that named the topic without stating the rule, the date it takes effect, or what happens if it is missed. Both are now structured rows in postPublish.marketplaceChecklist, which the sheet renders with lane, effective date and volatility. The key stays (empty) so an operator pack can still add its OWN account-specific placeholders without touching the marketplace checklist."
   },
   "_attributeGuardComment": "AM-1 / C24 — the DOSAGE-ATTRIBUTE guard, ported from the harness kit's checkC24. Structured attributes are FILTER-FED: a strength figure sitting in an attribute whose KEY names a dose states that number AS a dose, which overstates the product even when the number itself is the canonical one. `keyPattern` is matched against the attribute KEY (case-insensitive); `unitDimensions` names which `units.dimensions` lists supply the hero units the VALUE may not assert beside a number. The figure belongs in copy attached to the blend or formula, never in structured data. Emptying either field disarms C24, so both are REQUIRED_PACK_PIECES.",
   "attributeGuard": {
@@ -910,6 +908,52 @@
         "Field edits themselves propagate to the live detail page within about 48 hours. Do not re-submit the same edit while it is propagating.",
         "Re-run the assistant interrogation monthly: ask it what the product is for, whether it is third-party tested, how it compares, and whether it is good value. Every wrong or missing answer is the next fix."
       ]
-    }
+    },
+    "marketplaceChecklistNote": "These are ACCOUNT-SIDE actions. This app cannot perform any of them and has checked none of them - it surfaces them so they are not discovered late. Every row marked ⚠ carries a date or a list that moves: re-verify it live before you rely on it, including the version printed here.",
+    "marketplaceChecklist": [
+      {
+        "id": "MC1",
+        "lane": "survival",
+        "dated": "mandatory since January 2026",
+        "volatile": true,
+        "title": "File the cGMP certificate and current COA through an approved TIC provider - the same day you publish.",
+        "detail": "Third-party cGMP verification submitted through a marketplace-approved Testing/Inspection/Certification provider is mandatory for every dietary supplement listing on the US marketplace, across all supplement categories, with roughly a 90-day window. Non-compliance means suppression or removal, so this is listing survival, not paperwork. HOLDING the documents is not compliance - they must be FILED (Seller Central > Manage Your Compliance > Select a Provider). First-party audits and regulator inspection history are not accepted; some existing certification programmes fast-track. The approved-provider list is refreshed MONTHLY: take it live at filing time and never trust a cached copy, including any list quoted in your own internal documents."
+      },
+      {
+        "id": "MC2",
+        "lane": "discovery",
+        "volatile": false,
+        "title": "Treat a 4.0-star rating as a discovery floor, and run rating defence from day one.",
+        "detail": "Measured assistant recommendation samples contain essentially nothing below 4.0 stars, so the rating behaves as an AI de-selection gate rather than a soft signal - and in-stock plus fast fulfilment are near-prerequisites alongside it. Stand up the rating-defence routine before the first order: daily review monitoring, prepared compliant response templates, and the Brand Registry review-contact workflow. Never incentivise a review. If the listing sits just above the floor, defence is existential rather than cosmetic."
+      },
+      {
+        "id": "MC3",
+        "lane": "growth",
+        "volatile": false,
+        "title": "Hold external traffic until week 7 or later, and stage it behind rating gates.",
+        "detail": "Publish and stabilise first: conversion assets have to be proven before you pay to send strangers at them. Sequence owned email, then the marketplace creator/affiliate programmes, then attribution-tracked affiliate platforms, then performance-PR placements, with small bridged paid tests last. Gate scaling on rating (a 4.2-star scaling floor and mandatory bridge pages until 4.3 is the pattern that worked). BANNED, all of them manipulation-policy violations: search-find-buy schemes, super URLs, and rebate programmes. Every off-marketplace asset goes through a compliance screen FIRST - off-site copy about a regulated product is still regulated speech."
+      },
+      {
+        "id": "MC4",
+        "lane": "growth",
+        "volatile": false,
+        "title": "Vine is for a child ASIN under 30 reviews - an established ASIN is ineligible.",
+        "detail": "Enrolment is limited to variation/child ASINs below the 30-review threshold, with per-parent fee tiers. Check eligibility before it appears in a launch plan: an established ASIN with a large review history cannot use it, and planning around a tactic the account cannot run costs a launch window."
+      },
+      {
+        "id": "MC5",
+        "lane": "hygiene",
+        "volatile": false,
+        "title": "Allow 48 hours for a saved edit to propagate. Do not re-submit it.",
+        "detail": "Description and field edits take up to 48 hours to reach the live detail page. Duplicate submissions queue behind one another and a stale one can overwrite a newer value, so re-submitting the same edit while it is propagating is how a correct value gets replaced by an old one. Verify rendering after propagation, not during it. Editing a listing can also trigger the marketplace AI enhancement pass - copy that already matches the canonical shape gives it nothing to rewrite."
+      },
+      {
+        "id": "MC6",
+        "lane": "hygiene",
+        "volatile": true,
+        "title": "Re-verify every dated rule monthly - including the ones printed in this sheet.",
+        "detail": "Marketplace listing policy changed twice in a single half-year during the source project. Monthly: re-run the assistant interrogation diagnostic, re-check the approved TIC provider list (it is refreshed monthly and providers drop off it), and confirm the browse node and product-type token have not drifted. Any cached list is a liability the moment it is written down, this document included."
+      }
+    ]
   }
 }
