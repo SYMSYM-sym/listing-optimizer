@@ -15,7 +15,20 @@ import { snapshotBlock } from './shared';
 function slotLines(arch: ImageArchitecture | undefined): string {
   const slots = (arch?.slots ?? []).filter((s) => s?.slot && s?.purpose);
   if (slots.length === 0) return '';
-  return slots.map((s) => `(${s.slot}) "${s.purpose}" — ${s.guidance}`).join('\n');
+  // The id is written where the field wants it — `"slot": 1` — because the
+  // previous rendering, `(1) "main-white-background" — …`, put a NUMBER and a
+  // quoted LABEL side by side and said nothing about which one the `slot`
+  // field takes. Every live run wrote the label and failed zod on all eight
+  // rows (D2). The schema is built from these same pack rows.
+  return slots.map((s) => `"slot": ${s.slot} — the ${s.purpose} image: ${s.guidance}`).join('\n');
+}
+
+/** The permitted `slot` values, verbatim from the pack. */
+function slotIds(arch: ImageArchitecture | undefined): string {
+  return (arch?.slots ?? [])
+    .filter((s) => s?.slot && s?.purpose)
+    .map((s) => String(s.slot))
+    .join(', ');
 }
 
 export function imagesPrompt(snapshot: ListingSnapshot, pack: KnowledgePack): string {
@@ -36,9 +49,10 @@ export function imagesPrompt(snapshot: ListingSnapshot, pack: KnowledgePack): st
 
 TASK: A ${count}-slot image plan plus a ${video?.aspect ?? '9:16'} video brief.
 
-SLOTS — write each one to its stated job, and state its stated requirements IN THE BRIEF:
+SLOTS — one object per slot, in this order, writing each one to its stated job and stating its stated requirements IN THE BRIEF:
 ${slotLines(arch)}
 
+- "slot": the whole number shown for that slot above and nothing else — exactly one of ${slotIds(arch)}. It is an id, not a name: never write the wording that follows it, never renumber, never skip one.
 - "spec": the concrete production requirements for that slot. Where the slot's job names a requirement above (a background colour, a fill share, a pixel floor, a real photograph), write that requirement out in the spec in those words — a requirement nobody wrote down is a requirement nobody renders.
 - "purpose", "spec" and "notes" are written in sentence case, never in capitals. "notes": copy and layout guidance.
 - "altText": a paste-ready ALT string for that image, at most ${altMax} characters. Describe what the image SHOWS, in plain words, front-loading the product and the one fact the image carries. Never name another brand: ALT text is invisible on the page and a rival's name sitting there is a trademark exposure.
@@ -48,5 +62,5 @@ ${slotLines(arch)}
 ${videoBlock}
 - "shots": the shot list. "onScreenText": every string that appears on screen, each one written to the same rules as a bullet.
 
-Return JSON: { "imagePlan": [{ "slot", "purpose", "spec", "notes", "altText" } ×${count}], "videoBrief": { "aspect", "durationSeconds", "shots": [], "onScreenText": [], "notes" } }`;
+Return JSON: { "imagePlan": [{ "slot": ${slots[0]?.slot ?? 1}, "purpose", "spec", "notes", "altText" }, ... one object for each of ${slotIds(arch)}], "videoBrief": { "aspect", "durationSeconds", "shots": [], "onScreenText": [], "notes" } }`;
 }

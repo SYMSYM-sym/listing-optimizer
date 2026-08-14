@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ImageArchitecture } from '@/lib/types';
 
 /**
  * Zod schemas per generation group — structural minimums enforced at the
@@ -119,37 +120,90 @@ export const aplusGroupSchema = z
   });
 
 /**
- * WS8 — 8 still slots + the 9:16 video brief.
+ * WS8 — the still slots + the 9:16 video brief.
  *
- * STRUCTURE ONLY, as everywhere at this boundary: the CONTENT of a brief (the
- * white-background/fill/pixel tokens, the real-photograph requirement) is
- * verified by gate C29 against the pack's slot specs, and the ALT cap by C30.
- * A schema that enforced the cap here would let a repair round satisfy Zod and
- * still ship an over-long ALT, because the schema runs before assembly.
+ * SLOT IS A PACK ID, NOT A FREE LABEL (D2). Every live run failed
+ * `imagePlan.0.slot`..`imagePlan.7.slot` because the schema demanded a NUMBER
+ * while the prompt listed each slot as `(1) "main-white-background" — …` and
+ * never said which of the two the field wanted; the model wrote the quoted
+ * label. Both sides are fixed together: the prompt now states the permitted
+ * values verbatim (they are rendered from the same `rules.imageArchitecture`
+ * data this schema is built from), and the schema resolves the slot to the
+ * pack's own id — accepting the number, the same number written as a string,
+ * or that slot's documented purpose label — and REJECTS anything else. It is
+ * deliberately NOT `z.string()`: C29 matches the emitted brief to its slot
+ * spec by id and C30 caps that slot's ALT, so "which slot is this" has to stay
+ * knowable.
+ *
+ * Everything else is STRUCTURE ONLY, as everywhere at this boundary: the
+ * CONTENT of a brief (the background/fill/pixel tokens, the real-photograph
+ * requirement) is verified by gate C29 against the pack's slot specs, and the
+ * ALT cap by C30. A schema that enforced the cap here would let a repair round
+ * satisfy Zod and still ship an over-long ALT, because the schema runs before
+ * deterministic assembly.
  */
-export const imagesGroupSchema = z.object({
-  imagePlan: z
-    .array(
-      z.object({
-        slot: z.number().int().min(1).max(9),
-        purpose: z.string().min(3),
-        spec: z.string().min(10),
-        notes: z.string(),
-        altText: z.string().default(''),
-      }),
-    )
-    .length(8),
-  videoBrief: z.object({
-    aspect: z.string().min(3),
-    durationSeconds: z.preprocess(
-      (v) => (typeof v === 'string' ? Number.parseInt(v, 10) : v),
-      z.number().int().min(1).max(600),
-    ),
-    shots: z.array(z.string().min(5)).min(3),
-    onScreenText: z.array(z.string().min(1)).min(2),
-    notes: z.string().default(''),
-  }),
+/** Fold a label to its comparison form: case, spacing and hyphens only. */
+const labelKey = (v: string): string => v.trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+
+/**
+ * The slot field for ONE pack's architecture. `ids` is the closed set of slot
+ * ids the pack defines; `byLabel` maps each slot's documented purpose label to
+ * that same id, so the one alternative spelling the prompt itself puts in front
+ * of the model resolves instead of costing a reparse round.
+ */
+function slotField(specs: { slot: number; purpose: string }[]) {
+  const ids = specs.map((s) => s.slot);
+  const byLabel = new Map(specs.map((s) => [labelKey(String(s.purpose ?? '')), s.slot]));
+  return z.preprocess((v) => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string') {
+      const raw = v.trim();
+      const digits = raw.match(/^[^0-9]{0,8}?(\d{1,3})$/);
+      if (digits) return Number(digits[1]);
+      const byName = byLabel.get(labelKey(raw));
+      if (byName !== undefined) return byName;
+    }
+    return v;
+  }, z.number().int().refine((n) => ids.includes(n), {
+    message: `slot must be one of the ids the pack defines: ${ids.join(', ')}`,
+  }));
+}
+
+const videoBriefSchema = z.object({
+  aspect: z.string().min(3),
+  durationSeconds: z.preprocess(
+    (v) => (typeof v === 'string' ? Number.parseInt(v, 10) : v),
+    z.number().int().min(1).max(600),
+  ),
+  shots: z.array(z.string().min(5)).min(3),
+  onScreenText: z.array(z.string().min(1)).min(2),
+  notes: z.string().default(''),
 });
+
+/**
+ * Build the images schema from the ACTIVE pack's slot architecture, so the
+ * accepted slot ids and the required plan length are the pack's numbers rather
+ * than literals kept in step by hand.
+ */
+export function imagesGroupSchemaFor(arch: ImageArchitecture | undefined) {
+  const specs = (arch?.slots ?? [])
+    .filter((s) => typeof s?.slot === 'number' && typeof s?.purpose === 'string')
+    .map((s) => ({ slot: s.slot, purpose: s.purpose }));
+  const item = z.object({
+    slot: specs.length > 0 ? slotField(specs) : z.number().int().min(1),
+    purpose: z.string().min(3),
+    spec: z.string().min(10),
+    notes: z.string(),
+    altText: z.string().default(''),
+  });
+  return z.object({
+    // No architecture => no declared plan length; the pack manifest already
+    // fails such a pack closed at PACK, so this boundary must not also invent
+    // a count of its own.
+    imagePlan: specs.length > 0 ? z.array(item).length(specs.length) : z.array(item).min(1),
+    videoBrief: videoBriefSchema,
+  });
+}
 
 export const qaGroupSchema = z.object({
   qa: z
@@ -216,6 +270,6 @@ export type DescriptionGroup = z.infer<typeof descriptionGroupSchema>;
 export type BackendGroup = z.infer<typeof backendGroupSchema>;
 export type AttributesGroup = z.infer<typeof attributesGroupSchema>;
 export type AplusGroup = z.infer<typeof aplusGroupSchema>;
-export type ImagesGroup = z.infer<typeof imagesGroupSchema>;
+export type ImagesGroup = z.infer<ReturnType<typeof imagesGroupSchemaFor>>;
 export type QaGroup = z.infer<typeof qaGroupSchema>;
 export type KeywordsGroup = z.infer<typeof keywordsGroupSchema>;
