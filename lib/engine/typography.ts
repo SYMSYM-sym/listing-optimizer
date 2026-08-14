@@ -1,0 +1,112 @@
+import type { OptimizedListing } from '@/lib/types';
+
+/**
+ * TYPOGRAPHIC NORMALIZATION AT EMIT (generation policy, NOT gate laundering).
+ *
+ * Models write typographer's punctuation: curly quotes, en/em dashes, ellipsis
+ * characters, non-breaking spaces. On a marketplace listing those are a real
+ * defect — the description budget is counted in UTF-8 BYTES (an em dash is
+ * three), feed pipelines mangle them, and the same sentence pasted twice can
+ * differ by an invisible character. So the ENGINE emits ASCII: the substitution
+ * happens once, here, at assembly, and the gate then INDEPENDENTLY verifies
+ * that what was emitted really is ASCII (C27). Worker != checker is preserved:
+ * this module never sees a gate result and the gate never calls it.
+ *
+ * WHAT IS DELIBERATELY *NOT* SUBSTITUTED, and why. Every character below is a
+ * pure typographic variant of an ASCII character, so replacing one cannot make
+ * a failing listing pass any check. These are NOT touched:
+ *
+ *   - the banned SYMBOL class (trademark/registered/copyright, currency signs):
+ *     C17 fails them by design, and silently rewriting one would be exactly the
+ *     "mutate content to force a pass" this project forbids;
+ *   - emoji: same reason (C17 again);
+ *   - zero-width and other invisible characters: the de-obfuscation passes in
+ *     `lib/gate/util` exist precisely because an attacker hides a banned term
+ *     behind one. Stripping them here would erase the evidence. They are
+ *     non-ASCII, so C27 reports them instead;
+ *   - anything with an accent or a non-Latin script: a real word, not
+ *     punctuation. C27 reports it and a human decides.
+ */
+
+/** Typographic variant -> ASCII. Punctuation and spacing ONLY. */
+const SUBSTITUTIONS: [RegExp, string][] = [
+  // curly single quotes + prime
+  [/[‘’‚‛′]/g, "'"],
+  // curly double quotes + double prime
+  [/[“”„‟″]/g, '"'],
+  // hyphen/dash family + minus sign
+  [/[‐‑‒–—―−]/g, '-'],
+  // horizontal ellipsis
+  [/…/g, '...'],
+  // fraction slash
+  [/⁄/g, '/'],
+  // comparison + arithmetic operators (spec shorthand: ">=85% fill", "<=5 icons")
+  [/≥/g, '>='],
+  [/≤/g, '<='],
+  [/≠/g, '!='],
+  [/±/g, '+/-'],
+  [/×/g, 'x'],
+  [/÷/g, '/'],
+  // non-breaking, en/em/thin/hair, narrow-no-break, medium-math and ideographic spaces
+  [/[  -   　]/g, ' '],
+];
+
+/** ASCII-fold the typographic punctuation in one string. */
+export function toAsciiTypography(text: string): string {
+  let out = typeof text === 'string' ? text : text == null ? '' : String(text);
+  for (const [re, to] of SUBSTITUTIONS) out = out.replace(re, to);
+  return out;
+}
+
+/**
+ * Apply `toAsciiTypography` to every GENERATED copy surface of an assembled
+ * listing.
+ *
+ * Explicitly untouched: `facts` (deterministically produced from the source
+ * snapshot, not written by the model), `fdaDisclaimer` and
+ * `aplusContent.fdaDisclaimer` (verbatim legal constants — C5/A1 compare them
+ * character for character, so this module must never be in a position to edit
+ * one), `state`, and the parallel bookkeeping arrays.
+ */
+export function normalizeListingTypography(l: OptimizedListing): OptimizedListing {
+  const t = toAsciiTypography;
+  return {
+    ...l,
+    title: t(l.title),
+    title75: t(l.title75),
+    itemHighlights: t(l.itemHighlights),
+    bullets: (l.bullets ?? []).map(t),
+    description: t(l.description),
+    backendSearchTerms: t(l.backendSearchTerms),
+    productName: t(l.productName),
+    primaryKeyword: t(l.primaryKeyword),
+    bulletAnchors: l.bulletAnchors?.map(t),
+    attributes: Object.fromEntries(
+      Object.entries(l.attributes ?? {}).map(([k, v]) => [k, t(v)]),
+    ),
+    aplusContent: {
+      ...l.aplusContent,
+      modules: (l.aplusContent?.modules ?? []).map((m) => ({
+        ...m,
+        headline: t(m.headline),
+        body: t(m.body),
+        ...(m.subcopy === undefined ? {} : { subcopy: t(m.subcopy) }),
+      })),
+      comparison: {
+        rows: (l.aplusContent?.comparison?.rows ?? []).map((r) => ({
+          label: t(r.label),
+          ours: t(r.ours),
+          typical: t(r.typical),
+        })),
+      },
+      faq: (l.aplusContent?.faq ?? []).map((f) => ({ ...f, q: t(f.q), a: t(f.a) })),
+    },
+    imagePlan: (l.imagePlan ?? []).map((s) => ({
+      ...s,
+      purpose: t(s.purpose),
+      spec: t(s.spec),
+      notes: t(s.notes),
+    })),
+    qa: (l.qa ?? []).map((f) => ({ ...f, q: t(f.q), a: t(f.a) })),
+  };
+}

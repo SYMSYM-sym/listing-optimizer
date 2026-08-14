@@ -20,6 +20,7 @@ import { loadPack } from '@/lib/knowledge/loadPack';
 import type { CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
+import { withCoherentBulletFlags } from './fixtures/coherentBullets';
 
 /**
  * RED TEAM ROUND 4.
@@ -48,7 +49,8 @@ beforeAll(async () => {
 const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
   const copy = JSON.parse(JSON.stringify(clean)) as OptimizedListing;
   fn(copy);
-  return copy;
+  // Keep the parallel claim-bearing flags coherent with the rewritten text.
+  return withCoherentBulletFlags(copy);
 };
 const failures = (l: OptimizedListing, p: KnowledgePack = pack, c: GateContext = ctx): Failure[] =>
   runGate(l, p, c).failures;
@@ -110,6 +112,34 @@ const EMPTIERS: Record<string, (p: KnowledgePack) => void> = {
   },
   'compliancePack.noAllergenPhrases': (p) => {
     p.compliancePack!.noAllergenPhrases = [];
+  },
+  // AM-3: the operator override may drop the BULLET leg of the triple
+  // declaration and nothing else. Switching off the attribute or description
+  // leg is a disarmed C9, so the manifest fails the pack closed.
+  'compliancePack.ingredientSubsetRule': (p) => {
+    delete p.compliancePack!.ingredientSubsetRule;
+  },
+  'rules.attributeGuard': (p) => {
+    delete p.rules.attributeGuard;
+  },
+  'rules.outputHygiene.asciiOnly': (p) => {
+    p.rules.outputHygiene!.asciiOnly = false;
+  },
+  'rules.outputHygiene.aiTellPhrases': (p) => {
+    p.rules.outputHygiene!.aiTellPhrases = [];
+  },
+  'rules.outputHygiene.instructionFragments': (p) => {
+    p.rules.outputHygiene!.instructionFragments = [];
+  },
+  'rules.outputHygiene.surfaces': (p) => {
+    p.rules.outputHygiene!.surfaces = [];
+  },
+  'compliancePack.allergenDeclarationSurfaces': (p) => {
+    p.compliancePack!.allergenDeclarationSurfaces = {
+      attribute: false,
+      description: false,
+      bullet: false,
+    };
   },
   'compliancePack.disclaimer': (p) => {
     p.compliancePack!.disclaimer = '';

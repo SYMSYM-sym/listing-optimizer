@@ -17,17 +17,21 @@ import {
  */
 const NO_NEGATION: NegationOptions = { mode: 'none' };
 
-interface ScanSurface {
+export interface ScanSurface {
   field: string;
   text: string;
 }
 
 /**
- * The surface set shared by C18 (prohibited detail-page content) and C19
- * (prohibited marketing). Which of these groups is actually scanned is PACK
- * DATA (`surfaces`), so the gate stays category-agnostic.
+ * The surface set shared by C18 (prohibited detail-page content), C19
+ * (prohibited marketing) and C27 (output hygiene). Which of these groups is
+ * actually scanned is PACK DATA (`surfaces`), so the gate stays
+ * category-agnostic. Exported because a second check that scans "the same
+ * surfaces, chosen by the same pack key" must not re-implement the mapping —
+ * two collectors drift, and the one that drifts is the one that stops scanning
+ * a surface.
  */
-function collectSurfaces(
+export function collectSurfaces(
   listing: OptimizedListing,
   want: Set<string>,
   priceAttributeKey?: string,

@@ -21,9 +21,9 @@ export const maxDuration = 300;
 export async function POST(req: Request): Promise<NextResponse> {
   const denied = checkAccess(req);
   if (denied) return denied as NextResponse;
-  let body: { snapshot?: ListingSnapshot };
+  let body: { snapshot?: ListingSnapshot; fictionPhrases?: string[] };
   try {
-    body = (await req.json()) as { snapshot?: ListingSnapshot };
+    body = (await req.json()) as { snapshot?: ListingSnapshot; fictionPhrases?: string[] };
   } catch {
     return NextResponse.json({ code: 'BAD_REQUEST', message: 'Body must be JSON.' }, { status: 400 });
   }
@@ -35,6 +35,9 @@ export async function POST(req: Request): Promise<NextResponse> {
       body.snapshot,
       anthropicClient(),
       env.maxRepairIterations(),
+      // R45: per-run operator input, merged into the pack's C11 list for this
+      // run only and never persisted (lib/knowledge/operatorInputs.ts).
+      { fictionPhrases: body.fictionPhrases },
     );
 
     let runId: string | null = null;

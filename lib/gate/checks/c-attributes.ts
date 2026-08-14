@@ -145,3 +145,166 @@ function noneStyleAllergenDeclaration(l: OptimizedListing, pack: KnowledgePack):
     ),
   ];
 }
+
+// ---------------------------------------------------------------------------
+// C24 — the DOSAGE-ATTRIBUTE guard (AM-1)
+// ---------------------------------------------------------------------------
+
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Longest-first alternation over pack tokens, inner whitespace flexible. */
+function alternation(tokens: string[]): string {
+  return [...new Set(tokens.map((t) => t.trim()).filter(Boolean))]
+    .sort((a, b) => b.length - a.length)
+    .map((t) => escapeRe(t).replace(/\s+/g, '\\s+'))
+    .join('|');
+}
+
+/**
+ * C24 — a dosage/strength/potency ATTRIBUTE may not assert a hero figure.
+ *
+ * Ported from the harness kit's `checkC24`. The kit's reasoning, which is the
+ * whole point of the check: structured attributes are FILTER-FED. Copy that
+ * says "50 Billion CFU blend" states a formula-level fact a reader can weigh
+ * against the panel; the same figure sitting in `maximum_dosage` states it as
+ * a DOSE, in a field that feeds filters and comparison widgets, with no
+ * sentence around it to carry the attachment. That is an overstatement EVEN
+ * WHEN THE NUMBER IS THE CANONICAL ONE — which is exactly why C12
+ * (fact-consistency) cannot catch it: C12's question is "does this figure
+ * agree with the facts?", and here it does. The fix is to remove the
+ * attribute; the figure belongs in copy attached to the blend or formula.
+ *
+ * FULLY PACK-DRIVEN (`rules.attributeGuard`): the KEY pattern and the
+ * dimension whose unit tokens count as hero units are both pack data, so this
+ * module names neither an attribute key nor a unit. A legitimate dose-shaped
+ * attribute that asserts NO hero unit (a serving size counted in dosage forms,
+ * a dosage FORM) is untouched, which is the both-direction contract this check
+ * ships with.
+ */
+export function c24DosageAttributeGuard(l: OptimizedListing, pack: KnowledgePack): Failure[] {
+  const guard = pack.rules?.attributeGuard;
+  const keyPattern = guard?.keyPattern?.trim();
+  if (!keyPattern) return [];
+  const units = (guard?.unitDimensions ?? []).flatMap(
+    (dim) => pack.rules?.units?.dimensions?.[dim] ?? [],
+  );
+  const unitSource = alternation(units);
+  if (!unitSource) return [];
+  let keyRe: RegExp;
+  try {
+    keyRe = new RegExp(keyPattern, 'i');
+  } catch {
+    return [];
+  }
+  // number (with separators) followed by a hero unit — the kit's value shape.
+  const valueRe = new RegExp(`\\d[\\d,.]*\\s*(?:${unitSource})\\b`, 'i');
+  const out: Failure[] = [];
+  for (const [key, value] of Object.entries(l.attributes ?? {})) {
+    if (!keyRe.test(key)) continue;
+    const text = typeof value === 'string' ? value : String(value ?? '');
+    if (!valueRe.test(text)) continue;
+    out.push(
+      fail(
+        'C24',
+        `attributes.${key}`,
+        `'${key}' asserts '${text}'`,
+        `A dosage/strength/potency attribute must not assert this figure — structured, filter-fed data states the number as a DOSE, which overstates the product even when the number is the canonical one. Remove '${key}'; the figure belongs in copy attached to the blend or formula.`,
+      ),
+    );
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// C26 — active ingredients must be a SUBSET of the full ingredient list
+// ---------------------------------------------------------------------------
+
+/** Lower-case, punctuation-flattened comparison text. */
+const flatten = (v: string): string =>
+  v.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+/**
+ * The comparable WORDS of one declared ingredient.
+ *
+ * Amounts, units and parentheticals are dropped: the two attributes are
+ * legitimately written in different styles ("Vitamin D3 (as cholecalciferol)
+ * 25 mcg" against "Vitamin D3 (cholecalciferol), Rice Flour"), and comparing
+ * them literally would report a formatting difference as an undeclared
+ * ingredient. Words shorter than three characters go too — they are 'as', 'of'
+ * and 'd3'-style fragments that match everywhere and prove nothing.
+ */
+function nameWords(token: string, amountRe: RegExp | null): string[] {
+  let text = token.replace(/\([^)]*\)/g, ' ');
+  // "Probiotic Blend 50 Billion CFU" and "Probiotic Blend" name the SAME
+  // ingredient; the amount is a property of the panel, not of the name, and
+  // the full label list routinely omits it. The unit vocabulary is pack data.
+  if (amountRe) text = text.replace(amountRe, ' ');
+  return [
+    ...new Set(
+      flatten(text)
+        .split(' ')
+        .filter((w) => w.length >= 3 && !/^\d+$/.test(w)),
+    ),
+  ];
+}
+
+/** `number + pack unit` sequences, longest unit first. Null when the pack declares none. */
+function amountPattern(pack: KnowledgePack): RegExp | null {
+  const units = Object.values(pack.rules?.units?.dimensions ?? {}).flat();
+  const source = alternation(units);
+  return source ? new RegExp(`\\d[\\d,.]*\\s*(?:${source})\\b`, 'gi') : null;
+}
+
+/** Split a multivalue attribute into its declared entries. */
+const entries = (value: string): string[] =>
+  value
+    .split(/[;\n|]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+/**
+ * C26 — `active_ingredients` ⊆ `ingredients` (both keys are PACK DATA:
+ * `compliancePack.ingredientSubsetRule`).
+ *
+ * WHY IT IS A GATE CHECK. Amazon's ingredient-match enforcement reads every
+ * ingredient claim against the same panel; an active ingredient that appears
+ * in the actives field and NOWHERE in the full label list is either a copy
+ * error or an undeclared ingredient, and both are suppression risks. The
+ * output contract has stated this invariant since brain/05 and nothing
+ * enforced it.
+ *
+ * DELIBERATELY TOLERANT. The comparison is on NAME WORDS after case,
+ * punctuation, ordering, parentheticals and amounts are normalized away, and a
+ * failure needs a word of the active's name to appear nowhere at all in the
+ * full list. Over-blocking here would be worse than not checking: the two
+ * fields are written in different registers by design, so a strict comparison
+ * would fail honest labels.
+ */
+export function c26ActiveIngredientSubset(l: OptimizedListing, pack: KnowledgePack): Failure[] {
+  const rule = pack.compliancePack?.ingredientSubsetRule;
+  const subsetKey = rule?.subsetKey?.trim();
+  const supersetKey = rule?.supersetKey?.trim();
+  if (!subsetKey || !supersetKey) return [];
+  const attrs = l.attributes ?? {};
+  const subsetRaw = typeof attrs[subsetKey] === 'string' ? attrs[subsetKey] : '';
+  if (subsetRaw.trim() === '') return []; // nothing declared → C23 owns the blank
+  const supersetRaw = typeof attrs[supersetKey] === 'string' ? attrs[supersetKey] : '';
+  const haystack = flatten(supersetRaw);
+  const amountRe = amountPattern(pack);
+  const out: Failure[] = [];
+  for (const token of entries(subsetRaw)) {
+    const words = nameWords(token, amountRe);
+    if (words.length === 0) continue;
+    const missing = words.filter((w) => !haystack.includes(w));
+    if (missing.length === 0) continue;
+    out.push(
+      fail(
+        'C26',
+        `attributes.${subsetKey}`,
+        `'${token}' is not declared in '${supersetKey}' (missing: ${missing.join(', ')})`,
+        `Every active ingredient must also appear in '${supersetKey}' — the full label list is what the marketplace matches ingredient claims against. Add it to '${supersetKey}' if the panel declares it, or remove it from '${subsetKey}' if it does not.`,
+      ),
+    );
+  }
+  return out;
+}

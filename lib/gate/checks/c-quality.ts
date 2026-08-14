@@ -147,14 +147,23 @@ export function c9Allergen(l: OptimizedListing, pack: KnowledgePack): Failure[] 
       out.push(fail('C9', declarationField, `"${phrase}" used`, `Never use "${phrase}" when a declarable allergen is present`));
     }
   }
+  // AM-3 — which LEGS of the triple declaration are required. The default is
+  // ALL THREE, and that is what every shipped pack declares: `surfaces` reads
+  // `true` for a leg unless the pack explicitly sets it to `false`, so an
+  // absent key, an absent object and an absent compliance field all mean
+  // ENFORCED. The attribute and description legs additionally cannot be
+  // switched off at all — `REQUIRED_PACK_PIECES` fails the pack closed if
+  // either is set false — so the override reaches the bullet leg only.
+  const surfaces = cp.allergenDeclarationSurfaces ?? {};
+  const requires = (leg: 'attribute' | 'description' | 'bullet'): boolean => surfaces[leg] !== false;
   for (const rule of present) {
-    if (attrs[f.declaration] !== rule.canonicalString) {
+    if (requires('attribute') && attrs[f.declaration] !== rule.canonicalString) {
       out.push(fail('C9', declarationField, attrs[f.declaration] ?? '(empty)', `${f.declaration} must equal exactly '${rule.canonicalString}'`));
     }
-    if (!(l.bullets ?? []).some((b) => allergenMentioned(b ?? '', rule, cp))) {
-      out.push(fail('C9', 'bullets', `no bullet declares ${rule.class}`, `Declare the allergen ('${rule.canonicalString}') in at least one bullet`));
+    if (requires('bullet') && !(l.bullets ?? []).some((b) => allergenMentioned(b ?? '', rule, cp))) {
+      out.push(fail('C9', 'bullets', `no bullet declares ${rule.class}`, `Declare the allergen ('${rule.canonicalString}') in at least one bullet — as a TRAILING clause, never the bullet's opening`));
     }
-    if (!allergenMentioned(l.description ?? '', rule, cp)) {
+    if (requires('description') && !allergenMentioned(l.description ?? '', rule, cp)) {
       out.push(fail('C9', 'description', `description does not declare ${rule.class}`, `Declare the allergen ('${rule.canonicalString}') in the description`));
     }
   }

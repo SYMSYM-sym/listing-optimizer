@@ -235,6 +235,18 @@ export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
       nonEmptyString(cp.allergenFields.aplusModuleIdCue),
   },
   {
+    id: 'compliancePack.allergenDeclarationSurfaces',
+    disarms:
+      'the ATTRIBUTE and DESCRIPTION legs of the allergen triple declaration (C9) — the operator override may drop the BULLET leg only; switching off either of the other two would leave a declarable allergen undeclared in structured data or in the field the customer actually reads',
+    // Absent object => every leg enforced (the strict default). Present object
+    // => the two non-overridable legs must not be switched off.
+    present: (_p, cp) => {
+      const s = cp.allergenDeclarationSurfaces;
+      if (!s) return true;
+      return s.attribute !== false && s.description !== false;
+    },
+  },
+  {
     id: 'compliancePack.noAllergenPhrases',
     disarms: 'the banned allergen-absence phrasing check (C9)',
     present: (_p, cp) => nonEmptyList(cp.noAllergenPhrases),
@@ -317,7 +329,7 @@ export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
   },
   {
     id: 'rules.style',
-    disarms: 'the entire style/formatting gate (C17)',
+    disarms: 'the entire style/formatting gate (C17) and the bullet claim-marker rule (C25)',
     present: (p) => {
       const st = p.rules?.style;
       if (!st) return false;
@@ -330,6 +342,7 @@ export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
         nonEmptyList(st.titleTermBans) &&
         nonEmptyList(st.titleTermBanSurfaces) &&
         nonEmptyString(st.bulletTrailingPunctuation) &&
+        nonEmptyString(st.claimMarker) &&
         nonEmptyString(st.asinPattern) &&
         nonEmptyString(st.emojiPattern) &&
         nonEmptyString(st.htmlTagPattern) &&
@@ -384,6 +397,46 @@ export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
     disarms:
       'the none-style allergen declaration rule (C23 R4) — without the canonical string a listing with no declarable allergen can leave the declaration attribute blank or fill it with unverifiable free text',
     present: (_p, cp) => nonEmptyString(cp.noAllergenCanonical),
+  },
+  {
+    id: 'compliancePack.ingredientSubsetRule',
+    disarms:
+      'C26 \u2014 without the attribute pair an active ingredient declared nowhere in the full label list can never be reported, and an undeclared ingredient is what marketplace ingredient-match enforcement suppresses listings for',
+    present: (_p, cp) =>
+      !!cp.ingredientSubsetRule &&
+      nonEmptyString(cp.ingredientSubsetRule.subsetKey) &&
+      nonEmptyString(cp.ingredientSubsetRule.supersetKey),
+  },
+  {
+    id: 'rules.attributeGuard',
+    disarms:
+      'C24 \u2014 the dosage/strength/potency ATTRIBUTE guard. Without the key pattern (or with no unit dimension left to guard) a hero figure can sit in structured, filter-fed data stating the number as a dose, and C12 cannot see it because the number agrees with the facts',
+    present: (p) => {
+      const g = p.rules?.attributeGuard;
+      if (!g || !nonEmptyString(g.keyPattern) || !nonEmptyList(g.unitDimensions)) return false;
+      // A dimension that names no units guards nothing.
+      return g.unitDimensions.some((d) => nonEmptyList(p.rules?.units?.dimensions?.[d]));
+    },
+  },
+  {
+    id: 'rules.outputHygiene.asciiOnly',
+    disarms: 'the ASCII half of C27 \u2014 non-ASCII characters would ship into the feed unreported',
+    present: (p) => p.rules?.outputHygiene?.asciiOnly === true,
+  },
+  {
+    id: 'rules.outputHygiene.aiTellPhrases',
+    disarms: 'the AI-tell half of C27',
+    present: (p) => nonEmptyList(p.rules?.outputHygiene?.aiTellPhrases),
+  },
+  {
+    id: 'rules.outputHygiene.instructionFragments',
+    disarms: 'the leaked-instruction half of C27',
+    present: (p) => nonEmptyList(p.rules?.outputHygiene?.instructionFragments),
+  },
+  {
+    id: 'rules.outputHygiene.surfaces',
+    disarms: 'every surface C27 would scan',
+    present: (p) => nonEmptyList(p.rules?.outputHygiene?.surfaces),
   },
   {
     id: 'rules.units.dimensions',

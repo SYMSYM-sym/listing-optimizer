@@ -13,6 +13,7 @@ import cosmeticsSchemaJson from '@/knowledge/attribute-schema.cosmetics.json';
 import type { AttributeSchemaFile, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
+import { withCoherentBulletFlags } from './fixtures/coherentBullets';
 
 /**
  * WS2 — ATTRIBUTE DISCIPLINE.
@@ -45,7 +46,8 @@ beforeAll(async () => {
 const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
   const copy = JSON.parse(JSON.stringify(clean)) as OptimizedListing;
   fn(copy);
-  return copy;
+  // Keep the parallel claim-bearing flags coherent with the rewritten text.
+  return withCoherentBulletFlags(copy);
 };
 const c23 = (l: OptimizedListing, p: KnowledgePack = pack) =>
   c23AttributeCompleteness(l, p);

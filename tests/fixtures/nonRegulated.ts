@@ -183,7 +183,7 @@ export function listingOf(p: NonRegulatedProduct): OptimizedListing {
     aplusContent: {
       fdaDisclaimer: '',
       modules: [
-        { id: 'brand-story', headline: `${name} — made for everyday use`, body: `${name} is built around one job and does it without fuss.`, claimBearing: false },
+        { id: 'brand-story', headline: `${name} - made for everyday use`, body: `${name} is built around one job and does it without fuss.`, claimBearing: false },
         { id: 'hero', headline: `${name} at a glance`, body: `${name} pairs a simple shape with materials chosen to last.`, claimBearing: false },
         { id: 'who-its-for', headline: 'Who it is for', body: p.description.split('Who it is for:')[1]?.split('\n')[0]?.trim() ?? 'Everyday households.', claimBearing: false },
       ],

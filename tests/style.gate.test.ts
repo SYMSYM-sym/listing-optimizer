@@ -15,6 +15,7 @@ import type { Failure, OptimizedListing, RuleSet } from '@/lib/types';
 import rulesJson from '@/knowledge/rules.json';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
+import { withCoherentBulletFlags } from './fixtures/coherentBullets';
 
 const pack = loadPack('supplements');
 const ctx: GateContext = { subcategories: ['probiotic', 'digestive'] };
@@ -28,7 +29,8 @@ beforeAll(async () => {
 const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
   const copy = JSON.parse(JSON.stringify(clean)) as OptimizedListing;
   fn(copy);
-  return copy;
+  // Keep the parallel claim-bearing flags coherent with the rewritten text.
+  return withCoherentBulletFlags(copy);
 };
 /** C17 failures only — other checks are covered by tests/gate.test.ts. */
 const c17 = (l: OptimizedListing): Failure[] =>

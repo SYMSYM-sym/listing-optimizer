@@ -32,12 +32,16 @@ import {
   c21SemanticDrugClaims,
   c22NaturalState,
   c23AttributeCompleteness,
+  c24DosageAttributeGuard,
+  c25BulletClaimMarker,
+  c26ActiveIngredientSubset,
+  c27OutputHygiene,
   packFailClosed,
   type GateContext,
 } from './checks';
 
 /**
- * The verify gate: C1–C12 + C15–C23 + A1–A9 + PACK (C13/C14 are
+ * The verify gate: C1–C12 + C15–C27 + A1–A9 + PACK (C13/C14 are
  * source-project-only and intentionally omitted). PASS only if zero failures.
  * The gate REPORTS — it never mutates content to force a pass.
  */
@@ -70,6 +74,10 @@ export function runGate(
     ...c21SemanticDrugClaims(listing, pack),
     ...c22NaturalState(listing, pack),
     ...c23AttributeCompleteness(listing, pack),
+    ...c24DosageAttributeGuard(listing, pack),
+    ...c25BulletClaimMarker(listing, pack),
+    ...c26ActiveIngredientSubset(listing, pack),
+    ...c27OutputHygiene(listing, pack),
     ...a1AplusDisclaimer(listing, pack),
     ...a2AplusBannedTerms(listing, pack),
     ...a3AplusBrandLeakage(listing),

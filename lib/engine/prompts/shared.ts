@@ -1,6 +1,8 @@
 import type {
+  BulletArchitecture,
   CompliancePack,
   ListingSnapshot,
+  PositioningAnchor,
   ProhibitedContentRules,
   ProhibitedMarketingRules,
   SemanticDrugClaims,
@@ -133,6 +135,52 @@ contain it verbatim, and the A+ brand-story and hero modules must each contain i
 verbatim.
 ${requirement}
 `;
+}
+
+
+/**
+ * WS4 — the BULLET ARCHITECTURE block, rendered FROM PACK DATA
+ * (`rules.bulletArchitecture`).
+ *
+ * WHY IT EXISTS. Five bullets written with no declared job produce five
+ * paraphrases of the same benefit, and the slot that should have carried the
+ * secondary use-case (or the trust facts, or the routine) is simply never
+ * written. The playbook's copy phase assigns each slot a JOB; this block states
+ * those jobs to the generator, demands one distinct situational anchor per
+ * bullet, and states the AM-3 allergen POSITION rule.
+ *
+ * STRATEGY IS NOT A GATE. Nothing here is enforced by a deterministic check:
+ * the audit reports an unfilled job or a repeated anchor as a P2 gap and the
+ * misplaced allergen declaration as a P1 gap. The gate's hard rules (C9's
+ * triple declaration, C25's claim marker) are untouched by anything in here.
+ */
+export function bulletArchitectureBlock(arch: BulletArchitecture | undefined): string {
+  const slots = (arch?.slots ?? []).filter((s) => s?.id && s?.job);
+  if (slots.length === 0) return '';
+  const lines = [
+    'BULLET ARCHITECTURE (each bullet has a DECLARED JOB \u2014 write to it, and give each bullet its own situational anchor):',
+    ...slots.map((s) => `- ${s.id} \u2014 ${s.job}. ${s.guidance}`),
+  ];
+  if (arch?.anchorRule) lines.push(`- ${arch.anchorRule}`);
+  const pos = arch?.allergenPosition;
+  if (pos?.mustTrail && pos.rule) lines.push(`- ${pos.rule}`);
+  lines.push(
+    `- Return the bullets IN SLOT ORDER: bullet 1 is ${slots[0]!.id}, bullet ${slots.length} is ${slots[slots.length - 1]!.id}.`,
+  );
+  return lines.join('\n');
+}
+
+/**
+ * R48 — the POSITIONING anchor, rendered FROM PACK DATA
+ * (`rules.positioningAnchor`). Playbook 8.20: a spec race against a number a
+ * rival can leapfrog by reformulating is not a position, and it invites a
+ * compliance mismatch as well as a losing comparison. Advisory guidance to the
+ * generator; the ship sheet renders the same anchor for the operator.
+ */
+export function positioningBlock(anchor: PositioningAnchor | undefined): string {
+  const guidance = (anchor?.guidance ?? []).filter((g) => g.trim() !== '');
+  if (!anchor?.headline || guidance.length === 0) return '';
+  return [`POSITIONING (${anchor.id}) \u2014 ${anchor.headline}`, ...guidance.map((g) => `- ${g}`)].join('\n');
 }
 
 export function snapshotBlock(snapshot: ListingSnapshot): string {

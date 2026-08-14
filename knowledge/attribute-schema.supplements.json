@@ -152,7 +152,7 @@
       "filterFacet": false,
       "required": false,
       "valueType": "string",
-      "example": "[N] [unit] (attached to the blend, never per-serving phrasing)",
+      "example": "2 Capsules Daily (the maximum DOSE COUNT \u2014 never a strength/potency figure: gate C24 fails a dosage attribute that asserts one, because structured data states the number as a dose)",
       "source": "generated",
       "pendingTemplateConfirm": true
     },

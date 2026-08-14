@@ -4,6 +4,7 @@ import { optimize, type GroupName, ALL_GROUPS } from '@/lib/engine/optimize';
 import { anthropicClient } from '@/lib/engine/llm';
 import { detectCategory } from '@/lib/knowledge/detectCategory';
 import { loadPack } from '@/lib/knowledge/loadPack';
+import { withOperatorFictionPhrases } from '@/lib/knowledge/operatorInputs';
 import { checkAccess } from '@/lib/server/guard';
 import { logServer } from '@/lib/server/log';
 import { updateRun } from '@/lib/store/runs';
@@ -25,6 +26,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     listing?: OptimizedListing;
     group?: string;
     runId?: string;
+    /** R45 — per-run operator known-false descriptors (C11). Never persisted. */
+    fictionPhrases?: string[];
   };
   try {
     body = (await req.json()) as typeof body;
@@ -49,7 +52,9 @@ export async function POST(req: Request): Promise<NextResponse> {
   const group = body.group as GroupName;
   try {
     const detection = detectCategory(body.snapshot);
-    const pack = loadPack(detection.packId);
+    // R45: the same per-run operator input the optimize/audit routes accept —
+    // a regeneration must not be a way to escape the phrases the operator set.
+    const pack = withOperatorFictionPhrases(loadPack(detection.packId), body.fictionPhrases);
     const enriched: ListingSnapshot = {
       ...body.snapshot,
       subcategory: detection.subcategories,

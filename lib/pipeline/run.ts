@@ -6,6 +6,7 @@ import { runRepairLoop } from '@/lib/engine/repair';
 import { buildAudit } from '@/lib/audit/buildAudit';
 import { detectCategory, type CategoryDetection } from '@/lib/knowledge/detectCategory';
 import { loadPack } from '@/lib/knowledge/loadPack';
+import { withOperatorFictionPhrases } from '@/lib/knowledge/operatorInputs';
 import { logServer } from '@/lib/server/log';
 
 /**
@@ -14,13 +15,26 @@ import { logServer } from '@/lib/server/log';
  * app runs. The LLM client is injected (routes pass the Anthropic client;
  * tests pass the recorded-fixture mock).
  */
+export interface PipelineOptions {
+  /**
+   * R45 — operator-supplied known-false descriptors for THIS run only (C11).
+   * Merged over the pack's own list; never persisted. See
+   * `lib/knowledge/operatorInputs.ts`.
+   */
+  fictionPhrases?: string[];
+}
+
 export async function runPipeline(
   snapshot: ListingSnapshot,
   llm: LlmClient,
   maxRepairIterations: number,
+  opts: PipelineOptions = {},
 ): Promise<OptimizeResult & { iterations: number; detection: CategoryDetection }> {
   const detection = detectCategory(snapshot);
-  const pack = loadPack(detection.packId);
+  // The operator's per-run fiction phrases are merged into a CLONE of the pack:
+  // the generator is told about them (the prompt renders the pack list) and C11
+  // enforces them, and the shipped pack data is untouched for the next run.
+  const pack = withOperatorFictionPhrases(loadPack(detection.packId), opts.fictionPhrases);
   const ctx = {
     subcategories: detection.subcategories,
     snapshotText: `${snapshot.title} ${snapshot.category}`,

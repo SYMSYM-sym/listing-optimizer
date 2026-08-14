@@ -1,5 +1,5 @@
-import type { ListingSnapshot } from '@/lib/types';
-import { canonicalNameBlock, snapshotBlock } from './shared';
+import type { ListingSnapshot, RuleSet } from '@/lib/types';
+import { canonicalNameBlock, positioningBlock, snapshotBlock } from './shared';
 
 export function descriptionPrompt(
   snapshot: ListingSnapshot,
@@ -7,6 +7,7 @@ export function descriptionPrompt(
   styleBlock = '',
   packRules: string[] = [],
   canonicalProductName = '',
+  rules?: RuleSet,
 ): string {
   const headroom = hasCompliance
     ? '≤1700 chars (the system appends the verbatim compliance disclaimer and needs the headroom)'
@@ -18,7 +19,9 @@ export function descriptionPrompt(
     canonicalProductName,
     'The description MUST contain that exact string at least once — write it out in full; do not paraphrase it or refer to it only as "this product".',
   );
-  return `${snapshotBlock(snapshot)}
+  // R48 positioning anchor (pack data) \u2014 the description carries the value story.
+  const positioning = positioningBlock(rules?.positioningAnchor);
+  return `${snapshotBlock(snapshot)}${positioning ? `\n\n${positioning}` : ''}
 
 ${styleBlock}
 

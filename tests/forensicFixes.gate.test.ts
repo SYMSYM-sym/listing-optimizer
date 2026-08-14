@@ -12,6 +12,7 @@ import { detectCategory } from '@/lib/knowledge/detectCategory';
 import type { Failure, ListingSnapshot, OptimizedListing } from '@/lib/types';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
+import { withCoherentBulletFlags } from './fixtures/coherentBullets';
 
 /**
  * FORENSIC REGRESSIONS — a real production run (an oral/dental supplement,
@@ -43,7 +44,8 @@ beforeAll(async () => {
 const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
   const copy = JSON.parse(JSON.stringify(clean)) as OptimizedListing;
   fn(copy);
-  return copy;
+  // Keep the parallel claim-bearing flags coherent with the rewritten text.
+  return withCoherentBulletFlags(copy);
 };
 
 const failuresOf = (l: OptimizedListing): Failure[] => runGate(l, pack, ctx).failures;

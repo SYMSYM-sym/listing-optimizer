@@ -13,6 +13,7 @@ import type { Failure, KnowledgePack, OptimizedListing, RuleSet } from '@/lib/ty
 import { z } from 'zod';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
+import { withCoherentBulletFlags } from './fixtures/coherentBullets';
 
 /**
  * RED TEAM ROUND 2 — the defects two independent audits found after the first
@@ -33,7 +34,8 @@ beforeAll(async () => {
 const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
   const copy = JSON.parse(JSON.stringify(clean)) as OptimizedListing;
   fn(copy);
-  return copy;
+  // Keep the parallel claim-bearing flags coherent with the rewritten text.
+  return withCoherentBulletFlags(copy);
 };
 const failures = (l: OptimizedListing, c: GateContext = ctx): Failure[] =>
   runGate(l, pack, c).failures;

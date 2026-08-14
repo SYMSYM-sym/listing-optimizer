@@ -10,6 +10,7 @@ import { logServer } from '@/lib/server/log';
 import { sanitizeBackendSearchTerms } from './backendSanitize';
 import { sanitizeBullets } from './bulletSanitize';
 import { buildFacts } from './facts';
+import { normalizeListingTypography } from './typography';
 import { generateGroup, type LlmClient } from './llm';
 import { buildGroupPrompts, buildSystemPrompt } from './prompts';
 import {
@@ -272,6 +273,11 @@ export async function optimize(
       pack.rules.bulletMax,
     ),
     bulletAnchors: bullets.bullets.map((b) => b.useCaseAnchor),
+    // The generator's OWN claim-bearing declaration, carried onto the contract
+    // so gate C25 can hold the emitted string to it (worker != checker: the
+    // Zod refinement ran before deterministic assembly, so it cannot vouch for
+    // what was finally emitted).
+    bulletClaimBearing: bullets.bullets.map((b) => b.claimBearing === true),
     description: finalDescription,
     // Deterministic C3/C16 cleanup after LLM (gate still re-validates).
     backendSearchTerms: sanitizeBackendSearchTerms(
@@ -294,7 +300,10 @@ export async function optimize(
   };
 
   // Belt-and-braces: the prompt asks for the pinned name; this guarantees it.
-  return pinProductName(assembled, pinnedProductName || undefined);
+  // TYPOGRAPHY is folded to ASCII last, at emit, so every stored/exported
+  // surface is byte-stable (see lib/engine/typography.ts — punctuation only,
+  // and gate C27 re-checks the result independently).
+  return normalizeListingTypography(pinProductName(assembled, pinnedProductName || undefined));
 }
 
 function stripDisclaimer(text: string, disclaimer: string): string {

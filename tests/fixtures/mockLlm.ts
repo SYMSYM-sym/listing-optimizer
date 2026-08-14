@@ -46,7 +46,7 @@ const responses: Record<string, unknown> = {
       servings_per_container: '60',
       unit_count: '60',
       unit_count_type: 'Count',
-      maximum_dosage: '50 Billion CFU',
+      maximum_dosage: '1 Capsule Daily',
       directions_for_use: 'Take 1 capsule daily with water, with or without food.',
       target_gender: 'Unisex',
       age_range_description: 'Adult',

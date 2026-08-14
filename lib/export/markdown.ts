@@ -93,6 +93,26 @@ export function toMarkdown(listing: OptimizedListing, audit: Audit): string {
     lines.push(`| ${g.severity} | ${g.field} | ${esc(g.current)} | ${esc(g.proposed)} | ${esc(g.why)} |`);
   }
   lines.push('');
+  // R33/R38 — the substantiation register travels with the RECORD as well as
+  // the ship sheet: whoever reads this file later needs to know which trust
+  // claims were signed off and which were still waiting for an artifact.
+  const register = audit.substantiationRegister ?? [];
+  if (register.length > 0) {
+    lines.push('### Substantiation register (operator sign-off)');
+    lines.push('| Claim | Appears on | Status | Note |');
+    lines.push('|---|---|---|---|');
+    for (const r of register) {
+      lines.push(`| ${esc(r.claim)} | ${esc(r.surface)} | ${r.status} | ${esc(r.note ?? '')} |`);
+    }
+    lines.push('');
+  }
+  // brain/02 — advisory lexicon proposals. About the CHECKER, not the copy.
+  const candidates = audit.candidateTerms ?? [];
+  if (candidates.length > 0) {
+    lines.push('### Candidate terms (advisory — not in the compliance lexicon)');
+    lines.push(candidates.map((t) => `\`${t}\``).join(', '));
+    lines.push('');
+  }
   if (!audit.verified) {
     lines.push('### ⛔ Blocking gate failures');
     for (const f of audit.gateResult.failures) {

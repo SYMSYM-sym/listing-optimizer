@@ -9,6 +9,7 @@ import { loadPack } from '@/lib/knowledge/loadPack';
 import type { Failure, OptimizedListing } from '@/lib/types';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
+import { withCoherentBulletFlags } from './fixtures/coherentBullets';
 
 /**
  * RED TEAM — every bypass here was PROVEN to pass the shipped gate.
@@ -33,7 +34,8 @@ beforeAll(async () => {
 const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
   const copy = JSON.parse(JSON.stringify(clean)) as OptimizedListing;
   fn(copy);
-  return copy;
+  // Keep the parallel claim-bearing flags coherent with the rewritten text.
+  return withCoherentBulletFlags(copy);
 };
 const failures = (l: OptimizedListing, c: GateContext = ctx): Failure[] =>
   runGate(l, pack, c).failures;

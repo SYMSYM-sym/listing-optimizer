@@ -10,6 +10,7 @@ import { loadPack } from '@/lib/knowledge/loadPack';
 import type { KnowledgePack, OptimizedListing } from '@/lib/types';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
+import { withCoherentBulletFlags } from './fixtures/coherentBullets';
 
 const pack = loadPack('supplements');
 const ctx: GateContext = { subcategories: ['probiotic', 'digestive'] };
@@ -23,7 +24,8 @@ beforeAll(async () => {
 const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
   const copy = JSON.parse(JSON.stringify(clean)) as OptimizedListing;
   fn(copy);
-  return copy;
+  // Keep the parallel claim-bearing flags coherent with the rewritten text.
+  return withCoherentBulletFlags(copy);
 };
 const idsOf = (l: OptimizedListing) => runGate(l, pack, ctx).failures.map((f) => f.checkId);
 

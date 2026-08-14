@@ -13,7 +13,13 @@ import { buildSystemPrompt } from './system';
 import { titlePrompt } from './title';
 
 export { buildSystemPrompt };
-export { prohibitedContentBlock, prohibitedMarketingBlock, styleRulesBlock } from './shared';
+export {
+  bulletArchitectureBlock,
+  positioningBlock,
+  prohibitedContentBlock,
+  prohibitedMarketingBlock,
+  styleRulesBlock,
+} from './shared';
 
 /** Per-group prompt builders — rule-injected from the active pack. */
 export function buildGroupPrompts(pack: KnowledgePack, titlePolicy: TitlePolicy = 'dual') {
@@ -29,11 +35,11 @@ export function buildGroupPrompts(pack: KnowledgePack, titlePolicy: TitlePolicy 
   return {
     // `pinnedProductName` is set on REPAIR regenerations only — see optimize.ts.
     title: (s: ListingSnapshot, pinnedProductName?: string) =>
-      titlePrompt(s, titlePolicy, styleBlock, pinnedProductName ?? ''),
+      titlePrompt(s, titlePolicy, styleBlock, pinnedProductName ?? '', pack.rules, packRules.title ?? []),
     bullets: (s: ListingSnapshot, canonicalProductName?: string) =>
-      bulletsPrompt(s, styleBlock, packRules.bullets ?? [], canonicalProductName ?? ''),
+      bulletsPrompt(s, styleBlock, packRules.bullets ?? [], canonicalProductName ?? '', pack.rules),
     description: (s: ListingSnapshot, canonicalProductName?: string) =>
-      descriptionPrompt(s, hasCompliance, styleBlock, packRules.description ?? [], canonicalProductName ?? ''),
+      descriptionPrompt(s, hasCompliance, styleBlock, packRules.description ?? [], canonicalProductName ?? '', pack.rules),
     // Title surfaces (when known) feed C16 forbidden stems into the backend prompt.
     backend: (s: ListingSnapshot, surfaces?: TitleSurfaces) => backendPrompt(s, surfaces),
     attributes: (s: ListingSnapshot, schemaFields: string) =>

@@ -82,6 +82,12 @@ export interface StyleRules {
   bulletNoTrailingPunctuation: boolean;
   /** Trailing markers that are allowed and stripped before the punctuation check (e.g. the '*' claim marker). */
   bulletTrailingAllowed: string[];
+  /**
+   * The trailing marker a CLAIM-BEARING bullet must carry (gate C25). Pack
+   * data so the gate holds no marker literal; it is also listed in
+   * `bulletTrailingAllowed`, so C17 already tolerates it in final position.
+   */
+  claimMarker?: string;
   /** Characters that count as a trailing-punctuation violation. */
   bulletTrailingPunctuation: string;
   /** Symbols banned on every customer surface. */
@@ -206,6 +212,113 @@ export interface OperatorChecklist {
   opsPlaceholders: string[];
 }
 
+/**
+ * WS4 — one BULLET SLOT JOB (pack data).
+ *
+ * The playbook's copy phase assigns each of the five bullets a JOB; a bullet
+ * with no declared job is written to whatever the model felt like saying, and
+ * five bullets with the same job are one bullet repeated five times. `cues`
+ * are the vocabulary the AUDIT lint uses to ask whether the slot looks filled
+ * — an ADVISORY question (a P2 gap), never a gate failure.
+ */
+export interface BulletSlotJob {
+  /** Stable slot id ('B1'..'B5'). */
+  id: string;
+  /** One-line statement of what this bullet is FOR. */
+  job: string;
+  /** How to write it — rendered verbatim into the bullets prompt. */
+  guidance: string;
+  /** Vocabulary that suggests the slot job was actually attempted (audit lint only). */
+  cues: string[];
+}
+
+/**
+ * AM-3 — where an allergen declaration may sit INSIDE a bullet.
+ *
+ * The triple declaration itself (attribute + description + >=1 bullet) is
+ * C9's, is unchanged, and is NOT weakened by anything here. This adds only a
+ * POSITION rule for the bullet leg: the declaration must be a trailing clause,
+ * never the bullet's lead. Enforced as a prompt instruction plus a P1 AUDIT
+ * gap — deliberately not a gate check, because a bullet whose declaration
+ * merely sits early is compliant copy written in the wrong order, and blocking
+ * publication over word order would be over-blocking.
+ */
+export interface BulletAllergenPosition {
+  /** When false the position lint is switched off entirely. */
+  mustTrail: boolean;
+  /** A declaration STARTING inside this many leading characters reads as the lead. */
+  leadWindow: number;
+  /** Rendered verbatim into the bullets prompt. */
+  rule: string;
+}
+
+/** WS4 — the bullet architecture the copy phase writes to (pack data). */
+export interface BulletArchitecture {
+  slots: BulletSlotJob[];
+  /** The distinct-anchor doctrine, rendered into the prompt. */
+  anchorRule: string;
+  /** AM-3 allergen POSITION rule (never the triple-declaration requirement). */
+  allergenPosition?: BulletAllergenPosition;
+}
+
+/**
+ * R48 — the POSITIONING anchor (pack data, advisory).
+ *
+ * Playbook 8.20: a per-serving arms race against a rival's number invites a
+ * compliance mismatch and a losing comparison; completeness and heritage are
+ * defensible because they cannot be copied by reformulating. Injected into the
+ * copy prompts and rendered as a strategy note in the ship-sheet header.
+ */
+export interface PositioningAnchor {
+  id: string;
+  headline: string;
+  guidance: string[];
+  /** The operator-facing note rendered in the ship-sheet header. */
+  sheetNote: string;
+}
+
+/**
+ * AM-1 / C24 — the DOSAGE-ATTRIBUTE guard (pack data).
+ *
+ * Structured data is filter-fed: a strength/potency figure sitting in an
+ * attribute whose KEY names a dose states the number AS a dose, which is an
+ * overstatement even when the number itself is canonical. `keyPattern` is the
+ * attribute-key regex; `unitDimensions` names which `units.dimensions` lists
+ * count as the hero units the value may not assert.
+ */
+export interface AttributeGuardRules {
+  /** Regex (case-insensitive) matched against the attribute KEY. */
+  keyPattern: string;
+  /** Which `units.dimensions` keys supply the guarded unit tokens. */
+  unitDimensions: string[];
+}
+
+/**
+ * C27 — OUTPUT HYGIENE (pack data).
+ *
+ * Three properties of machine-written copy that no other check looks at: it
+ * must be pure ASCII once the engine has normalized typography at emit, it
+ * must contain none of the model's own stock phrases, and it must never carry
+ * a fragment of its own instructions.
+ */
+export interface OutputHygieneRules {
+  /** Fail non-ASCII characters in generated copy. */
+  asciiOnly: boolean;
+  /** Stock LLM phrasing that marks copy as machine-written. */
+  aiTellPhrases: string[];
+  /** Fragments of the app's own prompt scaffolding that must never be echoed. */
+  instructionFragments: string[];
+  /** Which surface groups C27 scans. */
+  surfaces: string[];
+  /**
+   * Surface GROUPS exempt from the ASCII rule (the phrase scans still cover
+   * them). A false-positive reducer, never a manifest piece: emptying it makes
+   * the gate stricter. Backend search terms live here because other-language
+   * variants are that field's entire purpose.
+   */
+  asciiExemptSurfaces?: string[];
+}
+
 export interface RuleSet {
   titleMaxLegacy: number; // 200
   title75Max: number; // 75
@@ -243,6 +356,14 @@ export interface RuleSet {
   prohibitedMarketing?: ProhibitedMarketingRules;
   /** Publish-time operator procedure rendered by the ship sheet (pack data). */
   operatorChecklist?: OperatorChecklist;
+  /** WS4 bullet slot jobs + anchor doctrine (prompt + audit lint; never a gate rule). */
+  bulletArchitecture?: BulletArchitecture;
+  /** R48 positioning anchor (prompt + ship-sheet strategy note). */
+  positioningAnchor?: PositioningAnchor;
+  /** AM-1 / C24 dosage-attribute guard. */
+  attributeGuard?: AttributeGuardRules;
+  /** C27 output-hygiene rules. */
+  outputHygiene?: OutputHygieneRules;
   /** ISO date the rule snapshot was last re-verified against live policy. */
   verifiedAsOf: string;
   /** Non-blocking staleness horizon in days for `verifiedAsOf`. */
@@ -278,6 +399,8 @@ export interface PromptRules {
    */
   compliance?: string[];
   system?: string[];
+  /** Injected into the TITLE/Item-Highlights task instruction. */
+  title?: string[];
   attributes?: string[];
   bullets?: string[];
   description?: string[];
@@ -521,6 +644,49 @@ export interface CompliancePack {
    * the gate holds no attribute-key or allergen-phrase literal.
    */
   allergenFields: AllergenFields;
+  /**
+   * AM-3 — which SURFACES C9 requires the allergen declaration on.
+   *
+   * The default (this key absent) is the full triple declaration: attribute
+   * AND description AND at least one bullet. The key exists ONLY so an
+   * operator whose category genuinely cannot carry the bullet leg can drop
+   * THAT leg for their pack, and it ships with every leg ON — the override is
+   * documented and DEFAULT OFF. `attribute` and `description` may never be
+   * switched off: the pack manifest raises a blocking PACK failure if either
+   * is, so this flag can never become a way to disarm C9 wholesale.
+   */
+  allergenDeclarationSurfaces?: {
+    attribute?: boolean;
+    description?: boolean;
+    bullet?: boolean;
+  };
+  /**
+   * C26 — the ACTIVE-vs-FULL ingredient attribute pair. Every token of
+   * `subsetKey` must be present in `supersetKey`: an active ingredient that
+   * appears nowhere in the full label list is either a copy error or an
+   * undeclared ingredient, and both are label-mismatch enforcement risks.
+   */
+  ingredientSubsetRule?: { subsetKey: string; supersetKey: string };
+  /**
+   * R33/R38 — the SUBSTANTIATION REGISTER vocabulary. `[regexSource, display]`
+   * rows naming every trust/origin/certification claim that needs an artifact
+   * behind it. ADVISORY: it builds `audit.substantiationRegister` for operator
+   * sign-off and can never fail a run.
+   */
+  substantiationTokens?: string[][];
+  /**
+   * brain/02 — the CANDIDATE-NOUN proposer (advisory). Heuristics for spotting
+   * condition-like terms in the SOURCE listing that this pack's lexicon does
+   * not yet know about (the dental blind spot). Never a failure.
+   */
+  candidateTermHeuristics?: {
+    /** Morphological endings that mark a medical noun ('itis', 'osis', ...). */
+    medicalSuffixes: string[];
+    /** Verbs whose OBJECT is worth proposing as a candidate condition noun. */
+    therapeuticVerbCues: string[];
+    /** Words that are never candidates however they are shaped/capitalized. */
+    stopwords: string[];
+  };
   /** Phrases that must never appear when a declarable allergen is present (C9). */
   noAllergenPhrases: string[];
   /**
@@ -744,6 +910,15 @@ export interface OptimizedListing {
   primaryKeyword: string;
   /** Per-bullet situational anchors (parallel to bullets) — feeds the quality lint. */
   bulletAnchors?: string[];
+  /**
+   * Per-bullet CLAIM-BEARING flags (parallel to `bullets`), carried from the
+   * generation group so gate C25 can enforce the claim-marker discipline the
+   * generator declared: a bullet the model flagged as claim-bearing MUST be
+   * emitted with the trailing '*'. Optional because a listing submitted to the
+   * stateless audit route may not carry it; when it is absent C25 has no flag
+   * to enforce and says so rather than guessing.
+   */
+  bulletClaimBearing?: boolean[];
   /** Customer-facing product name (leads title/title75 per C8/C15). */
   productName: string;
   state: ElementState;
@@ -806,6 +981,34 @@ export interface PackIntegrity {
   problems: string[];
 }
 
+/**
+ * R33/R38 — ONE ROW of the substantiation register.
+ *
+ * Every trust/origin/certification claim the generated listing makes, with the
+ * surfaces it appears on and whether the SOURCE listing already evidenced it.
+ * The register is for OPERATOR SIGN-OFF: the app cannot hold a certificate, so
+ * it can only ever say "this claim is being made, here, and here is whether
+ * the seller was already making it".
+ */
+export interface SubstantiationClaim {
+  /** Display name of the claim (pack data). */
+  claim: string;
+  /** Surfaces it appears on, in generation order. */
+  surface: string;
+  /**
+   * HELD    — the claim is ECHOED from the source listing: the seller was
+   *           already publishing it, so the artifact is presumed to exist and
+   *           the operator is confirming, not sourcing, it.
+   * PENDING — the claim appears ONLY in the generated copy. Nothing in the
+   *           source listing evidences it, so it must not publish until the
+   *           operator names the artifact behind it. This is the "Made in USA"
+   *           problem: a plausible claim the generator introduced by itself.
+   */
+  status: 'PENDING' | 'HELD';
+  /** Human-readable reason for the status. */
+  note?: string;
+}
+
 export interface Audit {
   scorecard: Scorecard;
   gaps: AuditGap[];
@@ -828,6 +1031,21 @@ export interface Audit {
   attributeSchemaStale: boolean;
   /** Human-readable notice, present only when `attributeSchemaStale` is true. */
   attributeSchemaStaleNotice?: string;
+  /**
+   * R33/R38 — every trust/origin/certification claim in the generated listing,
+   * for operator sign-off. ADVISORY: a PENDING row never affects `verified`,
+   * because whether an artifact exists is a fact about the seller's filing
+   * cabinet, not about the copy. Optional on the type so a stored run written
+   * before the register existed still parses.
+   */
+  substantiationRegister?: SubstantiationClaim[];
+  /**
+   * brain/02 — condition-like terms found in the SOURCE listing that the
+   * pack's lexicon does not know. ADVISORY proposals for the lexicon owner
+   * (the dental blind spot: the pack had no oral-health nouns for months and
+   * nothing in the system could say so). Never a failure.
+   */
+  candidateTerms?: string[];
 }
 
 // ---------------------------------------------------------------------------

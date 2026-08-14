@@ -48,8 +48,14 @@ export {
   c12FactConsistency,
 } from './c-quality';
 
+export { c25BulletClaimMarker } from './c-bullets';
 export { c21SemanticDrugClaims } from './c-semantic';
-export { c23AttributeCompleteness } from './c-attributes';
+export {
+  c23AttributeCompleteness,
+  c24DosageAttributeGuard,
+  c26ActiveIngredientSubset,
+} from './c-attributes';
+export { c27OutputHygiene } from './c-hygiene';
 export { c22NaturalState } from './c-natural-state';
 export { c17Style, styleSurfaces, allCapsOffenders } from './c-style';
 export { c20Structure } from './c-structure';

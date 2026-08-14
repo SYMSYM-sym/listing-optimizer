@@ -260,11 +260,23 @@ td.v{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
 .block b{color:var(--bad)}
 .ord{background:rgba(255,153,0,.07);border:1px solid rgba(255,153,0,.3);border-radius:11px;padding:14px 16px;margin:0 0 22px;font-size:14px}
 .stale{background:rgba(255,153,0,.06);border:1px dashed rgba(255,153,0,.35);border-radius:11px;padding:11px 14px;margin:0 0 18px;font-size:13px;color:var(--mut)}
+.strat{background:rgba(207,224,255,.06);border:1px solid rgba(207,224,255,.25);border-radius:11px;padding:12px 15px;margin:0 0 18px;font-size:13.5px}
 ol{margin:8px 0 0;padding-left:20px}li{margin:5px 0}
 ul.ops{margin:8px 0 0;padding-left:20px}
 </style></head><body><div class=w>
 <h1>${esc(productName)} — Ship Sheet</h1>
 <p class=sub>${run.asin ? `ASIN ${esc(run.asin)} · ` : ''}rendered ${esc(generatedAt)} from the stored run. GENERATED — never hand-edit; regenerate after any change. Every count below is re-measured at render time.</p>`;
+
+  // --- R48 STRATEGY NOTE (pack data) ---
+  // The positioning anchor is rendered in the HEADER, above the banners, because
+  // it is the one thing on the sheet that an operator can undo by hand: a later
+  // "improvement" that re-frames the copy around a headline number quietly
+  // reverses the position the whole listing was written to hold. It is
+  // GUIDANCE, not a check — nothing on this sheet gates on it.
+  const positioning = rules.positioningAnchor;
+  if (positioning?.sheetNote) {
+    h += `<div class=strat><b>${esc(positioning.headline || positioning.id)}</b> ${esc(positioning.sheetNote)}</div>`;
+  }
 
   // --- verify / blocking banner ---
   h += verified
@@ -482,6 +494,50 @@ ul.ops{margin:8px 0 0;padding-left:20px}
       '</ul>';
   }
   h += '</div>';
+
+  // -------------------------------------------------------------------------
+  // 10 · Substantiation register — R33/R38. The one section that is about
+  //      EVIDENCE rather than copy: every trust claim the listing makes, where
+  //      it makes it, and whether the source listing was already making it. A
+  //      PENDING row is not a gate failure (no app can see a certificate) — it
+  //      is the operator's sign-off queue, and the "Made in USA" problem lives
+  //      in it: a claim the generator introduced by itself reads exactly like
+  //      one the seller has held on file for years.
+  // -------------------------------------------------------------------------
+  const register = audit?.substantiationRegister ?? [];
+  h += '<h2>10 · Substantiation register — sign off before publishing</h2>';
+  if (register.length === 0) {
+    h += '<p class=sub>No certification, origin or testing claim was detected in this listing.</p>';
+  } else {
+    const pending = register.filter((r) => r.status === 'PENDING').length;
+    h +=
+      '<p class=sub>' +
+      `${register.length} claim(s) detected, ${pending} with no evidence in the source listing. ` +
+      'A claim marked PENDING must not publish until you can name the artifact behind it — a certificate, a lab report, an invoice, a sales record.</p>';
+    h += '<table><tr><th>Claim</th><th>Appears on</th><th>Status</th><th>Note</th></tr>';
+    for (const row of register) {
+      const cls = row.status === 'PENDING' ? 'bad' : 'ok';
+      h +=
+        `<tr><td>${esc(row.claim)}</td><td class=v>${esc(row.surface)}</td>` +
+        `<td class="${cls}">${esc(row.status)}</td><td>${esc(row.note ?? '')}</td></tr>`;
+    }
+    h += '</table>';
+  }
+
+  // -------------------------------------------------------------------------
+  // 11 · Candidate terms — brain/02. ADVISORY, and about the CHECKER rather
+  //      than the copy: condition-like words the SOURCE listing uses that the
+  //      compliance lexicon does not know. A blind spot cannot report itself,
+  //      so this is the only place one becomes visible.
+  // -------------------------------------------------------------------------
+  const candidates = audit?.candidateTerms ?? [];
+  if (candidates.length > 0) {
+    h += '<h2>11 · Candidate terms (advisory — lexicon review)</h2><div class=f>';
+    h +=
+      '<p class=sub style="margin:0 0 8px">These condition-like words appear in the SOURCE listing but are not in the compliance lexicon. ' +
+      'They are NOT failures and nothing was blocked because of them — pass them to whoever owns the lexicon so the next run can enforce them.</p>';
+    h += `<div class=bx>${esc(candidates.join(', '))}</div></div>`;
+  }
 
   h += '</div>';
 

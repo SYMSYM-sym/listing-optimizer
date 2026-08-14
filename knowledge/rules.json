@@ -133,6 +133,8 @@
       "*",
       ")"
     ],
+    "_claimMarkerComment": "The trailing marker a CLAIM-BEARING bullet must carry (gate C25). Pack data: the gate holds no marker literal. It is also the first entry of bulletTrailingAllowed, so C17's trailing-punctuation rule already tolerates it.",
+    "claimMarker": "*",
     "bulletTrailingPunctuation": ".!?;,:…–—-",
     "bannedSymbols": [
       "™",
@@ -660,5 +662,188 @@
       "TIC / cGMP filing — record the manufacturing facility registration and the cGMP filing reference for this SKU in your own compliance file before publish. Operator-supplied: this app never generates it. (Extended in WS7.)",
       "Rating floor — confirm the SKU clears your programme rating floor (minimum star rating and review count) before enrolling it in promotions or advertising. Operator-supplied: ratings are not part of a generated listing. (Extended in WS7.)"
     ]
+  },
+  "_attributeGuardComment": "AM-1 / C24 \u2014 the DOSAGE-ATTRIBUTE guard, ported from the harness kit's checkC24. Structured attributes are FILTER-FED: a strength figure sitting in an attribute whose KEY names a dose states that number AS a dose, which overstates the product even when the number itself is the canonical one. `keyPattern` is matched against the attribute KEY (case-insensitive); `unitDimensions` names which `units.dimensions` lists supply the hero units the VALUE may not assert beside a number. The figure belongs in copy attached to the blend or formula, never in structured data. Emptying either field disarms C24, so both are REQUIRED_PACK_PIECES.",
+  "attributeGuard": {
+    "keyPattern": "dosage|strength|potency|dose",
+    "unitDimensions": [
+      "potency"
+    ]
+  },
+  "_outputHygieneComment": "C27 \u2014 OUTPUT HYGIENE. Three properties of machine-written copy no other check looks at: (1) generated copy must be pure ASCII, which it is by construction because the ENGINE folds typographic punctuation at emit (lib/engine/typography.ts) \u2014 anything left is a real character a human must decide about; (2) it carries none of the model's stock phrases; (3) it never echoes a fragment of its own instructions (a live run once shipped an image brief quoting the compliance instruction back at us). Every list is pack data and every one of them is a REQUIRED_PACK_PIECE, because emptying one disarms that third of the check.",
+  "outputHygiene": {
+    "asciiOnly": true,
+    "aiTellPhrases": [
+      "delve",
+      "in today's fast-paced",
+      "in today's fast paced",
+      "look no further",
+      "elevate your",
+      "game-changer",
+      "game changer",
+      "unlock the power",
+      "unlock the secret",
+      "harness the power",
+      "a testament to",
+      "in the realm of",
+      "embark on a journey",
+      "revolutionize your"
+    ],
+    "instructionFragments": [
+      "as an ai",
+      "as a language model",
+      "i cannot",
+      "i'm sorry",
+      "return json",
+      "here is the json",
+      "json:",
+      "task:",
+      "```",
+      "[insert",
+      "{{",
+      "<placeholder>",
+      "your product name here",
+      "canonical product name",
+      "approved claim shapes",
+      "style + formatting",
+      "deterministically checked",
+      "previous attempt failed",
+      "system prompt",
+      "lorem ipsum"
+    ],
+    "surfaces": [
+      "title",
+      "title75",
+      "itemHighlights",
+      "bullets",
+      "description",
+      "backendSearchTerms",
+      "qa",
+      "imagePlan",
+      "attributes",
+      "aplus"
+    ],
+    "_asciiExemptSurfacesComment": "FALSE-POSITIVE REDUCER for the ASCII rule only (emptying it makes the gate STRICTER, so it is deliberately not a REQUIRED_PACK_PIECE). Backend search terms are the one surface where non-ASCII is the POINT: the field exists for other-language variants and misspellings, and stripping the diacritics off a Spanish or German keyword removes the query it was added to match. The phrase scans (AI tells, leaked instructions) still cover it, and every customer-facing surface stays ASCII-only.",
+    "asciiExemptSurfaces": [
+      "backendSearchTerms"
+    ]
+  },
+  "_bulletArchitectureComment": "WS4 — BULLET ARCHITECTURE (pack data). The five bullet SLOT JOBS from the playbook's copy phase (B1 hero spec + named entities; B2 primary benefit cluster; B3 heritage/completeness + secondary use-case; B4 certifications + allergen + safety; B5 routine/usage/storage). Rendered into the bullets prompt so every bullet is written to a DECLARED job with its own situational anchor, and read by the AUDIT lint (lib/audit/diff.ts) which reports an unfilled job or a repeated anchor as a P2 gap. STRATEGY IS NEVER A GATE: nothing here can fail a run — the gate holds hard rules only.",
+  "bulletArchitecture": {
+    "slots": [
+      {
+        "id": "B1",
+        "job": "Primary benefit + primary keyword, carried by the hero spec and the named entities",
+        "guidance": "Open on the headline benefit in the primary keyword's own words; state the hero figure attached to the blend or formula (never to a serving) and name the entities by their full label names.",
+        "cues": [
+          "blend",
+          "strain",
+          "strains",
+          "formula",
+          "billion",
+          "cfu",
+          "mg",
+          "mcg",
+          "iu",
+          "support",
+          "supports"
+        ]
+      },
+      {
+        "id": "B2",
+        "job": "Mechanism / differentiator — what makes this formula work the way it does",
+        "guidance": "Name the mechanism or the structural differentiator (delivery form, stability, pairing, sourcing) and tie it to the benefit as cause and effect, not as an adjective.",
+        "cues": [
+          "shelf stable",
+          "shelf-stable",
+          "delivery",
+          "prebiotic",
+          "coating",
+          "absorption",
+          "refrigeration",
+          "stability",
+          "pairs",
+          "paired",
+          "because",
+          "so that"
+        ]
+      },
+      {
+        "id": "B3",
+        "job": "Secondary use-case — the second situation this product is bought for",
+        "guidance": "Take the second-largest query family (travel, evening routine, post-workout, a second audience) and answer it in one self-contained, quotable sentence fragment.",
+        "cues": [
+          "travel",
+          "trips",
+          "commute",
+          "busy",
+          "routine",
+          "daily",
+          "evening",
+          "morning",
+          "work",
+          "schedule",
+          "on the go"
+        ]
+      },
+      {
+        "id": "B4",
+        "job": "Quality / trust — certifications, testing, manufacturing and the allergen declaration",
+        "guidance": "State the verifiable trust facts (testing, certifications, manufacturing standard, origin) and close the bullet with the allergen declaration as its final, trailing clause.",
+        "cues": [
+          "tested",
+          "third-party",
+          "third party",
+          "certified",
+          "non-gmo",
+          "gluten",
+          "vegan",
+          "facility",
+          "gmp",
+          "cgmp",
+          "made in",
+          "contains",
+          "allergen",
+          "free from",
+          "free of"
+        ]
+      },
+      {
+        "id": "B5",
+        "job": "Audience fit + routine — who it is for, how it is used and how it is stored",
+        "guidance": "Say who the product is for in their own words, then how it fits a day: dose timing, what it is taken with, and storage.",
+        "cues": [
+          "adults",
+          "women",
+          "men",
+          "who",
+          "designed for",
+          "take",
+          "daily",
+          "with water",
+          "store",
+          "storage",
+          "serving",
+          "per day"
+        ]
+      }
+    ],
+    "anchorRule": "Each bullet carries ONE situational anchor — a concrete moment, audience or environment — and no two bullets may share one. An anchor is the sentence a retrieval engine can quote back to a shopper who described that exact situation.",
+    "allergenPosition": {
+      "mustTrail": true,
+      "leadWindow": 40,
+      "rule": "When a bullet declares an allergen, the declaration is a TRAILING clause in the bullet's final segment - never its opening words and never its colon header. The bullet must earn its read on the benefit first; a declaration placed first turns the whole slot into a warning label."
+    }
+  },
+  "_positioningAnchorComment": "R48 — POSITIONING ANCHOR (pack data). Playbook 8.20: do not compete on a spec you cannot defend. A per-serving arms race against a rival's number invites both a compliance mismatch and a losing comparison; panel-verifiable completeness and heritage are defensible because a competitor cannot copy them by reformulating. Injected into the copy prompts and rendered as a STRATEGY NOTE in the ship-sheet header. Advisory guidance — no check reads it.",
+  "positioningAnchor": {
+    "id": "R48",
+    "headline": "Position on completeness, not on a spec race.",
+    "guidance": [
+      "Anchor the value story on what the label can verify in full — breadth of the formula, the completeness of the panel, heritage and process — rather than on a single headline number.",
+      "Never frame a figure as out-scoring, doubling or overtaking a rival's number: a figure a competitor can overtake by reformulating is not a position.",
+      "When a number is used, attach it to the formula or the blend it is actually measured over, and let the completeness story carry the premium."
+    ],
+    "sheetNote": "Strategy (R48): this listing is positioned on panel-verifiable completeness, not on a spec race. If you edit the copy, keep the value story on breadth and process — a headline number a competitor can leapfrog by reformulating is not a defensible position."
   }
 }

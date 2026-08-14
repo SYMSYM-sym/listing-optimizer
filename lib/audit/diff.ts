@@ -3,8 +3,11 @@ import type {
   KnowledgePack,
   ListingSnapshot,
   OptimizedListing,
+  SubstantiationClaim,
 } from '@/lib/types';
 import { allDiseaseNouns } from '@/lib/gate/checks';
+import { bulletArchitectureGaps } from './bulletLints';
+import { unevidencedHeaderClaims } from './substantiation';
 import { normalize, scanTerms, subtractDisclaimers, utf8Bytes } from '@/lib/gate/util';
 
 /**
@@ -25,6 +28,7 @@ export function diff(
   current: ListingSnapshot,
   proposed: OptimizedListing,
   pack: KnowledgePack,
+  substantiationRegister: SubstantiationClaim[] = [],
 ): AuditGap[] {
   const gaps: AuditGap[] = [];
   const cp = pack.compliancePack;
@@ -155,9 +159,22 @@ export function diff(
   if (!postName.includes((proposed.primaryKeyword ?? '').toLowerCase())) {
     gaps.push({ field: 'title', current: clip(current.title, 80), proposed: clip(proposed.title ?? '', 80), why: `Quality lint: primary keyword '${proposed.primaryKeyword ?? ''}' should sit immediately after the product name.`, severity: 'P2' });
   }
-  const anchors = proposed.bulletAnchors ?? [];
-  if (new Set(anchors.filter(Boolean)).size < anchors.length) {
-    gaps.push({ field: 'bullets', current: 'n/a', proposed: anchors.join(' | '), why: 'Quality lint: bullet use-case anchors should be distinct (one per major use-case).', severity: 'P2' });
+  // WS4 bullet architecture: slot jobs, distinct anchors, the AM-3 allergen
+  // POSITION rule and the unenforced direction of C25 — all advisory.
+  gaps.push(...bulletArchitectureGaps(proposed, pack));
+
+  // R33/R38 — an UNEVIDENCED trust claim in a HEADER field. The register
+  // itself is advisory sign-off; a claim the source listing never made,
+  // sitting in the field a moderator reads first and every downstream surface
+  // quotes, is worth a P1.
+  for (const claim of unevidencedHeaderClaims(substantiationRegister)) {
+    gaps.push({
+      field: 'title',
+      current: 'not present in the source listing',
+      proposed: `${claim.claim} (on ${claim.surface})`,
+      why: `Substantiation: '${claim.claim}' is claimed in a header field but nothing in the source listing evidences it. Move it to the bullets or description where the register carries it for sign-off, or drop it until the artifact is on file.`,
+      severity: 'P1',
+    });
   }
   const whoFor = (proposed.aplusContent?.modules ?? []).some((m) => /who/i.test(m?.id ?? '') || /who it'?s for|who it is for/i.test(`${m?.headline ?? ''} ${m?.body ?? ''}`)) ||
     (proposed.qa ?? []).some((q) => /who is it for|who it'?s for/i.test(q?.q ?? ''));

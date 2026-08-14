@@ -11,6 +11,7 @@ import { loadPack } from '@/lib/knowledge/loadPack';
 import type { Failure, ListingSnapshot, OptimizedListing } from '@/lib/types';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
+import { withCoherentBulletFlags } from './fixtures/coherentBullets';
 
 /**
  * RED TEAM ROUND 5 — B1..B6.
@@ -39,7 +40,8 @@ beforeAll(async () => {
 const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
   const copy = JSON.parse(JSON.stringify(clean)) as OptimizedListing;
   fn(copy);
-  return copy;
+  // Keep the parallel claim-bearing flags coherent with the rewritten text.
+  return withCoherentBulletFlags(copy);
 };
 const c6On = (l: OptimizedListing, field: string): Failure[] =>
   c6BannedTerms(l, pack).filter((f) => f.field === field);

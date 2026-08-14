@@ -10,6 +10,7 @@ import { detectCategory } from '@/lib/knowledge/detectCategory';
 import type { Failure, ListingSnapshot, OptimizedListing } from '@/lib/types';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
+import { withCoherentBulletFlags } from './fixtures/coherentBullets';
 
 /**
  * ROUND 7 — the residuals the previous round listed as NOT fixed, each pinned
@@ -29,7 +30,8 @@ beforeAll(async () => {
 const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
   const copy = JSON.parse(JSON.stringify(clean)) as OptimizedListing;
   fn(copy);
-  return copy;
+  // Keep the parallel claim-bearing flags coherent with the rewritten text.
+  return withCoherentBulletFlags(copy);
 };
 
 // ===========================================================================

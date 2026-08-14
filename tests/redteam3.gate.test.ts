@@ -11,6 +11,7 @@ import { loadPack } from '@/lib/knowledge/loadPack';
 import type { CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
+import { withCoherentBulletFlags } from './fixtures/coherentBullets';
 
 /**
  * RED TEAM ROUND 3 — CLASS-level regressions.
@@ -36,7 +37,8 @@ beforeAll(async () => {
 const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
   const copy = JSON.parse(JSON.stringify(clean)) as OptimizedListing;
   fn(copy);
-  return copy;
+  // Keep the parallel claim-bearing flags coherent with the rewritten text.
+  return withCoherentBulletFlags(copy);
 };
 const failures = (l: OptimizedListing, c: GateContext = ctx): Failure[] =>
   runGate(l, pack, c).failures;
@@ -530,7 +532,7 @@ describe('no false positives — legitimate copy on every surface', () => {
   const SURFACES: [string, (l: OptimizedListing, s: string) => void][] = [
     ['bullets[1]', (l, s) => { l.bullets[1] = `Daily support with ${s} for adults`; }],
     ['itemHighlights', (l, s) => { l.itemHighlights = `Blend with ${s}`; }],
-    ['qa[0].a', (l, s) => { l.qa[0] = { ...l.qa[0]!, a: `Yes — ${s}` }; }],
+    ['qa[0].a', (l, s) => { l.qa[0] = { ...l.qa[0]!, a: `Yes - ${s}` }; }],
     ['imagePlan[0].notes', (l, s) => { l.imagePlan[0] = { ...l.imagePlan[0]!, notes: `Overlay: ${s}` }; }],
     ['attributes.product_benefit', (l, s) => { l.attributes = { ...l.attributes, product_benefit: s }; }],
     ['aplus.modules[ingredients].body', (l, s) => { l.aplusContent.modules[2]!.body = `Inside: ${s}.`; }],

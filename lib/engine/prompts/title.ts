@@ -1,6 +1,6 @@
-import type { ListingSnapshot } from '@/lib/types';
+import type { ListingSnapshot, RuleSet } from '@/lib/types';
 import type { TitlePolicy } from '@/lib/env';
-import { snapshotBlock } from './shared';
+import { positioningBlock, snapshotBlock } from './shared';
 
 /** Prompt emphasis controlled by TITLE_POLICY (both titles are always produced + gated). */
 const POLICY_EMPHASIS: Record<TitlePolicy, string> = {
@@ -35,8 +35,16 @@ export function titlePrompt(
   policy: TitlePolicy = 'dual',
   styleBlock = '',
   pinnedProductName = '',
+  rules?: RuleSet,
+  packRules: string[] = [],
 ): string {
-  return `${snapshotBlock(snapshot)}
+  // R48 \u2014 pack data. The title is where a spec race starts, so the positioning
+  // anchor is stated before the task rather than left to the model's instincts.
+  const positioning = positioningBlock(rules?.positioningAnchor);
+  // Category guidance (pack data) — R33/R38's "keep unevidenced trust claims
+  // out of the header fields" rule lives here, not in this module.
+  const packLines = packRules.map((line) => `- ${line}\n`).join('');
+  return `${snapshotBlock(snapshot)}${positioning ? `\n\n${positioning}` : ''}
 
 ${styleBlock}
 
@@ -52,6 +60,6 @@ TASK: Generate the title group.
 - "title": legacy \u2264200 chars. Product name first, then primary keyword, then supporting terms. No word >2\u00d7.
 - "title75": \u226475 chars. Product name first + the single highest-value keyword cluster. Ruthlessly prioritized.
 - "itemHighlights": \u2264125 chars, searchable. Every important term that no longer fits title75 (audience qualifiers, form/count/diet tags). Do NOT duplicate title75 words.
-${POLICY_EMPHASIS[policy]}
+${packLines}${POLICY_EMPHASIS[policy]}
 Return JSON: { "productName", "primaryKeyword", "title", "title75", "itemHighlights" }`;
 }

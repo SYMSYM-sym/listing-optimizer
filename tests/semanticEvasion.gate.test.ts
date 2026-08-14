@@ -9,6 +9,7 @@ import { loadPack } from '@/lib/knowledge/loadPack';
 import type { Failure, OptimizedListing } from '@/lib/types';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
+import { withCoherentBulletFlags } from './fixtures/coherentBullets';
 
 /**
  * SEMANTIC EVASION — drug claims written with ZERO listed tokens.
@@ -39,7 +40,8 @@ beforeAll(async () => {
 const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
   const copy = JSON.parse(JSON.stringify(clean)) as OptimizedListing;
   fn(copy);
-  return copy;
+  // Keep the parallel claim-bearing flags coherent with the rewritten text.
+  return withCoherentBulletFlags(copy);
 };
 
 /** The ten payloads the adversarial auditor proved were passing, verbatim. */

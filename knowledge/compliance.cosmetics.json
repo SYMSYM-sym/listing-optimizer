@@ -406,6 +406,40 @@
   ],
   "noAllergenCanonical": "Free from declared allergens per label",
 
+  "_substantiationTokensComment": "R33/R38 \u2014 the SUBSTANTIATION REGISTER vocabulary, ported from the harness kit's C30. Every certification/origin/quality claim in customer copy needs an ARTIFACT behind it, and the original project shipped 'cGMP-certified, third-party-tested' live on three surfaces with no register entry anywhere: every other check asked 'is this phrasing allowed?', none asked 'can we prove it?'. Each row is [regexSource, displayName]. ADVISORY ONLY \u2014 it builds audit.substantiationRegister for operator sign-off and can never fail a run, which is why it is not a REQUIRED_PACK_PIECE.",
+  "substantiationTokens": [
+    ["\\bmade in (the )?usa\\b", "Made in USA"],
+    ["\\bmanufactured in (the )?usa\\b", "Manufactured in USA"],
+    ["\\bc?gmp\\b", "cGMP facility"],
+    ["\\bthird[- ]party[- ]?(tested|testing)\\b", "Third-party tested"],
+    ["\\bclinically\\s+(studied|tested|proven|shown)\\b", "Clinically studied"],
+    ["\\bnon[- ]gmo\\b", "Non-GMO"],
+    ["\\borganic\\b", "Organic"],
+    ["\\bgluten[- ]free\\b", "Gluten-free"],
+    ["\\bvegan\\b", "Vegan"],
+    ["\\b(usda|usp|nsf|fda)[- ](approved|verified|certified|registered)\\b", "Regulatory certification"],
+    ["\\b\\d[\\d,.]*\\+?\\s*(units|bottles|customers|servings)\\s+sold\\b", "Units-sold claim"],
+    ["\\b\\d+\\+?\\s*years\\b", "Years-in-business / heritage claim"],
+    ["\\bpatented\\b", "Patent claim"],
+    ["\\baward[- ]winning\\b", "Award claim"]
+  ],
+  "_candidateTermHeuristicsComment": "brain/02 \u2014 the CANDIDATE-NOUN proposer. ADVISORY: it scans the SOURCE listing for condition-like terms this pack's lexicon does not know and proposes them to whoever owns the lexicon. It exists because a blind spot cannot report itself: the oral/dental nouns were missing for months and no run could say so. `medicalSuffixes` are morphological endings that mark a medical noun; `therapeuticVerbCues` are the verbs whose OBJECT is worth proposing; `stopwords` are words that are never candidates however they are shaped. Never a failure, so never a REQUIRED_PACK_PIECE.",
+  "candidateTermHeuristics": {
+    "medicalSuffixes": ["itis", "osis", "oses", "emia", "aemia", "algia", "pathy", "pathies", "plasia", "trophy", "ectomy", "opia", "iasis", "itus", "oma", "phobia", "penia", "rrhea", "rrhoea"],
+    "therapeuticVerbCues": ["treats", "treat", "cures", "cure", "heals", "heal", "relieves", "relieve", "prevents", "prevent", "eases", "ease", "soothes", "soothe", "fights", "fight", "reverses", "reverse", "eliminates", "eliminate", "helps with", "remedy for", "relief from", "suffer from", "suffering from"],
+    "stopwords": ["the", "this", "that", "your", "our", "their", "these", "those", "with", "from", "into", "daily", "cream", "serum", "lotion", "formula", "blend", "bottle", "jar", "tube", "product", "support", "supports", "health", "healthy", "amazon", "brand", "made", "count", "vegan", "natural", "quality", "value", "adults", "women", "men", "during", "users", "user", "report", "reports", "people", "anyone", "someone", "night", "nights", "morning", "evening", "relief", "symptom", "symptoms", "before", "after", "while", "other", "others", "most", "many", "when", "they", "them", "some", "each", "every", "there", "about", "also", "occasional", "occasionally", "which", "without", "again", "still", "times", "level", "levels"]
+  },
+  "_ingredientSubsetRuleComment": "C26 \u2014 the ACTIVE-vs-FULL ingredient attribute pair. Every ingredient named in `subsetKey` must appear in `supersetKey`: an active ingredient missing from the full label list is either a copy error or an undeclared ingredient, and Amazon's ingredient-match enforcement reads both from the same panel. Comparison is TOLERANT of formatting (case, punctuation, ordering, amounts and parentheticals are all normalized away) because the two fields are legitimately written in different styles; it fails only when a word of the active ingredient's NAME appears nowhere in the full list. Emptying this disarms C26, so it is a REQUIRED_PACK_PIECE.",
+  "ingredientSubsetRule": {
+    "subsetKey": "active_ingredients",
+    "supersetKey": "ingredients"
+  },
+  "_allergenDeclarationSurfacesComment": "AM-3 \u2014 which SURFACES C9 requires the allergen declaration on. DEFAULT IS THE FULL TRIPLE DECLARATION: attribute AND description AND at least one bullet; that is what ships here and what every existing check enforces. The key exists only so an operator whose category genuinely cannot carry the bullet leg can drop THAT leg for their own pack \u2014 the override is DEFAULT OFF (every flag true). `attribute` and `description` may NEVER be switched off: REQUIRED_PACK_PIECES raises a blocking PACK failure if either is false, so this flag can never become a way to disarm C9 wholesale. Separate from, and no weakening of, the POSITION rule (rules.bulletArchitecture.allergenPosition), which says the bullet's declaration must TRAIL rather than lead.",
+  "allergenDeclarationSurfaces": {
+    "attribute": true,
+    "description": true,
+    "bullet": true
+  },
   "noAllergenPhrases": [
     "no known allergens"
   ],
@@ -418,12 +452,19 @@
       "No star-rating or review-count claims.",
       "No price, discount, shipping or availability statement in copy."
     ],
+    "_titleComment": "R33/R38 \u2014 the header fields (title, title75, itemHighlights) carry no UNEVIDENCED trust claim. The substantiation register reports one that slips through; this is the prevention half.",
+    "title": [
+    "Do NOT put an origin, certification, testing or heritage claim (country of origin, manufacturing standard, third-party testing, dietary certification, years in business, units sold) in the title or Item Highlights unless the CURRENT LISTING above already carries it. Every such claim needs an artifact behind it, the header fields are the ones a moderator reads first, and a claim the source listing never made is one nobody has evidence for.",
+    "Keep the header fields to what the product IS: identity, form, count, the primary keyword cluster and audience qualifiers."
+    ],
     "system": [
       "Do NOT write the disclaimer anywhere — the system inserts the verbatim constant itself. Claim-bearing bullets end with a trailing \"*\" marker only.",
       "If an allergen is present, declare it exactly as \"Contains: [Allergen]\" consistently; never write \"No Known Allergens\" when one is present."
     ],
     "attributes": [
       "\"ingredients\": the full INCI label list, in label order.",
+    "Any \"active_ingredients\" value must be a subset of \"ingredients\" \u2014 every active is checked against the full list.",
+    "NEVER put a strength/potency figure in an attribute whose name is about dose (dosage, strength, potency): structured data states the number AS a dose. Keep the strength figure in copy attached to the formula.",
       "\"allergen_information\": exact canonical string if an allergen is present, else \"Free from major allergens per label\" ONLY if the label says so, else omit."
     ],
     "bullets": [
