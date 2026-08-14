@@ -316,6 +316,30 @@ ul.ops{margin:8px 0 0;padding-left:20px}
     ? '<div class=banner><b>✓ Verified for publish.</b> Every deterministic check passed on this exact copy. Paste in the order below.</div>'
     : blockingBanner(failures);
 
+  /**
+   * REPAIR-ROUTING GAPS — a DEFECT REPORT, printed next to the failures it
+   * explains.
+   *
+   * When a gate failure's field belongs to no generation group, the repair
+   * loop could not have fixed it however many rounds it was given. Without
+   * this the sheet shows a stubborn compliance failure and nothing
+   * distinguishes it from copy the model refused to correct, which is exactly
+   * how the B00EEEITVA `videoBrief` hole survived a live run. It is never a
+   * softening: every field named here is also in the blocking table above.
+   */
+  const routingGaps = arr<{ checkId?: unknown; field?: unknown }>(
+    (audit as { routingGaps?: unknown } | null | undefined)?.routingGaps,
+  );
+  if (routingGaps.length > 0) {
+    h +=
+      '<div class=block><b>⚠ Unroutable failure(s) — this is a defect in this app, not in the copy.</b>' +
+      ' The repair loop has no generation group for the field(s) below, so no number of rounds could have fixed them: ' +
+      routingGaps
+        .map((g) => `<code>${esc(String(g?.checkId ?? ''))} ${esc(String(g?.field ?? ''))}</code>`)
+        .join(' ') +
+      '. Report it — the run stays UNVERIFIED either way.</div>';
+  }
+
   // --- advisory staleness notices (never affect `verified`) ---
   if (audit?.rulesStale) {
     h += `<div class=stale>⏳ ${esc(audit.rulesStaleNotice ?? 'Rule snapshot is stale — re-verify the time-sensitive marketplace limits.')}</div>`;

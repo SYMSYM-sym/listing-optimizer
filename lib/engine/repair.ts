@@ -1,6 +1,5 @@
 import 'server-only';
 import type {
-  Failure,
   GateResult,
   KnowledgePack,
   ListingSnapshot,
@@ -11,6 +10,23 @@ import { runGate } from '@/lib/gate/runGate';
 import { logServer } from '@/lib/server/log';
 import type { LlmClient } from './llm';
 import { optimize, pinProductName, type GroupName, type OptimizeOptions } from './optimize';
+import { routeFailure, unroutableFailures, type RoutingGap } from './fieldRouting';
+
+/**
+ * The routing table lives in `./fieldRouting` — it has more than one reader
+ * now (the audit reports the gaps, the oracle enumerates them) and `repair.ts`
+ * pulls in the whole generator, so nothing that only needs the table can
+ * import this file. Re-exported here because that is where every existing
+ * caller looks for it.
+ */
+export {
+  FIELD_TO_GROUP,
+  NOT_REGENERABLE,
+  fieldToGroup,
+  routeFailure,
+  unroutableFailures,
+} from './fieldRouting';
+export type { FieldRoutingTable, RepairRoute, RoutingGap } from './fieldRouting';
 
 /**
  * Bounded repair loop. Maps each failure to the prompt group that OWNS it and
@@ -19,39 +35,22 @@ import { optimize, pinProductName, type GroupName, type OptimizeOptions } from '
  * persistent failure is returned to the caller and surfaced in the UI.
  */
 
-/**
- * Explicit ownership table: gate failure field → prompt group that owns repair.
- * PACK failures are intentionally absent — they are not repairable by regeneration.
- * The disclaimer field is absent too: it is CODE-inserted verbatim, never
- * LLM-owned, so regenerating the title group could not repair it.
- */
-export const FIELD_TO_GROUP: ReadonlyArray<{ match: (field: string, checkId: string) => boolean; group: GroupName }> = [
-  { match: (f) => f === 'title' || f === 'title75' || f === 'itemHighlights' || f === 'productName' || f === 'primaryKeyword', group: 'title' },
-  { match: (f) => f.startsWith('bullets'), group: 'bullets' },
-  { match: (f) => f === 'description', group: 'description' },
-  { match: (f) => f === 'backendSearchTerms', group: 'backend' },
-  { match: (f) => f === 'attributes' || f.startsWith('attributes.'), group: 'attributes' },
-  // `facts.*` is now a scanned surface (C6). The facts block is produced
-  // deterministically from the snapshot alongside the attribute group, so the
-  // attributes group owns any repair round a facts failure triggers.
-  { match: (f) => f === 'facts' || f.startsWith('facts.'), group: 'attributes' },
-  { match: (f) => f.startsWith('aplus') || f === 'aplusContent', group: 'aplus' },
-  { match: (f) => f.startsWith('imagePlan'), group: 'images' },
-  { match: (f) => f.startsWith('qa'), group: 'qa' },
-  // WS3 — C28 reports against `keywords[i]`; the keyword group owns the repair.
-  { match: (f) => f === 'keywords' || f.startsWith('keywords['), group: 'keywords' },
-];
-
-export function fieldToGroup(failure: Failure): GroupName | null {
-  if (failure.checkId === 'PACK') return null;
-  const row = FIELD_TO_GROUP.find((r) => r.match(failure.field, failure.checkId));
-  return row?.group ?? null;
-}
-
 export interface RepairOutcome {
   listing: OptimizedListing;
   gateResult: GateResult;
   iterations: number;
+  /**
+   * Failures whose `field` resolved to NEITHER an owning generation group nor
+   * a documented non-regenerable class (see `lib/engine/fieldRouting.ts`).
+   *
+   * This is a BUG REPORT about the routing table, not about the copy: the
+   * loop could not have repaired these however many rounds it was given, which
+   * is exactly what the B00EEEITVA run spent its rounds discovering. It is
+   * returned so the caller can say so; `lib/audit/buildAudit.ts` derives the
+   * same list independently from the gate result, so a caller that drops this
+   * cannot hide the gap.
+   */
+  unroutable: RoutingGap[];
 }
 
 export async function runRepairLoop(
@@ -104,7 +103,7 @@ export async function runRepairLoop(
     logServer('repair.pack_short_circuit', {
       failures: gateResult.failures.map((f) => f.checkId),
     });
-    return { listing, gateResult, iterations };
+    return { listing, gateResult, iterations, unroutable: unroutableFailures(gateResult.failures) };
   }
 
   /**
@@ -141,16 +140,36 @@ export async function runRepairLoop(
     const groups = new Set<GroupName>();
     const failureContext: Partial<Record<GroupName, string>> = {};
     for (const failure of gateResult.failures) {
-      const g = fieldToGroup(failure);
-      if (!g) {
-        // Nothing regenerable owns this failure — say so instead of dropping it
-        // silently, so an unmapped field surfaces in the logs.
-        logServer('repair.unowned_failure', {
-          checkId: failure.checkId,
-          field: failure.field,
-        });
+      const route = routeFailure(failure);
+      if (route.kind !== 'group') {
+        /**
+         * Nothing regenerable owns this failure. The two reasons are NOT the
+         * same thing and are no longer reported as if they were:
+         *
+         *  - `not-regenerable` is the CORRECT answer for a documented class
+         *    (a pack gap, a thrown check, a degraded group, the code-inserted
+         *    disclaimer). Nothing is wrong with the router.
+         *  - `unroutable` means the router has no opinion about this field at
+         *    all, which is a BUG IN THE ROUTER: the loop will now burn every
+         *    remaining round without ever touching the surface that failed.
+         *    That is the B00EEEITVA shape, and it is recorded so the run can
+         *    say so instead of being diagnosed by grep.
+         */
+        if (route.kind === 'unroutable') {
+          logServer('repair.unroutable_failure', {
+            checkId: failure.checkId,
+            field: failure.field,
+          });
+        } else {
+          logServer('repair.unowned_failure', {
+            checkId: failure.checkId,
+            field: failure.field,
+            reason: route.id,
+          });
+        }
         continue;
       }
+      const g = route.group;
       groups.add(g);
       const line = `[${failure.checkId}] ${failure.field}: ${failure.context} → FIX: ${failure.fix}`;
       failureContext[g] = failureContext[g] ? `${failureContext[g]}\n${line}` : line;
@@ -177,6 +196,7 @@ export async function runRepairLoop(
       logServer('repair.no_owner_exit', {
         iteration: iterations,
         failures: gateResult.failures.map((f) => `${f.checkId}:${f.field}`),
+        unroutable: unroutableFailures(gateResult.failures).map((g) => `${g.checkId}:${g.field}`),
       });
       break;
     }
@@ -199,11 +219,14 @@ export async function runRepairLoop(
     longestRoundMs = Math.max(longestRoundMs, Date.now() - roundStartedAt);
     if (gateResult.failures.some((f) => f.checkId === 'PACK')) break;
   }
+  const unroutable = unroutableFailures(gateResult.failures);
   logServer('repair.done', {
     iterations,
     verified: gateResult.pass,
     ms: Date.now() - startedAt,
     failureIds: gateResult.failures.map((f) => f.checkId),
+    // A non-empty list here is the one-look diagnosis of a burnt repair loop.
+    unroutable: unroutable.map((g) => `${g.checkId}:${g.field}`),
   });
-  return { listing, gateResult, iterations };
+  return { listing, gateResult, iterations, unroutable };
 }

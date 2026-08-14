@@ -1,6 +1,6 @@
 import type { KnowledgePack, ListingSnapshot } from '@/lib/types';
 import { APLUS_BODY_MIN_CHARS, APLUS_HEADLINE_MIN_CHARS } from '../schemas';
-import { canonicalNameBlock, snapshotBlock } from './shared';
+import { canonicalNameBlock, heroSpecBlock, snapshotBlock } from './shared';
 
 export function aplusPrompt(
   snapshot: ListingSnapshot,
@@ -31,9 +31,15 @@ export function aplusPrompt(
         .map((c) => `"${c}"`)
         .join(', ')}. Name the actual buyer (routine, life stage, usage context) — never a vague "everyone".\n`
     : '';
+  // The hero-spec rule, stated AT this surface. The A+ hero and brand-story
+  // bodies are the other place a headline figure gets written as a slogan.
+  // Empty string when the pack ships no per-dose phrasing.
+  const heroSpec = heroSpecBlock(pack.rules.units);
   return `${snapshotBlock(snapshot)}
 
 ${styleBlock}
+
+${heroSpec}
 
 ${canonical}
 TASK: A+ content — real extractable text (AI/voice engines read it).

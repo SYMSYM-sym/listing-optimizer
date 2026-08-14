@@ -88,6 +88,9 @@ describe('POST /api/optimize', () => {
       listing: mockListing,
       gateResult: { pass: true, failures: [] } as GateResult,
       iterations: 1,
+      // A converged run has no routing gaps; the key is required on the
+      // outcome so a caller cannot forget the loop reports them.
+      unroutable: [],
     });
   });
 

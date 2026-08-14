@@ -1,5 +1,5 @@
 import type { ImageArchitecture, KnowledgePack, ListingSnapshot } from '@/lib/types';
-import { snapshotBlock } from './shared';
+import { heroSpecBlock, snapshotBlock } from './shared';
 
 /**
  * WS8 — the VISUAL PRODUCTION brief.
@@ -45,7 +45,14 @@ export function imagesPrompt(snapshot: ListingSnapshot, pack: KnowledgePack): st
       ].join('\n')
     : '';
 
+  // The hero-spec rule, stated AT this surface rather than only in the shared
+  // system preamble — a video overlay is where a headline figure gets written
+  // as a slogan (see `heroSpecBlock`). Empty string when the pack ships none.
+  const heroSpec = heroSpecBlock(r.units);
+
   return `${snapshotBlock(snapshot)}
+
+${heroSpec}
 
 TASK: A ${count}-slot image plan plus a ${video?.aspect ?? '9:16'} video brief.
 

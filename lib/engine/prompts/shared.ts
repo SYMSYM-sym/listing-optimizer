@@ -10,6 +10,7 @@ import type {
   SemanticDrugClaims,
   SemanticTargetEntry,
   StyleRules,
+  UnitRules,
 } from '@/lib/types';
 
 /**
@@ -275,6 +276,48 @@ export function prohibitedMarketingBlock(rules: ProhibitedMarketingRules | undef
  * echoed out of this table lands in a JSON field the customer never sees and
  * that no copy surface is built from.
  */
+/**
+ * THE HERO-SPEC RULE, rendered FROM PACK DATA (`rules.units`) — the prevention
+ * half of gate C10 / A5.
+ *
+ * WHY IT EXISTS AS ITS OWN BLOCK. The rule was stated once, in the shared
+ * SYSTEM preamble, buried under the canonical facts. It held for the copy
+ * groups and did not hold for the two surfaces where the headline number is
+ * MOST likely to be written as a slogan: a video overlay and an A+ hero body.
+ * A live run on B00EEEITVA came back with exactly that pair —
+ * `videoBrief.onScreenText[1]` and `aplus.modules[brand-story].body` both
+ * attaching the headline potency to a single dose — while every bullet, the
+ * title and the description were clean.
+ *
+ * So the rule is stated AT the surfaces that break it. It authors nothing: the
+ * unit tokens and the forbidden phrasings are the SAME pack lists gate C10/A5
+ * compile their regexes from, so a pack that ships no per-dose phrasing has no
+ * rule and renders no block — `''`, and the prompt is byte-for-byte what it
+ * was.
+ *
+ * RENDERED AHEAD OF `TASK:`, for the documented reason `styleRulesBlock` is:
+ * it is an ENUMERATION OF DATA the gate enforces, not a sentence of the form
+ * "avoid <banned word>" inside the instruction a brief gets paraphrased from
+ * (see `tests/promptHygiene.test.ts`).
+ */
+export function heroSpecBlock(units: UnitRules | undefined): string {
+  const phrases = (units?.perServingPhrases ?? []).map((p) => p.trim()).filter(Boolean);
+  if (phrases.length === 0) return '';
+  const verbs = (units?.potencyVerbs ?? []).map((v) => v.trim()).filter(Boolean);
+  const verbLine = verbs.length
+    ? ` The same holds when the figure is introduced by ${verbs
+        .map((v) => `"${v}"`)
+        .join(' / ')}: what is described is the formula, not one unit of use.`
+    : '';
+  return [
+    'HEADLINE SPEC (deterministically checked on this surface):',
+    `- Attach the headline potency figure to the blend or formula as a whole. NEVER attach it to a single dose — never write it as ${phrases
+      .map((p) => `"${p}"`)
+      .join(' / ')}.${verbLine}`,
+    '- The figure itself is unchanged: state it, and state what it belongs to.',
+  ].join('\n');
+}
+
 export function keywordVocabularyBlock(kr: KeywordRules | undefined): string {
   const visible = (kr?.visibleSurfaces ?? []).filter((s) => s.trim() !== '');
   const backend = (kr?.backendSurfaces ?? []).filter((s) => s.trim() !== '');

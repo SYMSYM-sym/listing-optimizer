@@ -19,6 +19,7 @@ export {
   buyerLanguageBlock,
   bulletArchitectureBlock,
   demandRecaptureBlock,
+  heroSpecBlock,
   keywordVocabularyBlock,
   positioningBlock,
   prohibitedContentBlock,

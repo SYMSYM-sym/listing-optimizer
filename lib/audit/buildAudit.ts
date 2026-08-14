@@ -10,6 +10,7 @@ import type {
 import type { GateContext } from '@/lib/gate/checks';
 import { runGate } from '@/lib/gate/runGate';
 import { buildFacts } from '@/lib/engine/facts';
+import { unroutableFailures } from '@/lib/engine/fieldRouting';
 import { candidateTerms } from './candidateTerms';
 import { buildBenchmark } from './benchmark';
 import { rivalBrandNames } from './rivalBrands';
@@ -127,6 +128,20 @@ export function buildAudit(
   const packProblems = gateResult.failures
     .filter((f) => f.checkId === 'PACK')
     .map((f) => f.context);
+  /**
+   * REPAIR-ROUTING GAPS, derived from the SAME gate result `verified` is.
+   *
+   * A failure the repair loop cannot attribute to a generation group is
+   * unrepairable however many rounds it is given, and until now it was dropped
+   * silently — the operator saw a stubborn compliance failure and had no way to
+   * tell it apart from one the model simply refused to fix. Naming it here
+   * makes the next occurrence a one-look diagnosis.
+   *
+   * This ADDS a signal; it removes none. Every entry is also a blocking gate
+   * failure, so `verified` is false whenever the list is non-empty, and the key
+   * is omitted entirely when it is empty.
+   */
+  const routingGaps = unroutableFailures(gateResult.failures);
   return {
     scorecard,
     scorecardProposed,
@@ -143,6 +158,7 @@ export function buildAudit(
     ...(inputs.reviewRejected && inputs.reviewRejected.length > 0
       ? { reviewLanguageRejected: inputs.reviewRejected }
       : {}),
+    ...(routingGaps.length > 0 ? { routingGaps } : {}),
     rulesStale: staleness.stale,
     ...(staleness.notice ? { rulesStaleNotice: staleness.notice } : {}),
     attributeSchemaStale: schemaStaleness.stale,

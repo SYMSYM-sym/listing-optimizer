@@ -1357,6 +1357,19 @@ export interface AuditGap {
   severity: GapSeverity;
 }
 
+/**
+ * One REPAIR-ROUTING GAP: a gate failure whose `field` the repair loop could
+ * not attribute to any generation group. Structurally identical to (and kept
+ * in sync with) `RoutingGap` in `lib/engine/fieldRouting.ts`; declared here so
+ * the shipped `Audit` contract does not import from the engine.
+ */
+export interface RoutingGap {
+  /** The check that emitted the failure (e.g. a C- or A- id). */
+  checkId: string;
+  /** The output-contract field path nothing owns. */
+  field: string;
+}
+
 export interface PrincipleScore {
   id: string;
   score: 'full' | 'partial' | 'none' | 'unknown';
@@ -1552,6 +1565,26 @@ export interface Audit {
    * nothing, rather than guessing. Never copy; never a failure.
    */
   reviewLanguageRejected?: { fragment: string; why: string }[];
+  /**
+   * REPAIR-ROUTING GAPS — gate failures the repair loop could not route to any
+   * generation group and that are not one of the documented non-regenerable
+   * classes (see `lib/engine/fieldRouting.ts`).
+   *
+   * WHY IT IS ON THE AUDIT. A live run on B00EEEITVA ended `verified:false`
+   * with two C10/A5 potency findings the model could trivially have fixed: the
+   * `videoBrief.*` fields had no row in the routing table, so the loop dropped
+   * them silently and spent every round on nothing. The run looked like a hard
+   * compliance failure and was actually a one-line hole in the router — and
+   * the only way to find that out was to grep the source.
+   *
+   * It is DERIVED from `gateResult.failures`, in the same module that owns
+   * `verified`, so it can never disagree with the verdict and no route has to
+   * remember to thread it. It is NOT a softening of anything: every entry here
+   * is ALSO a blocking gate failure, so `verified` is already false whenever
+   * this key is present. The key is omitted entirely when there are none, so a
+   * healthy run's payload is byte-identical to what it was.
+   */
+  routingGaps?: RoutingGap[];
 }
 
 // ---------------------------------------------------------------------------
