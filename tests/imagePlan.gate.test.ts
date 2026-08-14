@@ -3,7 +3,7 @@ import { buildAudit } from '@/lib/audit/buildAudit';
 import { optimize } from '@/lib/engine/optimize';
 import { buildShipSheet } from '@/lib/export/shipSheet';
 import { toMarkdown } from '@/lib/export/markdown';
-import { c29ImagePlanContent, c30ImageAltText, type GateContext } from '@/lib/gate/checks';
+import { aspectMatches, c29ImagePlanContent, c30ImageAltText, type GateContext } from '@/lib/gate/checks';
 import { runGate } from '@/lib/gate/runGate';
 import { mapProduct } from '@/lib/ingest/providers/rainforest';
 import { toSnapshot } from '@/lib/ingest/toSnapshot';
@@ -305,5 +305,99 @@ describe('WS8 — the sheet renders the visual pack and the A+ disclosures', () 
     expect(md).toContain(clean.imagePlan[5]!.altText!);
     expect(md).toContain(`Video brief — ${clean.videoBrief!.aspect}`);
     expect(md).toContain('On-screen text');
+  });
+});
+
+// ===========================================================================
+// 7 — E1: THE C29 ASPECT FALSE POSITIVE (live, all three ASINs, every run)
+// ===========================================================================
+
+/**
+ * THE LIVE FAILURE, verbatim:
+ *
+ *   C29 | videoBrief.aspect | context: "9:16"
+ *        | fix: "The brief must be for a 9:16 vertical frame — a wide edit
+ *                cropped down is a different shot"
+ *
+ * The emitted value IS the pack's frame. The check compared the whole pack
+ * string ("9:16 vertical") as a SUBSTRING of a field whose entire content is
+ * the ratio, so it demanded a prose word the field never carries and reported
+ * a correct brief as the wrong shot on every run. Over-blocking a truthful
+ * value is exactly as bad as accepting a false one: it trains the operator to
+ * ignore C29, which is indistinguishable from not having it.
+ *
+ * Both directions, with the exact live value as the passing case.
+ */
+describe('C29 videoBrief.aspect — the ratio is the fact, the prose word is not', () => {
+  const packAspect = () => arch().video.aspect;
+  const aspectFailures = (value: unknown): Failure[] => {
+    const l = clone();
+    (l.videoBrief as { aspect: unknown }).aspect = value;
+    return c29(l).filter((f) => f.field === 'videoBrief.aspect');
+  };
+
+  it('the pack states the frame as a ratio PLUS a prose word (this is the mismatch)', () => {
+    expect(packAspect()).toContain('9:16');
+    expect(packAspect()).not.toBe('9:16');
+  });
+
+  /** Every one of these states the pack's frame. */
+  const ACCEPTED = [
+    '9:16', // <- the exact live value that was being rejected
+    '9:16 vertical',
+    'vertical 9:16',
+    '9:16 portrait, full-bleed',
+    '9 : 16',
+    '9:16 (1080x1920)',
+  ];
+
+  it.each(ACCEPTED)('PASSES: %s', (value) => {
+    expect(aspectFailures(value)).toEqual([]);
+  });
+
+  /** And a genuinely wrong frame still fails — the check is not disarmed. */
+  const REJECTED: [string, unknown][] = [
+    ['a wide edit', '16:9'],
+    ['a wide edit with prose', '16:9 landscape'],
+    ['a square', '1:1'],
+    ['a 4:5 feed crop', '4:5'],
+    ['a wide edit cropped down', '16:9 cropped to 9:16'],
+    ['the prose word alone, no ratio', 'vertical'],
+    ['empty', ''],
+    ['whitespace', '   '],
+    ['null', null],
+    ['a number', 916],
+    ['the ratio inverted inside prose', 'shoot 16:9 and crop'],
+  ];
+
+  it.each(REJECTED)('FAILS: %s', (_label, value) => {
+    expect(aspectFailures(value).length).toBeGreaterThan(0);
+  });
+
+  it('FAILS: the whole brief missing (the aspect leg is not the only one)', () => {
+    const l = clone();
+    delete l.videoBrief;
+    expect(c29(l).some((f) => f.field === 'videoBrief')).toBe(true);
+  });
+
+  it('the pure predicate, both directions, against the pack value', () => {
+    expect(aspectMatches('9:16', packAspect())).toBe(true);
+    expect(aspectMatches(packAspect(), packAspect())).toBe(true);
+    expect(aspectMatches('16:9', packAspect())).toBe(false);
+    expect(aspectMatches('', packAspect())).toBe(false);
+  });
+
+  /**
+   * A pack that spells its frame with NO ratio at all keeps the old
+   * containment rule, so widening the check never silently unchecks a pack.
+   */
+  it('a ratio-free pack aspect still enforces containment, both directions', () => {
+    expect(aspectMatches('shot in portrait throughout', 'portrait')).toBe(true);
+    expect(aspectMatches('shot wide', 'portrait')).toBe(false);
+  });
+
+  it('the golden brief and the whole gate stay green', () => {
+    expect(c29(clean)).toEqual([]);
+    expect(runGate(clean, pack, ctx)).toEqual({ pass: true, failures: [] });
   });
 });

@@ -57,7 +57,7 @@ export {
 } from './c-attributes';
 export { c27OutputHygiene } from './c-hygiene';
 export { c28KeywordPlacement, keywordSurfaceText } from './c-keywords';
-export { c29ImagePlanContent, c30ImageAltText } from './c-images';
+export { aspectMatches, c29ImagePlanContent, c30ImageAltText } from './c-images';
 export { c31BulletFormat } from './c-format';
 export { c22NaturalState } from './c-natural-state';
 export { c17Style, styleSurfaces, allCapsOffenders } from './c-style';

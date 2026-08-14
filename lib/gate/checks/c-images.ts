@@ -28,8 +28,9 @@ import { fail } from './shared';
  *    where a group is satisfied by ANY of its accepted spellings. The text
  *    searched is purpose + spec + notes together, because an operator reads
  *    the card, not one field of it.
- * Plus the video brief: present, the pack's aspect, and a duration inside the
- * pack's window.
+ * Plus the video brief: present, the pack's aspect RATIO (see `aspectMatches`
+ * — the ratio is the fact, the pack's prose word for it is not), and a
+ * duration inside the pack's window.
  *
  * WHAT IT DOES NOT ASSERT. Nothing about slots the pack gives no tokens for,
  * and nothing about how GOOD a brief is. A token list is a floor.
@@ -51,6 +52,46 @@ const groupSatisfied = (hay: string, group: ImageSpecTokenGroup): boolean =>
     const t = normalize(String(token ?? '')).toLowerCase();
     return t !== '' && hay.includes(t);
   });
+
+/**
+ * Every W:H RATIO stated in a frame description, normalised (`09 : 16` ->
+ * `9:16`).
+ *
+ * WHY A RATIO COMPARISON RATHER THAN A SUBSTRING. The pack states the frame as
+ * an operator reads it — a ratio plus the prose word for it ("9:16 vertical").
+ * The emitted `videoBrief.aspect` is a FIELD WHOSE WHOLE CONTENT IS THE RATIO,
+ * so a brief that correctly says "9:16" did not contain the pack's whole
+ * string and was reported as the WRONG FRAME on every live run, on all three
+ * ASINs — a check demanding a prose token inside a field that carries none.
+ * The FACT being checked is the ratio; the prose word is how the pack spells
+ * it for a human. So the ratio is what is compared, in both strings, and the
+ * pack keeps owning the number.
+ *
+ * STRICT, NOT LOOSE: EVERY ratio the brief mentions must be the pack's, and it
+ * must mention at least one. "16:9 cropped to 9:16" therefore still fails —
+ * that is the wide edit the failure text warns about — and so do "1:1", a
+ * ratio-free "vertical", and an empty field.
+ */
+const RATIO_RE = /(\d{1,4})\s*:\s*(\d{1,4})/g;
+const ratiosIn = (text: string): string[] =>
+  [...normalize(text).matchAll(RATIO_RE)].map(([, w, h]) => `${Number(w)}:${Number(h)}`);
+
+/**
+ * Does the emitted frame description state the frame the pack specifies?
+ * Exported for the both-direction suite, which drives it with the exact live
+ * value ("9:16") as the passing case.
+ */
+export function aspectMatches(emitted: string, packAspect: string): boolean {
+  const wanted = ratiosIn(packAspect);
+  // A pack aspect with no ratio in it at all is not a ratio spec; fall back to
+  // the containment rule so a pack that spells its frame some other way is
+  // still enforced rather than silently unchecked.
+  if (wanted.length === 0) {
+    return normalize(emitted).toLowerCase().includes(packAspect.trim().toLowerCase());
+  }
+  const got = ratiosIn(emitted);
+  return got.length > 0 && got.every((r) => wanted.includes(r));
+}
 
 export function c29ImagePlanContent(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const arch: ImageArchitecture | undefined = pack.rules?.imageArchitecture;
@@ -116,13 +157,13 @@ export function c29ImagePlanContent(l: OptimizedListing, pack: KnowledgePack): F
         ),
       );
     } else {
-      if (!normalize(str(brief.aspect)).toLowerCase().includes(video.aspect.toLowerCase())) {
+      if (!aspectMatches(str(brief.aspect), video.aspect)) {
         out.push(
           fail(
             C29,
             'videoBrief.aspect',
             str(brief.aspect) || '(empty)',
-            `The brief must be for a ${video.aspect} frame — a wide edit cropped down is a different shot`,
+            `The brief must state the ${video.aspect} frame — a wide edit cropped down is a different shot`,
           ),
         );
       }
