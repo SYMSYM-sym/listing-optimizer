@@ -867,7 +867,8 @@
       "aplus",
       "faq",
       "qa",
-      "images"
+      "images",
+      "video"
     ],
     "backendSurfaces": [
       "backend"

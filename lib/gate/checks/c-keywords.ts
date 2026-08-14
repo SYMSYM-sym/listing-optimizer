@@ -46,6 +46,16 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  * module cannot resolve to text is ALSO a failure — a surface name that
  * silently resolves to nothing would vouch for every term declared on it.
  *
+ * EVERY CUSTOMER-READABLE STRING IS A SURFACE. The reader below must cover the
+ * same text the operator ships, not a convenient subset of it: A+ banner ALT
+ * and the 9:16 video brief are both customer-facing and both INVISIBLE on the
+ * page, which is precisely where a stale agency template's rival brand name
+ * survives. While `aplus` skipped `bannerAltText` and the video brief had no
+ * surface name at all, a `negative` term planted in either produced no failure
+ * and a verified run — R50 defeated by an omission in a reader. Both are
+ * covered now; `tests/keywordPlacement.surfaces.test.ts` holds every leg in
+ * both directions.
+ *
  * PACK-DRIVEN. Every surface name, status word and threshold comes from
  * `rules.keywordRules`; this module holds none. `visibleSurfaces`,
  * `backendSurfaces`, `statuses` and `minNegatives` are all
@@ -55,18 +65,59 @@ const CHECK_ID = 'C28';
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
-/** Every A+ text field, flattened. */
+/**
+ * Every A+ text field, flattened — INCLUDING the banner ALT strings.
+ *
+ * `bannerAltText` was missing from this reader while `aplus` was the declared
+ * surface name for the whole module set, which made A+ ALT a hole with exactly
+ * the shape R50 warns about: a rival brand name left in an old agency
+ * template's ALT is invisible on the page, is a real trademark exposure, and
+ * produced ZERO C28 failures. It is customer-facing text on a customer-facing
+ * module and every other content scan already reads it (`aplusSurfaces` in
+ * ./shared), so it is read here too.
+ */
 function aplusText(l: OptimizedListing): string {
   const a = l.aplusContent;
   if (!a || typeof a !== 'object') return '';
   const parts: string[] = [];
-  for (const m of arr<{ headline?: unknown; body?: unknown; subcopy?: unknown }>(a.modules)) {
-    parts.push(str(m?.headline), str(m?.body), str(m?.subcopy));
+  for (const m of arr<{
+    headline?: unknown;
+    body?: unknown;
+    subcopy?: unknown;
+    bannerAltText?: unknown;
+  }>(a.modules)) {
+    parts.push(str(m?.headline), str(m?.body), str(m?.subcopy), str(m?.bannerAltText));
   }
   for (const r of arr<{ label?: unknown; ours?: unknown; typical?: unknown }>(a.comparison?.rows)) {
     parts.push(str(r?.label), str(r?.ours), str(r?.typical));
   }
   return parts.join(' \n ');
+}
+
+/**
+ * EVERY string field of the 9:16 VIDEO BRIEF, flattened.
+ *
+ * The brief had no surface name at all, so a term planted in
+ * `videoBrief.onScreenText` or `videoBrief.notes` sat outside C28's world
+ * entirely: a NEGATIVE term (where rival brand names live, R50) was scanned
+ * against a corpus that did not contain it, and a backend-only term could sit
+ * in on-screen copy without tripping the leak rule. `VideoBrief`'s own note
+ * says why that is wrong — the on-screen strings are read by the same OCR that
+ * reads the images, so they ARE copy.
+ *
+ * Every string field is read, `aspect` and `notes` as well as the two arrays:
+ * a surface reader that covers only part of its object is the same hole one
+ * level down. `durationSeconds` is a number and can carry no term.
+ */
+function videoText(l: OptimizedListing): string {
+  const v = l.videoBrief;
+  if (!v || typeof v !== 'object') return '';
+  return [
+    str(v.aspect),
+    ...arr<unknown>(v.shots).map(str),
+    ...arr<unknown>(v.onScreenText).map(str),
+    str(v.notes),
+  ].join(' \n ');
 }
 
 /**
@@ -102,6 +153,8 @@ export function keywordSurfaceText(l: OptimizedListing, name: string): string | 
       return Object.values(l.attributes && typeof l.attributes === 'object' ? l.attributes : {}).map(str).join(' \n ');
     case 'aplus':
       return aplusText(l);
+    case 'video':
+      return videoText(l);
     case 'faq':
       return arr<{ q?: unknown; a?: unknown }>(l.aplusContent?.faq).map((f) => `${str(f?.q)} ${str(f?.a)}`).join(' \n ');
     case 'qa':
