@@ -99,14 +99,16 @@ describe('optimize (mock LLM — golden generation fixture)', () => {
     expect(pkWords.some((w) => listing.title.toLowerCase().includes(w))).toBe(true);
   });
 
-  it('fans out 8 parallel LLM calls on a full optimize run', async () => {
+  it('costs 9 LLM calls on a full optimize run — 1 phase-1 + 7 phase-2 + 1 phase-3', async () => {
     let calls = 0;
     const counting: typeof mockLlm = async (req) => {
       calls++;
       return mockLlm(req);
     };
     await optimize(snapshot, pack, counting);
-    expect(calls).toBe(8);
+    // PHASE 3 (WS3) is the ninth: the keyword reference READS the finished copy,
+    // so it cannot share the phase-2 fan-out. See lib/engine/optimize.ts.
+    expect(calls).toBe(9);
   });
 
   it('generic pack omits FDA disclaimer assembly', async () => {

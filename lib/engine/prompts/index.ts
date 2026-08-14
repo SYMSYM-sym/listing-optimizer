@@ -1,4 +1,4 @@
-import type { KnowledgePack, ListingSnapshot } from '@/lib/types';
+import type { KnowledgePack, ListingSnapshot, OptimizedListing } from '@/lib/types';
 import type { TitlePolicy } from '@/lib/env';
 import type { TitleSurfaces } from '../backendSanitize';
 import { aplusPrompt } from './aplus';
@@ -7,14 +7,18 @@ import { backendPrompt } from './backend';
 import { bulletsPrompt } from './bullets';
 import { descriptionPrompt } from './description';
 import { imagesPrompt } from './images';
+import { keywordsPrompt, type KeywordSurfacesView } from './keywords';
 import { qaPrompt } from './qa';
 import { styleRulesBlock } from './shared';
 import { buildSystemPrompt } from './system';
 import { titlePrompt } from './title';
 
 export { buildSystemPrompt };
+export type { KeywordSurfacesView };
 export {
   bulletArchitectureBlock,
+  demandRecaptureBlock,
+  keywordVocabularyBlock,
   positioningBlock,
   prohibitedContentBlock,
   prohibitedMarketingBlock,
@@ -47,6 +51,10 @@ export function buildGroupPrompts(pack: KnowledgePack, titlePolicy: TitlePolicy 
     aplus: (s: ListingSnapshot, canonicalProductName?: string) =>
       aplusPrompt(s, pack, styleBlock, canonicalProductName ?? ''),
     images: (s: ListingSnapshot) => imagesPrompt(s, pack),
+    // WS3 — phase 3: the keyword reference READS the finished copy, so it takes
+    // the emitted surfaces rather than guessing at them (see prompts/keywords.ts).
+    keywords: (s: ListingSnapshot, emitted: KeywordSurfacesView & Partial<OptimizedListing>) =>
+      keywordsPrompt(s, emitted, pack.rules.keywordRules),
     qa: (s: ListingSnapshot, canonicalProductName?: string) =>
       qaPrompt(s, packRules.qa ?? [], canonicalProductName ?? ''),
   };

@@ -142,6 +142,52 @@ export const qaGroupSchema = z.object({
     .max(18),
 });
 
+/**
+ * WS3 — the KEYWORD REFERENCE group.
+ *
+ * STRUCTURE ONLY, as everywhere else at this boundary: the schema guarantees a
+ * well-shaped artifact; gate C28 is what verifies that a declaration is TRUE.
+ * `tier` is coerced from the model's string ("1", "backend") because the kit's
+ * schema mixes numeric tiers with label tiers in the same field.
+ */
+const keywordTierField = z.preprocess((v) => {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+    const s = v.trim();
+    if (/^[1-4]$/.test(s)) return Number(s);
+    return s.toLowerCase();
+  }
+  return v;
+}, z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.string().min(3)]));
+
+export const keywordsGroupSchema = z.object({
+  keywords: z
+    .array(
+      z.preprocess((raw) => {
+        if (!raw || typeof raw !== 'object') return raw;
+        const o = raw as Record<string, unknown>;
+        // The kit's artifact calls the term `t` and the rationale `evidence`;
+        // accept both spellings so a model shown either shape validates first try.
+        return {
+          ...o,
+          term: o.term ?? o.t ?? o.keyword ?? o.phrase,
+          why: o.why ?? o.evidence ?? o.rationale ?? o.reason,
+          surfaces: Array.isArray(o.surfaces) ? o.surfaces : o.surfaces == null ? [] : [o.surfaces],
+        };
+      }, z.object({
+        term: z.string().min(2),
+        tier: keywordTierField,
+        status: z.string().min(3),
+        surfaces: z.array(z.string()),
+        why: z.string().min(3),
+        via: z.string().optional(),
+        home: z.string().optional(),
+      })),
+    )
+    .min(8)
+    .max(60),
+});
+
 export type TitleGroup = z.infer<typeof titleGroupSchema>;
 export type BulletsGroup = z.infer<typeof bulletsGroupSchema>;
 export type DescriptionGroup = z.infer<typeof descriptionGroupSchema>;
@@ -150,3 +196,4 @@ export type AttributesGroup = z.infer<typeof attributesGroupSchema>;
 export type AplusGroup = z.infer<typeof aplusGroupSchema>;
 export type ImagesGroup = z.infer<typeof imagesGroupSchema>;
 export type QaGroup = z.infer<typeof qaGroupSchema>;
+export type KeywordsGroup = z.infer<typeof keywordsGroupSchema>;

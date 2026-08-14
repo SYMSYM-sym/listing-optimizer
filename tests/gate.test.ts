@@ -424,7 +424,15 @@ describe('repair loop', () => {
         // truncates on word boundaries, so a single giant token would leave
         // the field EMPTY — which C3 now reports as an unfilled deliverable
         // rather than silently accepting as "0 bytes, under the cap".
-        return JSON.stringify({ backendSearchTerms: Array.from({ length: 30 }, (_, i) => `ätermö${i}`).join(' ') });
+        // The three backend-only terms the golden keyword reference declares
+        // lead the field: the sanitizer truncates on word boundaries from the
+        // END, so a prefix survives and the artifact stays TRUE. (Dropping them
+        // would make C28 fire on a suite that is about C3.)
+        return JSON.stringify({
+          backendSearchTerms: ['acidophilus', 'probotic', 'probyotic']
+            .concat(Array.from({ length: 30 }, (_, i) => `ätermö${i}`))
+            .join(' '),
+        });
       }
       return res;
     };
@@ -454,8 +462,12 @@ describe('repair loop', () => {
     expect(outcome.gateResult.pass).toBe(false);
     expect(outcome.iterations).toBe(2);
     expect(outcome.gateResult.failures.some((f) => f.checkId === 'C1')).toBe(true);
-    // initial full run = 8 calls; each repair round regenerates ONLY title (+retry inside generateGroup)
-    expect(calls.length).toBeLessThanOrEqual(8 + 2 * 2);
+    // Initial full run = 9 calls (1 phase-1 + 7 phase-2 + 1 phase-3). Each
+    // repair round regenerates the owning group (title) AND the keyword
+    // reference — the WS3 coupling in lib/engine/repair.ts, because a rewritten
+    // title invalidates every declaration about it — plus a possible retry
+    // inside generateGroup for each.
+    expect(calls.length).toBeLessThanOrEqual(9 + 2 * (2 + 2));
   });
 
   it('PACK failure short-circuits before any repair round', async () => {
@@ -463,7 +475,7 @@ describe('repair loop', () => {
     const counting: typeof mockLlm = async (req) => { llmCalls++; return mockLlm(req); };
     const outcome = await runRepairLoop(snapshot, pack, counting, { subcategories: [] }, 3);
     expect(outcome.iterations).toBe(0);
-    expect(llmCalls).toBe(8); // one full generation, zero repair rounds
+    expect(llmCalls).toBe(9); // one full generation (incl. phase 3), zero repair rounds
     expect(outcome.gateResult.failures.some((f) => f.checkId === 'PACK')).toBe(true);
   });
 

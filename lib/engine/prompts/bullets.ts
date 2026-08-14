@@ -1,5 +1,11 @@
 import type { ListingSnapshot, RuleSet } from '@/lib/types';
-import { bulletArchitectureBlock, canonicalNameBlock, positioningBlock, snapshotBlock } from './shared';
+import {
+  bulletArchitectureBlock,
+  canonicalNameBlock,
+  demandRecaptureBlock,
+  positioningBlock,
+  snapshotBlock,
+} from './shared';
 
 export function bulletsPrompt(
   snapshot: ListingSnapshot,
@@ -21,7 +27,11 @@ export function bulletsPrompt(
   // module authors no strategy of its own.
   const architecture = bulletArchitectureBlock(rules?.bulletArchitecture);
   const positioning = positioningBlock(rules?.positioningAnchor);
-  const blocks = [architecture, positioning].filter((b) => b !== '').join('\n\n');
+  // K4 (WS3): the demand-recapture map. The recapture only works if the COPY
+  // actually writes the compliant cluster the keyword reference points at, so
+  // the mapping is stated to the bullet writer as well as to the keyword pass.
+  const recapture = demandRecaptureBlock(rules?.keywordRules);
+  const blocks = [architecture, positioning, recapture].filter((b) => b !== '').join('\n\n');
   return `${snapshotBlock(snapshot)}
 
 ${styleBlock}

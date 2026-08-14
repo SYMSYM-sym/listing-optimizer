@@ -663,14 +663,14 @@
       "Rating floor — confirm the SKU clears your programme rating floor (minimum star rating and review count) before enrolling it in promotions or advertising. Operator-supplied: ratings are not part of a generated listing. (Extended in WS7.)"
     ]
   },
-  "_attributeGuardComment": "AM-1 / C24 \u2014 the DOSAGE-ATTRIBUTE guard, ported from the harness kit's checkC24. Structured attributes are FILTER-FED: a strength figure sitting in an attribute whose KEY names a dose states that number AS a dose, which overstates the product even when the number itself is the canonical one. `keyPattern` is matched against the attribute KEY (case-insensitive); `unitDimensions` names which `units.dimensions` lists supply the hero units the VALUE may not assert beside a number. The figure belongs in copy attached to the blend or formula, never in structured data. Emptying either field disarms C24, so both are REQUIRED_PACK_PIECES.",
+  "_attributeGuardComment": "AM-1 / C24 — the DOSAGE-ATTRIBUTE guard, ported from the harness kit's checkC24. Structured attributes are FILTER-FED: a strength figure sitting in an attribute whose KEY names a dose states that number AS a dose, which overstates the product even when the number itself is the canonical one. `keyPattern` is matched against the attribute KEY (case-insensitive); `unitDimensions` names which `units.dimensions` lists supply the hero units the VALUE may not assert beside a number. The figure belongs in copy attached to the blend or formula, never in structured data. Emptying either field disarms C24, so both are REQUIRED_PACK_PIECES.",
   "attributeGuard": {
     "keyPattern": "dosage|strength|potency|dose",
     "unitDimensions": [
       "potency"
     ]
   },
-  "_outputHygieneComment": "C27 \u2014 OUTPUT HYGIENE. Three properties of machine-written copy no other check looks at: (1) generated copy must be pure ASCII, which it is by construction because the ENGINE folds typographic punctuation at emit (lib/engine/typography.ts) \u2014 anything left is a real character a human must decide about; (2) it carries none of the model's stock phrases; (3) it never echoes a fragment of its own instructions (a live run once shipped an image brief quoting the compliance instruction back at us). Every list is pack data and every one of them is a REQUIRED_PACK_PIECE, because emptying one disarms that third of the check.",
+  "_outputHygieneComment": "C27 — OUTPUT HYGIENE. Three properties of machine-written copy no other check looks at: (1) generated copy must be pure ASCII, which it is by construction because the ENGINE folds typographic punctuation at emit (lib/engine/typography.ts) — anything left is a real character a human must decide about; (2) it carries none of the model's stock phrases; (3) it never echoes a fragment of its own instructions (a live run once shipped an image brief quoting the compliance instruction back at us). Every list is pack data and every one of them is a REQUIRED_PACK_PIECE, because emptying one disarms that third of the check.",
   "outputHygiene": {
     "asciiOnly": true,
     "aiTellPhrases": [
@@ -845,5 +845,53 @@
       "When a number is used, attach it to the formula or the blend it is actually measured over, and let the completeness story carry the premium."
     ],
     "sheetNote": "Strategy (R48): this listing is positioned on panel-verifiable completeness, not on a spec race. If you edit the copy, keep the value story on breadth and process — a headline number a competitor can leapfrog by reformulating is not a defensible position."
+  },
+  "_keywordRulesComment": [
+    "WS3 — the KEYWORD SYSTEM (playbook Phase 7 + gate C28).",
+    "PACK DATA: every surface name, status word and threshold the placement check reads",
+    "lives here, so lib/gate holds no keyword vocabulary of its own.",
+    "The model is QUALITATIVE — the playbook forbids search-volume tools and this system",
+    "calls none: a term earns its tier from evidence, never from a number an API returned."
+  ],
+  "keywordRules": {
+    "visibleSurfaces": [
+      "title",
+      "title75",
+      "itemHighlights",
+      "bullet1",
+      "bullet2",
+      "bullet3",
+      "bullet4",
+      "bullet5",
+      "bullets",
+      "description",
+      "attributes",
+      "aplus",
+      "faq",
+      "qa",
+      "images"
+    ],
+    "backendSurfaces": [
+      "backend"
+    ],
+    "statuses": [
+      "placed",
+      "backend",
+      "captured-via",
+      "not-targeted",
+      "candidate",
+      "negative"
+    ],
+    "minNegatives": 3,
+    "demandRecapture": {
+      "headline": "K4 — DEMAND RECAPTURE: never abandon the demand behind a term you may not write. Map it to a compliant cluster and record the route.",
+      "mappings": [
+        "Named-condition demand maps onto the compliant structure/function cluster the category already uses (balance, flora, pH, everyday comfort language). Write the cluster; record the banned term as captured-via with the cluster named in via.",
+        "Condition-intent demand maps onto the INGREDIENT NAMES themselves — for that intent the ingredient is the search term. Name every entity in full and let the ingredient carry the intent.",
+        "Symptom-word demand stays in customer review language, which is where buyers are allowed to write it. Your copy mirrors only the compliant half of the pair (the everyday, qualified phrasing) and never the symptom word itself.",
+        "Every candidate term passes a four-test screen before it may be placed: legality, marketplace policy, substantiation, and conversion economics. A term can be lawful and still be strategically negative when the intent it brings converts badly."
+      ]
+    },
+    "sheetNote": "Every PLACED term below was machine-verified to appear on each surface it declares; every BACKEND-only term was verified to sit in the search-terms field and nowhere a customer can read; every NEGATIVE term was verified to appear nowhere at all. Rival brand names belong in the negative list — they are a trademark exposure, not an opportunity."
   }
 }

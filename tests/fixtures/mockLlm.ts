@@ -125,6 +125,35 @@ const responses: Record<string, unknown> = {
       { q: 'Is there a prebiotic included?', a: 'Yes, prebiotic fiber is included to help feed the probiotic strains.', claimBearing: false },
     ],
   },
+  keywords: {
+    keywords: [
+      // Declared on `description` ONLY, deliberately: several suites mutate the
+      // product NAME inside the title surfaces (tests/twoPhase, tests/repairConsistency),
+      // and a fixture row that declared a placement those suites then invalidate
+      // would report C28 against copy the suite meant to change. The title
+      // surfaces stay covered by the rows below, whose terms the rename leaves
+      // untouched — so nothing is weakened, only made rename-stable.
+      { t: 'probiotic supplement', tier: 1, status: 'placed', surfaces: ['description'], evidence: 'Category head term; both lane leaders lead with it' },
+      { t: 'digestive balance', tier: 1, status: 'placed', surfaces: ['title', 'bullet1', 'description', 'attributes', 'aplus'], evidence: 'The single intent cluster this listing owns' },
+      { t: '50 billion cfu', tier: 2, status: 'placed', surfaces: ['title', 'title75', 'bullet1', 'description', 'aplus', 'faq'], evidence: 'The hero spec — panel-verifiable and blend-attached' },
+      { t: 'prebiotic', tier: 2, status: 'placed', surfaces: ['title', 'itemHighlights', 'attributes', 'aplus'], evidence: 'Named entity assistants lift for what-is-in-it questions' },
+      { t: 'vegan', tier: 3, status: 'placed', surfaces: ['title', 'itemHighlights', 'bullet5', 'description', 'attributes'], evidence: 'Filter facet and tie-breaker' },
+      { t: 'shelf stable', tier: 3, status: 'placed', surfaces: ['itemHighlights', 'description'], evidence: 'Storage differentiator against refrigerated rivals' },
+      { t: 'two month supply', tier: 3, status: 'placed', surfaces: ['itemHighlights'], evidence: 'Supply qualifier in the separately indexed header field' },
+      { t: 'acidophilus', tier: 'backend', status: 'backend', surfaces: ['backend'], evidence: 'Common-name variant deliberately kept out of visible copy' },
+      { t: 'probotic', tier: 'backend', status: 'backend', surfaces: ['backend'], evidence: 'Misspelling' },
+      { t: 'probyotic', tier: 'backend', status: 'backend', surfaces: ['backend'], evidence: 'Misspelling' },
+      { t: 'immune boost', tier: 'demand', status: 'captured-via', surfaces: [], via: 'the compliant daily wellness and everyday routine cluster the copy writes out in full', evidence: 'Boost framing is an efficacy shape this copy deliberately avoids' },
+      { t: 'weight loss', tier: 'strategy', status: 'not-targeted', surfaces: [], evidence: 'No label substantiation; the adjacent intent converts badly' },
+      { t: 'organic probiotic', tier: 'candidate', status: 'candidate', surfaces: [], home: 'PPC exact + off-site articles', evidence: 'Certification not held — keep out of published copy until it is' },
+      { t: 'diabetes', tier: 'negative', status: 'negative', surfaces: [], evidence: 'Named condition' },
+      { t: 'detox', tier: 'negative', status: 'negative', surfaces: [], evidence: 'Implied-treatment framing, unsubstantiated' },
+      { t: 'miracle', tier: 'negative', status: 'negative', surfaces: [], evidence: 'Unverifiable superlative' },
+      { t: 'maximum strength', tier: 'negative', status: 'negative', surfaces: [], evidence: 'Unverifiable superlative' },
+      { t: 'greenluxe', tier: 'negative', status: 'negative', surfaces: [], evidence: 'Rival brand / trademark exposure' },
+      { t: 'clinically proven', tier: 'negative', status: 'negative', surfaces: [], evidence: 'Unsubstantiated clinical claim' },
+    ],
+  },
 };
 
 export const mockLlm: LlmClient = async ({ user }) => {
@@ -145,7 +174,9 @@ export const mockLlm: LlmClient = async ({ user }) => {
                 ? 'images'
                 : user.includes('Q&A pairs seeding')
                   ? 'qa'
-                  : null;
+                  : user.includes('TASK: The keyword reference')
+                    ? 'keywords'
+                    : null;
   if (!key) throw new Error(`mockLlm: unrecognized prompt: ${user.slice(0, 120)}`);
   return JSON.stringify(responses[key]);
 };

@@ -116,6 +116,18 @@ const EMPTIERS: Record<string, (p: KnowledgePack) => void> = {
   // AM-3: the operator override may drop the BULLET leg of the triple
   // declaration and nothing else. Switching off the attribute or description
   // leg is a disarmed C9, so the manifest fails the pack closed.
+  'rules.keywordRules.visibleSurfaces': (p) => {
+    p.rules.keywordRules!.visibleSurfaces = [];
+  },
+  'rules.keywordRules.backendSurfaces': (p) => {
+    p.rules.keywordRules!.backendSurfaces = [];
+  },
+  'rules.keywordRules.statuses': (p) => {
+    p.rules.keywordRules!.statuses = [];
+  },
+  'rules.keywordRules.minNegatives': (p) => {
+    p.rules.keywordRules!.minNegatives = 0;
+  },
   'compliancePack.ingredientSubsetRule': (p) => {
     delete p.compliancePack!.ingredientSubsetRule;
   },

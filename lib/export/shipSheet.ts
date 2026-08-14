@@ -261,6 +261,7 @@ td.v{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
 .ord{background:rgba(255,153,0,.07);border:1px solid rgba(255,153,0,.3);border-radius:11px;padding:14px 16px;margin:0 0 22px;font-size:14px}
 .stale{background:rgba(255,153,0,.06);border:1px dashed rgba(255,153,0,.35);border-radius:11px;padding:11px 14px;margin:0 0 18px;font-size:13px;color:var(--mut)}
 .strat{background:rgba(207,224,255,.06);border:1px solid rgba(207,224,255,.25);border-radius:11px;padding:12px 15px;margin:0 0 18px;font-size:13.5px}
+.kwnote{background:rgba(207,224,255,.06);border:1px solid rgba(207,224,255,.25);border-radius:11px;padding:12px 15px;margin:0 0 14px;font-size:13.3px}
 ol{margin:8px 0 0;padding-left:20px}li{margin:5px 0}
 ul.ops{margin:8px 0 0;padding-left:20px}
 </style></head><body><div class=w>
@@ -537,6 +538,71 @@ ul.ops{margin:8px 0 0;padding-left:20px}
       '<p class=sub style="margin:0 0 8px">These condition-like words appear in the SOURCE listing but are not in the compliance lexicon. ' +
       'They are NOT failures and nothing was blocked because of them — pass them to whoever owns the lexicon so the next run can enforce them.</p>';
     h += `<div class=bx>${esc(candidates.join(', '))}</div></div>`;
+  }
+
+  // -------------------------------------------------------------------------
+  // 12 · Keyword reference — WS3. The one section on this sheet that is about
+  //      what the listing DELIBERATELY does not say as much as what it does.
+  //      Every row here was machine-verified by gate C28 against the exact
+  //      strings the cards above serve, so a "placed" row is a measurement,
+  //      not a checkmark somebody typed. The playbook is explicit that the
+  //      hand-written version of this table is the pattern that failed nine
+  //      times, which is why the sheet prints the verification, not the claim.
+  // -------------------------------------------------------------------------
+  const coverage = audit?.keywordCoverage;
+  const keywordRules = rules.keywordRules;
+  h += '<h2>12 · Keyword reference</h2>';
+  if (!coverage || coverage.total === 0) {
+    h += '<p class=sub>No keyword reference is attached to this run.</p>';
+  } else {
+    if (keywordRules?.sheetNote) {
+      h += `<div class=kwnote>${esc(keywordRules.sheetNote)}</div>`;
+    }
+    if (coverage.placed.length > 0) {
+      h += '<table><tr><th>Term</th><th>Tier</th><th>Verified on</th><th>Why</th></tr>';
+      for (const r of coverage.placed) {
+        h +=
+          `<tr><td class=v>${esc(r.term)}</td><td>${esc(String(r.tier))}</td>` +
+          `<td class=v>${esc(r.surfaces.join(', '))}</td><td>${esc(r.why)}</td></tr>`;
+      }
+      h += '</table>';
+    }
+    if (coverage.backendOnly.length > 0) {
+      h +=
+        '<div class=f><div class=fh><div><b>Backend only</b> <code>keywords.backend</code></div></div>' +
+        `<div class=bx>${esc(coverage.backendOnly.map((r) => r.term).join(', '))}</div>` +
+        '<div class=note>Verified present in the search-terms field and absent from every visible surface. Never repeat one in customer copy — the bytes are the point.</div></div>';
+    }
+    if (coverage.negatives.length > 0) {
+      h += '<div class=f><div class=fh><div><b>Negative list — must appear NOWHERE</b></div></div>';
+      h += '<table style="margin-top:6px"><tr><th>Term</th><th>Why</th></tr>';
+      for (const r of coverage.negatives) {
+        h += `<tr><td class=v>${esc(r.term)}</td><td>${esc(r.why)}</td></tr>`;
+      }
+      h +=
+        '</table><div class=note>Each was verified absent from every surface, backend included. A rival brand name in ALT text or copy is invisible on the page and a real trademark exposure.</div></div>';
+    }
+    if (coverage.recaptured.length > 0) {
+      h += '<div class=f><div class=fh><div><b>Demand recapture (K4)</b></div></div>';
+      h += '<table style="margin-top:6px"><tr><th>Demand we do not write</th><th>How it still reaches this listing</th></tr>';
+      for (const r of coverage.recaptured) {
+        h += `<tr><td class=v>${esc(r.term)}</td><td>${esc(r.via)}</td></tr>`;
+      }
+      h +=
+        '</table><div class=note>This map is why the term below is absent. Before anyone re-adds one because it has volume: the volume is already being captured, and this row says how.</div></div>';
+    }
+    if (coverage.candidates.length > 0 || coverage.notTargeted.length > 0) {
+      h += '<div class=f><div class=fh><div><b>Held back and deliberately skipped</b></div></div>';
+      h += '<table style="margin-top:6px"><tr><th>Term</th><th>Status</th><th>Why / where it lives</th></tr>';
+      for (const r of coverage.candidates) {
+        h += `<tr><td class=v>${esc(r.term)}</td><td>candidate</td><td>${esc([r.home, r.why].filter(Boolean).join(' — '))}</td></tr>`;
+      }
+      for (const r of coverage.notTargeted) {
+        h += `<tr><td class=v>${esc(r.term)}</td><td>not targeted</td><td>${esc(r.why)}</td></tr>`;
+      }
+      h +=
+        '</table><div class=note>Recorded so a later session can tell a deliberate omission from an oversight. A candidate must stay out of published copy until the thing that blocks it is held.</div></div>';
+    }
   }
 
   h += '</div>';

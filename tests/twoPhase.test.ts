@@ -171,12 +171,15 @@ describe('two-phase generation: the canonical product name is known before it is
 });
 
 describe('two-phase generation: call budget and opts.groups', () => {
-  it('a full first pass costs exactly 8 calls — 1 phase-1 + 7 phase-2, no duplicate title', async () => {
+  it('a full first pass costs exactly 9 calls — 1 phase-1 + 7 phase-2 + 1 phase-3, no duplicate title', async () => {
     const llm = twoPhaseAwareLlm();
     await optimize(snapshot, pack, llm);
     const calls = llm.calls();
     expect(calls).toHaveLength(ALL_GROUPS.length);
-    expect(calls).toHaveLength(8);
+    // The ninth call is PHASE 3 (WS3): the keyword reference is generated after
+    // the copy because it DECLARES where each term sits and the gate verifies
+    // every declaration against the emitted strings.
+    expect(calls).toHaveLength(9);
     expect(calls.filter((c) => c === 'title')).toHaveLength(1);
     expect(calls.filter((c) => c === 'description')).toHaveLength(1);
     expect(calls.filter((c) => c === 'aplus')).toHaveLength(1);

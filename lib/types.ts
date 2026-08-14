@@ -319,6 +319,45 @@ export interface OutputHygieneRules {
   asciiExemptSurfaces?: string[];
 }
 
+/**
+ * WS3 — the KEYWORD SYSTEM rules (pack data, read by gate check C28).
+ *
+ * The playbook's Phase 7 builds a keyword reference listing every term the
+ * listing targets, deliberately avoids, or captures indirectly, and a gate
+ * check machine-verifies every placement and every negative — so "all content
+ * is based on the keyword reference" is an ENFORCED invariant rather than a
+ * description. Everything the check reads lives here, so `lib/gate` holds no
+ * surface name, status word or threshold of its own.
+ *
+ * NOTE ON VOLUME TOOLS: the playbook forbids them, and nothing here calls one.
+ * The model is QUALITATIVE (tier + status + evidence); no search-volume API is
+ * consulted anywhere in this system.
+ */
+export interface KeywordRules {
+  /** Surface names a term may declare that a CUSTOMER can read. Closed world. */
+  visibleSurfaces: string[];
+  /** Surface names that are indexed but invisible (the backend field). Closed world. */
+  backendSurfaces: string[];
+  /** The six statuses a term may carry. A status outside this set is a failure. */
+  statuses: string[];
+  /**
+   * Minimum number of `negative` rows. A keyword reference with no negative
+   * list is the shape the playbook's negative-keyword doctrine exists to
+   * prevent: the banned vocabulary stops being recorded and the next copy
+   * cycle "helpfully" adds a banned term back because it has volume.
+   */
+  minNegatives: number;
+  /**
+   * K4 — the DEMAND-RECAPTURE guidance rendered into the keyword and copy
+   * prompts. Each line states one mapping pattern from banned demand to a
+   * compliant capture route. Prompt-only: nothing here is enforced, which is
+   * why it is not a `REQUIRED_PACK_PIECES` row.
+   */
+  demandRecapture?: { headline: string; mappings: string[] };
+  /** Operator-facing note rendered above the keyword section of the ship sheet. */
+  sheetNote?: string;
+}
+
 export interface RuleSet {
   titleMaxLegacy: number; // 200
   title75Max: number; // 75
@@ -358,6 +397,8 @@ export interface RuleSet {
   operatorChecklist?: OperatorChecklist;
   /** WS4 bullet slot jobs + anchor doctrine (prompt + audit lint; never a gate rule). */
   bulletArchitecture?: BulletArchitecture;
+  /** WS3 keyword-system rules (gate C28 + the keyword/copy prompts). */
+  keywordRules?: KeywordRules;
   /** R48 positioning anchor (prompt + ship-sheet strategy note). */
   positioningAnchor?: PositioningAnchor;
   /** AM-1 / C24 dosage-attribute guard. */
@@ -870,12 +911,66 @@ export interface ImageSlot {
   purpose: string; // e.g. 'main-white-background', 'value-prop-infographic'
   spec: string; // requirements per amazon-rules (white bg, ≥85% fill, real photo for regulated panels…)
   notes: string;
+  /**
+   * WS8 — the paste-ready ALT string for this slot (≤ `rules.imageAltMax`).
+   *
+   * Optional on the TYPE so a run stored before ALT text existed still parses;
+   * gate check C30 treats a missing/over-length ALT on a freshly generated plan
+   * as a FAILURE, so optionality here is backward compatibility, never a skip.
+   */
+  altText?: string;
 }
 
 export interface QAItem {
   q: string;
   a: string;
   claimBearing: boolean; // claim-bearing answers carry the verbatim disclaimer
+}
+
+/**
+ * WS3 — one row of the KEYWORD REFERENCE (playbook Phase 7 / §7.2).
+ *
+ * Ported from the harness kit's `content/keywords.json` schema, field for
+ * field, because that artifact is what the gate check verifies against. The
+ * model is QUALITATIVE by design — the playbook forbids volume tools, so a
+ * term earns its tier from evidence ("both category leaders title with it"),
+ * never from a number an API returned.
+ */
+export type KeywordTier = 1 | 2 | 3 | 4 | 'backend' | 'demand' | 'strategy' | 'candidate' | 'negative';
+
+/**
+ * The SIX statuses, exactly as `content/keywords.json` defines them:
+ *
+ *  placed       — must appear on every surface it declares.
+ *  backend      — indexed invisibly: must be in the backend field and NOWHERE visible.
+ *  captured-via — banned demand recaptured through a compliant cluster; not scanned,
+ *                 but the compliant route MUST be documented in `via` (K4).
+ *  not-targeted — a deliberate strategy call; not scanned.
+ *  candidate    — future PPC / off-site / next copy cycle; must NOT be in current copy.
+ *  negative     — must appear NOWHERE, visible or backend. Competitor brand names
+ *                 live here (R50), as do banned terms and unverifiable superlatives.
+ */
+export type KeywordStatus =
+  | 'placed'
+  | 'backend'
+  | 'captured-via'
+  | 'not-targeted'
+  | 'candidate'
+  | 'negative';
+
+export interface KeywordTerm {
+  /** The term itself (`t` in the kit's schema). */
+  term: string;
+  tier: KeywordTier;
+  status: KeywordStatus;
+  /** Declared surfaces. Required and non-empty for `placed`; `["backend"]` for `backend`. */
+  surfaces: string[];
+  /** The evidence/rationale (`evidence` or `why` in the kit's schema). */
+  why: string;
+  /** `captured-via` ONLY: the compliant cluster this demand reaches us through. */
+  via?: string;
+  /** `candidate` ONLY: where the term lives until it enters copy (PPC / off-site). */
+  home?: string;
 }
 
 /** Element lifecycle: advances to 'verified' only when the gate is green. */
@@ -904,6 +999,15 @@ export interface OptimizedListing {
   aplusContent: AplusContent;
   /** ~7 slots per amazon-rules; no price/ratings/CTAs. */
   imagePlan: ImageSlot[];
+  /**
+   * WS3 — the KEYWORD REFERENCE for this listing (playbook Phase 7).
+   *
+   * Optional on the TYPE so a run stored before the artifact existed still
+   * parses; gate check C28 treats a missing/empty artifact as a FAILURE on a
+   * freshly generated listing, so optionality here is backward compatibility,
+   * never a way to skip the check.
+   */
+  keywords?: KeywordTerm[];
   /** ~15 accurate pairs mirroring bullets + A+ FAQ facts. */
   qa: QAItem[];
   /** Primary keyword the engine chose — enables the deterministic front-load lint. */
@@ -1009,6 +1113,31 @@ export interface SubstantiationClaim {
   note?: string;
 }
 
+/**
+ * WS3 — the KEYWORD COVERAGE summary (audit payload).
+ *
+ * A DERIVED view of `optimized.keywords`, which gate C28 has already verified
+ * against the emitted copy. Advisory in the sense that it adds no verdict of
+ * its own; it can never disagree with `verified`, because a false declaration
+ * makes the gate fail before this is ever read.
+ */
+export interface KeywordCoverage {
+  total: number;
+  byStatus: Record<string, number>;
+  /** Terms machine-verified to appear on every surface they declare. */
+  placed: { term: string; tier: KeywordTier; surfaces: string[]; why: string }[];
+  /** Indexed invisibly: in the backend field and nowhere a customer reads. */
+  backendOnly: { term: string; why: string }[];
+  /** Verified to appear NOWHERE — rival brand names included (R50). */
+  negatives: { term: string; why: string }[];
+  /** K4 — banned demand and the compliant cluster it reaches the listing through. */
+  recaptured: { term: string; via: string; why: string }[];
+  /** Held back for a later cycle; verified NOT to be in the current copy. */
+  candidates: { term: string; home: string; why: string }[];
+  /** Deliberate strategy calls — recorded so a later session can tell them from an oversight. */
+  notTargeted: { term: string; why: string }[];
+}
+
 export interface Audit {
   scorecard: Scorecard;
   gaps: AuditGap[];
@@ -1046,6 +1175,11 @@ export interface Audit {
    * nothing in the system could say so). Never a failure.
    */
   candidateTerms?: string[];
+  /**
+   * WS3 — the keyword-coverage summary derived from `optimized.keywords`.
+   * Optional so a run stored before the artifact existed still parses.
+   */
+  keywordCoverage?: KeywordCoverage;
 }
 
 // ---------------------------------------------------------------------------

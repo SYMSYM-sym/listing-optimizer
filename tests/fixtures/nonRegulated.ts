@@ -207,8 +207,28 @@ export function listingOf(p: NonRegulatedProduct): OptimizedListing {
       { q: 'Does it arrive assembled?', a: 'Yes, it arrives ready to use.', claimBearing: false },
       { q: 'How is it cleaned?', a: 'A damp cloth is enough for everyday marks.', claimBearing: false },
     ],
+    // WS3 — a realistic keyword reference. Deliberately written as a
+    // NON-REGULATED one: the negative rows here are rival brand names and
+    // marketplace-banned marketing language, not compliance vocabulary,
+    // because that is what a coffee grinder's negative list actually holds.
+    keywords: [
+      { term: name, tier: 1, status: 'placed', surfaces: ['title', 'title75', 'description', 'aplus'], why: 'Brand-led identity term' },
+      { term: p.keyword, tier: 1, status: 'placed', surfaces: ['title', 'itemHighlights'], why: 'Head phrase for the lane' },
+      { term: firstBackendToken(p.backend), tier: 'backend', status: 'backend', surfaces: ['backend'], why: 'Other-language variant, deliberately invisible' },
+      { term: 'rivalcorp', tier: 'negative', status: 'negative', surfaces: [], why: 'Rival brand / trademark exposure' },
+      { term: 'best seller', tier: 'negative', status: 'negative', surfaces: [], why: 'Rank claim banned in listing copy' },
+      { term: 'money back guarantee', tier: 'negative', status: 'negative', surfaces: [], why: 'Guarantee language banned in listing copy' },
+    ],
     primaryKeyword: p.keyword,
     productName: name,
     state: 'draft',
   };
+}
+
+/**
+ * The first backend token — used as the fixture's backend-only keyword row, so
+ * the declaration is true by construction against that product's own field.
+ */
+function firstBackendToken(backend: string): string {
+  return backend.trim().split(/\s+/)[0] ?? 'variant';
 }

@@ -38,6 +38,8 @@ export const FIELD_TO_GROUP: ReadonlyArray<{ match: (field: string, checkId: str
   { match: (f) => f.startsWith('aplus') || f === 'aplusContent', group: 'aplus' },
   { match: (f) => f.startsWith('imagePlan'), group: 'images' },
   { match: (f) => f.startsWith('qa'), group: 'qa' },
+  // WS3 — C28 reports against `keywords[i]`; the keyword group owns the repair.
+  { match: (f) => f === 'keywords' || f.startsWith('keywords['), group: 'keywords' },
 ];
 
 export function fieldToGroup(failure: Failure): GroupName | null {
@@ -100,6 +102,15 @@ export async function runRepairLoop(
       groups.add(g);
       const line = `[${failure.checkId}] ${failure.field}: ${failure.context} → FIX: ${failure.fix}`;
       failureContext[g] = failureContext[g] ? `${failureContext[g]}\n${line}` : line;
+    }
+    // WS3 — COUPLING, stated explicitly rather than left to a second round.
+    // The keyword reference DECLARES where each term sits, so the moment any
+    // copy group is rewritten every declaration about it is stale. Regenerating
+    // the copy without re-reading it would make C28 fail on the NEXT round for
+    // a reason the current round already created, burning an iteration on a
+    // self-inflicted failure. The reference is re-read in the same round.
+    if (groups.size > 0 && [...groups].some((g) => g !== 'keywords')) {
+      groups.add('keywords');
     }
     if (groups.size === 0) {
       // Nothing regenerable owns ANY of the remaining failures. That is a

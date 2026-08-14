@@ -10,6 +10,7 @@ import type { Failure, ListingSnapshot, OptimizedListing } from '@/lib/types';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
 import { withCoherentBulletFlags } from './fixtures/coherentBullets';
+import { withCoherentKeywords } from './fixtures/coherentKeywords';
 
 /**
  * FALSE-POSITIVE REGRESSION GUARD (the file round 4 was missing).
@@ -41,7 +42,7 @@ const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
   const copy = JSON.parse(JSON.stringify(clean)) as OptimizedListing;
   fn(copy);
   // Keep the parallel claim-bearing flags coherent with the rewritten text.
-  return withCoherentBulletFlags(copy);
+  return withCoherentKeywords(withCoherentBulletFlags(copy));
 };
 
 /**

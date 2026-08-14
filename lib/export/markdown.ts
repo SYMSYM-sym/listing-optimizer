@@ -72,6 +72,46 @@ export function toMarkdown(listing: OptimizedListing, audit: Audit): string {
     lines.push(`${s.slot}. **${s.purpose}** — ${s.spec} (${s.notes})`);
   }
   lines.push('');
+  // WS3 — the keyword reference travels with the RECORD as well as the sheet:
+  // whoever reads this file later needs to know what the listing deliberately
+  // avoided, and how the demand behind an avoided term is still captured.
+  const coverage = audit.keywordCoverage;
+  if (coverage && coverage.total > 0) {
+    lines.push('## Keyword reference');
+    if (coverage.placed.length > 0) {
+      lines.push('### Placed (verified on every surface declared)');
+      lines.push('| Term | Tier | Verified on | Why |');
+      lines.push('|---|---|---|---|');
+      for (const r of coverage.placed) {
+        lines.push(`| ${r.term} | ${String(r.tier)} | ${r.surfaces.join(', ')} | ${r.why} |`);
+      }
+      lines.push('');
+    }
+    if (coverage.backendOnly.length > 0) {
+      lines.push(`**Backend only (verified absent from every visible surface):** ${coverage.backendOnly.map((r) => r.term).join(', ')}`);
+      lines.push('');
+    }
+    if (coverage.negatives.length > 0) {
+      lines.push('### Negative list — verified to appear nowhere');
+      lines.push('| Term | Why |');
+      lines.push('|---|---|');
+      for (const r of coverage.negatives) lines.push(`| ${r.term} | ${r.why} |`);
+      lines.push('');
+    }
+    if (coverage.recaptured.length > 0) {
+      lines.push('### Demand recapture (K4)');
+      lines.push('| Demand not written | How it still reaches the listing |');
+      lines.push('|---|---|');
+      for (const r of coverage.recaptured) lines.push(`| ${r.term} | ${r.via} |`);
+      lines.push('');
+    }
+    if (coverage.candidates.length > 0 || coverage.notTargeted.length > 0) {
+      lines.push('### Held back / deliberately skipped');
+      for (const r of coverage.candidates) lines.push(`- **${r.term}** — candidate; ${[r.home, r.why].filter(Boolean).join(' — ')}`);
+      for (const r of coverage.notTargeted) lines.push(`- **${r.term}** — not targeted; ${r.why}`);
+      lines.push('');
+    }
+  }
   lines.push('## Q&A');
   for (const f of listing.qa) {
     lines.push(`- **Q: ${f.q}**`);

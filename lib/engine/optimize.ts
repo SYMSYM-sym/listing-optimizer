@@ -2,6 +2,9 @@ import 'server-only';
 import { env } from '@/lib/env';
 import type {
   AplusContent,
+  KeywordStatus,
+  KeywordTerm,
+  KeywordTier,
   KnowledgePack,
   ListingSnapshot,
   OptimizedListing,
@@ -15,6 +18,7 @@ import { generateGroup, type LlmClient } from './llm';
 import { buildGroupPrompts, buildSystemPrompt } from './prompts';
 import {
   aplusGroupSchema,
+  keywordsGroupSchema,
   attributesGroupSchema,
   backendGroupSchema,
   bulletsGroupSchema,
@@ -33,7 +37,8 @@ export type GroupName =
   | 'attributes'
   | 'aplus'
   | 'images'
-  | 'qa';
+  | 'qa'
+  | 'keywords';
 
 export const ALL_GROUPS: GroupName[] = [
   'title',
@@ -44,6 +49,9 @@ export const ALL_GROUPS: GroupName[] = [
   'aplus',
   'images',
   'qa',
+  // WS3 — PHASE 3. Runs AFTER every copy group because it READS the finished
+  // surfaces; see the phase-3 comment below.
+  'keywords',
 ];
 
 /**
@@ -207,7 +215,7 @@ export async function optimize(
     phase1Generated: groups.includes('title') || !base,
     pinned: pinnedProductName !== '',
     nameLength: canonicalProductName.length,
-    phase2Groups: ALL_GROUPS.filter((g) => g !== 'title' && groups.includes(g)),
+    phase2Groups: ALL_GROUPS.filter((g) => g !== 'title' && g !== 'keywords' && groups.includes(g)),
   });
 
   // ---------------------------------------------------------------------------
@@ -296,6 +304,8 @@ export async function optimize(
     })),
     primaryKeyword: title.primaryKeyword,
     productName: title.productName,
+    // WS3 — filled by PHASE 3 below, from the FINAL copy.
+    keywords: base?.keywords ?? [],
     state: 'draft',
   };
 
@@ -303,7 +313,78 @@ export async function optimize(
   // TYPOGRAPHY is folded to ASCII last, at emit, so every stored/exported
   // surface is byte-stable (see lib/engine/typography.ts — punctuation only,
   // and gate C27 re-checks the result independently).
-  return normalizeListingTypography(pinProductName(assembled, pinnedProductName || undefined));
+  const copy = normalizeListingTypography(
+    pinProductName(assembled, pinnedProductName || undefined),
+  );
+
+  // ---------------------------------------------------------------------------
+  // PHASE 3 — the KEYWORD REFERENCE (WS3).
+  //
+  // WHY IT IS A THIRD PHASE rather than a ninth parallel call. The reference
+  // declares WHERE each term sits and gate C28 verifies every one of those
+  // declarations against the emitted strings. A declaration written at the same
+  // instant as the copy could only be a guess — which is exactly the
+  // hand-written "all placed" checkmark the playbook names as the pattern that
+  // failed nine times. So this call is handed the FINISHED, typography-folded
+  // surfaces and asked to READ them; the gate then re-derives the truth
+  // independently and fails closed on any disagreement.
+  //
+  // COST: one short call, and only when `keywords` is in scope — a repair round
+  // that regenerates nothing else makes no other call at all.
+  const keywords = await run(
+    'keywords',
+    () =>
+      generateGroup(
+        llm,
+        'keywords',
+        system,
+        withCtx('keywords', groupPrompts.keywords(snapshot, copy)),
+        keywordsGroupSchema,
+        3000,
+      ),
+    base && { keywords: base.keywords ?? [] },
+  );
+
+  return { ...copy, keywords: normalizeKeywords(keywords.keywords) };
+}
+
+/**
+ * Deterministic tidy-up of the keyword artifact.
+ *
+ * Trims, drops blank rows and de-duplicates on the term. It does NOT rewrite a
+ * status, a surface list or a tier: doing so would launder exactly the
+ * disagreement C28 exists to report. The only thing removed is noise that
+ * could never be a meaningful declaration in the first place.
+ */
+export function normalizeKeywords(rows: unknown): KeywordTerm[] {
+  if (!Array.isArray(rows)) return [];
+  const seen = new Set<string>();
+  const out: KeywordTerm[] = [];
+  for (const raw of rows) {
+    if (!raw || typeof raw !== 'object') continue;
+    const r = raw as Record<string, unknown>;
+    const term = String(r.term ?? '').trim();
+    if (!term) continue;
+    const key = term.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const surfaces = Array.isArray(r.surfaces)
+      ? [...new Set(r.surfaces.map((s) => String(s ?? '').trim()).filter(Boolean))]
+      : [];
+    const row: KeywordTerm = {
+      term,
+      tier: r.tier as KeywordTier,
+      status: String(r.status ?? '').trim() as KeywordStatus,
+      surfaces,
+      why: String(r.why ?? '').trim(),
+    };
+    const via = String(r.via ?? '').trim();
+    if (via) row.via = via;
+    const home = String(r.home ?? '').trim();
+    if (home) row.home = home;
+    out.push(row);
+  }
+  return out;
 }
 
 function stripDisclaimer(text: string, disclaimer: string): string {

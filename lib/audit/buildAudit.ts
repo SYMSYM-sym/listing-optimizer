@@ -10,6 +10,7 @@ import type { GateContext } from '@/lib/gate/checks';
 import { runGate } from '@/lib/gate/runGate';
 import { candidateTerms } from './candidateTerms';
 import { diff } from './diff';
+import { keywordCoverage } from './keywordCoverage';
 import { buildSubstantiationRegister } from './substantiation';
 import { attributeSchemaStaleness, rulesStaleness } from './staleness';
 import { scoreAgainstPrinciples } from './scoreAgainstPrinciples';
@@ -59,6 +60,8 @@ export function buildAudit(
     substantiationRegister,
     // brain/02 — ADVISORY proposals for the LEXICON owner, never about the copy.
     candidateTerms: candidateTerms(current, pack),
+    // WS3 — a DERIVED view of the keyword artifact C28 has already verified.
+    keywordCoverage: keywordCoverage(proposed),
     rulesStale: staleness.stale,
     ...(staleness.notice ? { rulesStaleNotice: staleness.notice } : {}),
     attributeSchemaStale: schemaStaleness.stale,

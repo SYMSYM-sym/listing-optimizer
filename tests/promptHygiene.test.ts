@@ -49,6 +49,17 @@ import { rainforestSample } from './fixtures/rainforest.sample';
 
 const PACK_IDS = ['supplements', 'cosmetics'] as const;
 
+/** An empty emitted-surface view for the WS3 keyword prompt (see below). */
+const EMPTY_SURFACES = {
+  title: '',
+  title75: '',
+  itemHighlights: '',
+  bullets: [] as string[],
+  description: '',
+  backendSearchTerms: '',
+  attributes: {} as Record<string, string>,
+};
+
 const snapshot: ListingSnapshot = toSnapshot(
   mapProduct('B0TESTASIN', rainforestSample.product, rainforestSample),
 );
@@ -122,6 +133,11 @@ describe.each(PACK_IDS)('prompt hygiene — %s group prompts name no banned term
     ['aplus', g.aplus(snapshot)],
     ['images', g.images(snapshot)],
     ['qa', g.qa(snapshot)],
+    // WS3 — the keyword prompt is scanned like every other task instruction.
+    // It is handed an EMPTY surface view on purpose: the finished copy it
+    // normally embeds is the listing's own (already gate-scanned) text, and
+    // what this suite is about is the INSTRUCTION we author.
+    ['keywords', g.keywords(snapshot, EMPTY_SURFACES)],
   ];
 
   it.each(prompts)('the %s task instruction carries no banned vocabulary', (_group, prompt) => {

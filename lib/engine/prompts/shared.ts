@@ -1,5 +1,6 @@
 import type {
   BulletArchitecture,
+  KeywordRules,
   CompliancePack,
   ListingSnapshot,
   PositioningAnchor,
@@ -259,4 +260,54 @@ export function prohibitedMarketingBlock(rules: ProhibitedMarketingRules | undef
     'AMAZON PROHIBITED MARKETING CLAIMS — never include any of the following anywhere in the listing:',
     `- ${labels.join('\n- ')}`,
   ].join('\n');
+}
+
+/**
+ * WS3 — the KEYWORD VOCABULARY block, rendered FROM PACK DATA
+ * (`rules.keywordRules`).
+ *
+ * DELIBERATELY RENDERED AHEAD OF `TASK:`, for the same documented reason the
+ * style block is: it is an ENUMERATION OF DATA the gate enforces (the surface
+ * names and the six status words), not a sentence of the form "avoid <banned
+ * word>". `tests/promptHygiene.test.ts` scans everything AFTER `TASK:`, which
+ * is the part a model paraphrases into customer-adjacent output; a status word
+ * echoed out of this table lands in a JSON field the customer never sees and
+ * that no copy surface is built from.
+ */
+export function keywordVocabularyBlock(kr: KeywordRules | undefined): string {
+  const visible = (kr?.visibleSurfaces ?? []).filter((s) => s.trim() !== '');
+  const backend = (kr?.backendSurfaces ?? []).filter((s) => s.trim() !== '');
+  const statuses = (kr?.statuses ?? []).filter((s) => s.trim() !== '');
+  if (visible.length === 0 || statuses.length === 0) return '';
+  return [
+    'KEYWORD REFERENCE VOCABULARY (pack data — the gate enforces exactly this):',
+    `- Visible surface names: ${visible.join(', ')}.`,
+    `- Invisible (indexed) surface name: ${backend.join(', ') || '(none)'}.`,
+    `- Statuses: ${statuses.join(' | ')}.`,
+    '- Tiers: 1 = own-the-lane head terms for the single intent cluster this listing owns; 2 = named entities (each component by its full name, the headline spec, the formula callout) because those are what an assistant quotes back; 3 = qualifier and trust terms (diet flags, origin, count, supply) that act as filters and tie-breakers; 4 = conversational buyer-language phrases. A row that is not tier 1-4 carries one of these tier labels instead: backend, demand, strategy, candidate, negative.',
+    `- A row with the '${statuses[0]}' status must appear on EVERY surface it lists. A row on the invisible surface must appear there and NOWHERE visible. A row on the negative list must appear nowhere at all.`,
+  ].join('\n');
+}
+
+/**
+ * K4 — the DEMAND-RECAPTURE guidance, rendered FROM PACK DATA
+ * (`rules.keywordRules.demandRecapture`).
+ *
+ * The playbook calls this the strategic heart of regulated-category keyword
+ * work: you do not abandon the demand behind a term you may not write, you map
+ * it to a compliant cluster the semantic layer bridges, and you RECORD the
+ * route. The record is what stops a later cycle from "helpfully" re-adding the
+ * banned term because it has volume — the volume is already being captured and
+ * the map proves how.
+ *
+ * Injected into the keyword prompt AND the copy prompts, because the mapping
+ * only works if the copy actually writes the compliant cluster. Guidance only:
+ * nothing here is enforced, which is why it is not a `REQUIRED_PACK_PIECES`
+ * row — what IS enforced is that a recaptured row documents its route (C28).
+ */
+export function demandRecaptureBlock(kr: KeywordRules | undefined): string {
+  const dr = kr?.demandRecapture;
+  const mappings = (dr?.mappings ?? []).filter((m) => m.trim() !== '');
+  if (!dr?.headline || mappings.length === 0) return '';
+  return [dr.headline, ...mappings.map((m) => `- ${m}`)].join('\n');
 }

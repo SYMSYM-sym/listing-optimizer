@@ -439,6 +439,33 @@ export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
     present: (p) => nonEmptyList(p.rules?.outputHygiene?.surfaces),
   },
   {
+    id: 'rules.keywordRules.visibleSurfaces',
+    disarms:
+      'C28 \u2014 with no visible-surface vocabulary a backend-only term can sit in plain customer copy and a NEGATIVE term (where rival brand names live, R50) is scanned against nothing at all',
+    present: (p) => nonEmptyList(p.rules?.keywordRules?.visibleSurfaces),
+  },
+  {
+    id: 'rules.keywordRules.backendSurfaces',
+    disarms:
+      'the backend-only leg of C28 \u2014 without it a term declared as invisible discovery reserve can never be shown to be in the field it claims, and the visible/invisible split collapses',
+    present: (p) => nonEmptyList(p.rules?.keywordRules?.backendSurfaces),
+  },
+  {
+    id: 'rules.keywordRules.statuses',
+    disarms:
+      'the STATUS vocabulary of C28 \u2014 with no closed set every status is accepted, so a term can be filed under a word that means nothing and escape every placement rule',
+    present: (p) => nonEmptyList(p.rules?.keywordRules?.statuses),
+  },
+  {
+    id: 'rules.keywordRules.minNegatives',
+    disarms:
+      'the negative-list floor of C28 \u2014 at zero a keyword reference with no negative rows passes, and the banned vocabulary stops being recorded at all, which is the precondition for a later cycle re-adding a banned term because it has volume',
+    present: (p) => {
+      const n = p.rules?.keywordRules?.minNegatives;
+      return typeof n === 'number' && n >= 1;
+    },
+  },
+  {
     id: 'rules.units.dimensions',
     disarms: 'the unit-anchored potency + fact-consistency checks (C10/C12/A5)',
     present: (p) => {
