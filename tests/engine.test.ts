@@ -67,7 +67,9 @@ describe('optimize (mock LLM — golden generation fixture)', () => {
     expect(listing.aplusContent.modules.length).toBeGreaterThanOrEqual(5);
     expect(listing.aplusContent.comparison.rows.length).toBeGreaterThanOrEqual(3);
     expect(listing.aplusContent.faq.length).toBeGreaterThanOrEqual(5);
-    expect(listing.imagePlan).toHaveLength(7);
+    // WS8: the visual pack is 8 still slots plus a 9:16 video brief.
+    expect(listing.imagePlan).toHaveLength(8);
+    expect(listing.videoBrief).toBeTruthy();
     expect(listing.qa.length).toBeGreaterThanOrEqual(15);
     expect(listing.state).toBe('draft');
   });

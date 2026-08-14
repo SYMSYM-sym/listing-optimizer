@@ -2,6 +2,8 @@ import rulesJson from '@/knowledge/rules.json';
 import type {
   AttributeField,
   Audit,
+  ListingSnapshot,
+  MarketplaceChecklistItem,
   Failure,
   KnowledgePack,
   OptimizedListing,
@@ -9,6 +11,7 @@ import type {
   RuleSet,
 } from '@/lib/types';
 import { utf8Bytes } from '@/lib/shared/utf8Bytes';
+import { arr } from '@/lib/gate/util';
 import { toSellerCentralDescription } from './descriptionHtml';
 
 /**
@@ -66,6 +69,12 @@ export interface ShipSheetRun {
   created_at?: string;
   /** Supplies limits, the attribute-schema notes and the operator checklist. */
   pack?: Pick<KnowledgePack, 'rules' | 'attributeSchema'>;
+  /**
+   * WS10 — the SCRAPED listing, so the sheet can show the brand identity that
+   * came off the live page next to the generated one. Optional: a sheet built
+   * without it simply omits the scraped column.
+   */
+  snapshot?: Pick<ListingSnapshot, 'attributes'>;
 }
 
 const DEFAULT_RULES = rulesJson as unknown as RuleSet;
@@ -210,14 +219,17 @@ export function buildShipSheet(run: ShipSheetRun): string {
   // The gate result decides EVERY affordance on the sheet.
   const verified = audit?.verified === true;
   const copyable = verified;
-  const failures = audit?.gateResult?.failures ?? [];
+  const failures = arr<Failure>(audit?.gateResult?.failures);
 
   const schemaOf = (field: string): AttributeField | undefined =>
     schema.find((f) => f.field === field);
 
-  const bullets = l.bullets ?? [];
-  const attributes = l.attributes ?? {};
-  const qa = l.qa ?? [];
+  // WS10 — Array.isArray, not `?? []`: the sheet has to RENDER a malformed
+  // run, because it is where the operator reads why it was blocked.
+  const bullets = arr<string>(l.bullets);
+  const attributes: Record<string, string> =
+    l.attributes && typeof l.attributes === 'object' ? (l.attributes as Record<string, string>) : {};
+  const qa = arr<{ q?: string; a?: string }>(l.qa);
   const aplus = l.aplusContent;
 
   // --- RECOMPUTED measurements (never carried from the run) ---
@@ -350,6 +362,15 @@ ul.ops{margin:8px 0 0;padding-left:20px}
     note: 'Paste exactly as shown, on one line. The <br> tags render the paragraphs.',
     copyable,
   });
+  // WS10 — R12 and R11. Two rendering facts that decide whether this field
+  // works, printed beside the field rather than filed somewhere else.
+  const surfaceNotes = rules.copySurfaceNotes;
+  if (surfaceNotes?.descriptionWithAplus) {
+    h += `<div class=kwnote>${esc(surfaceNotes.descriptionWithAplus)}</div>`;
+  }
+  if (surfaceNotes?.mobileFrontLoad) {
+    h += `<div class=kwnote>${esc(surfaceNotes.mobileFrontLoad)}</div>`;
+  }
 
   // -------------------------------------------------------------------------
   // 4 · Backend search terms
@@ -387,10 +408,31 @@ ul.ops{margin:8px 0 0;padding-left:20px}
     h += `<tr><td><code>${esc(k)}</code>${noteHtml}</td><td class=v>${esc(v)}</td><td>${btn}</td></tr>`;
   }
   h += '</table>';
-  const backendBrand = attributes.brand_name ?? attributes.manufacturer ?? '';
+  // WS10 — BRAND IDENTITY, generated beside SCRAPED.
+  //
+  // The generated value is what this run proposes; the scraped one is what the
+  // live page actually carries, and the two disagreeing is exactly the case an
+  // operator needs to see before anything reaches a feed. A scraped brand
+  // string is a seller-entered value on somebody's page, not a Brand Registry
+  // fact, so it is rendered with a CONFIRM marker rather than as an answer.
+  const scrapedAttributes = run.snapshot?.attributes ?? {};
+  const brandFields = ['brand_name', 'manufacturer'] as const;
+  h += '<table style="margin-top:10px"><tr><th>Field</th><th>Proposed</th><th>Scraped from the live page</th></tr>';
+  for (const field of brandFields) {
+    const generated = attributes[field] ?? '';
+    const scraped = scrapedAttributes[field] ?? '';
+    const disagree = scraped !== '' && generated !== '' && scraped !== generated;
+    h +=
+      `<tr><td><code>${esc(field)}</code></td><td class=v>${esc(generated) || '<i>—</i>'}</td>` +
+      `<td class="${disagree ? 'bad' : 'v'}">${esc(scraped) || '<i>not on the scraped page</i>'}` +
+      (scraped ? `<div class=note>⚠ ${esc(rules.copySurfaceNotes?.brandConfirm ?? 'CONFIRM — scraped value.')}</div>` : '') +
+      (disagree ? '<div class=note>⚠ This disagrees with the proposed value — resolve before entering either.</div>' : '') +
+      '</td></tr>';
+  }
+  h += '</table>';
   h +=
-    '<p class=sub style="margin-top:10px">⚠ <code>brand_name</code> / <code>manufacturer</code> = ' +
-    `"${esc(backendBrand)}" — backend only, never in customer copy.</p>`;
+    '<p class=sub style="margin-top:10px">⚠ <code>brand_name</code> / <code>manufacturer</code> are ' +
+    'backend only, never in customer copy.</p>';
 
   // -------------------------------------------------------------------------
   // 6 · A+ content modules
@@ -413,7 +455,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
       if (note) h += `<div class=kwnote>${esc(note)}</div>`;
     }
   }
-  const modules = aplus?.modules ?? [];
+  const modules = arr<NonNullable<typeof aplus>['modules'][number]>(aplus?.modules);
   modules.forEach((m, i) => {
     h += card({
       label: `Module ${i + 1} (${m.id}) — headline`,
@@ -446,7 +488,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
       });
     }
   });
-  const rows = aplus?.comparison?.rows ?? [];
+  const rows = arr<{ label: string; ours: string; typical: string }>(aplus?.comparison?.rows);
   if (rows.length > 0) {
     h +=
       '<div class=f><div class=fh><div><b>Comparison table</b> <code>aplus_comparison</code></div></div>' +
@@ -511,14 +553,14 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   h += '<h2>9 · Operator checklist</h2><div class=f>';
   h +=
     '<div><b>Publish order</b></div><ol>' +
-    (checklist.publishOrder ?? []).map((s) => `<li>${esc(s)}</li>`).join('') +
+    arr<string>(checklist.publishOrder).map((s) => `<li>${esc(s)}</li>`).join('') +
     '</ol>';
   h += `<div class=note>${esc(checklist.propagationNote)}</div>`;
   h += `<div class=note>${esc(checklist.browseNodeNote)}</div>`;
-  if ((checklist.opsPlaceholders ?? []).length > 0) {
+  if (arr<string>(checklist.opsPlaceholders).length > 0) {
     h +=
       '<div style="margin-top:12px"><b>Operator-supplied (not generated here)</b></div><ul class=ops>' +
-      checklist.opsPlaceholders.map((s) => `<li>${esc(s)}</li>`).join('') +
+      arr<string>(checklist.opsPlaceholders).map((s) => `<li>${esc(s)}</li>`).join('') +
       '</ul>';
   }
   h += '</div>';
@@ -532,7 +574,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   //      in it: a claim the generator introduced by itself reads exactly like
   //      one the seller has held on file for years.
   // -------------------------------------------------------------------------
-  const register = audit?.substantiationRegister ?? [];
+  const register = arr<NonNullable<Audit['substantiationRegister']>[number]>(audit?.substantiationRegister);
   h += '<h2>10 · Substantiation register — sign off before publishing</h2>';
   if (register.length === 0) {
     h += '<p class=sub>No certification, origin or testing claim was detected in this listing.</p>';
@@ -558,7 +600,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   //      compliance lexicon does not know. A blind spot cannot report itself,
   //      so this is the only place one becomes visible.
   // -------------------------------------------------------------------------
-  const candidates = audit?.candidateTerms ?? [];
+  const candidates = arr<string>(audit?.candidateTerms);
   if (candidates.length > 0) {
     h += '<h2>11 · Candidate terms (advisory — lexicon review)</h2><div class=f>';
     h +=
@@ -574,7 +616,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   //       string is length-checked (C30) — so what is printed here is verified,
   //       not merely present.
   // -------------------------------------------------------------------------
-  const imagePlan = l.imagePlan ?? [];
+  const imagePlan = arr<NonNullable<OptimizedListing['imagePlan']>[number]>(l.imagePlan);
   const altMax = rules.imageArchitecture?.altMax ?? 100;
   if (imagePlan.length > 0) {
     h += `<h2>12 · Visual production pack — ${imagePlan.length} slots + video</h2>`;
@@ -596,8 +638,8 @@ ul.ops{margin:8px 0 0;padding-left:20px}
     h +=
       `<div class=f><div class=fh><div><b>Video brief</b> <code>videoBrief</code></div>` +
       `<div class=meta>${esc(brief.aspect)} · ${esc(brief.durationSeconds)}s</div></div>` +
-      `<ol>${(brief.shots ?? []).map((b) => `<li>${esc(b)}</li>`).join('')}</ol>` +
-      `<div class=note>On-screen text (scanned exactly like a bullet): ${esc((brief.onScreenText ?? []).join(' | '))}</div>` +
+      `<ol>${arr<string>(brief.shots).map((b) => `<li>${esc(b)}</li>`).join('')}</ol>` +
+      `<div class=note>On-screen text (scanned exactly like a bullet): ${esc(arr<string>(brief.onScreenText).join(' | '))}</div>` +
       (brief.notes ? `<div class=note>${esc(brief.notes)}</div>` : '') +
       '</div>';
   }
@@ -620,46 +662,52 @@ ul.ops{margin:8px 0 0;padding-left:20px}
     if (keywordRules?.sheetNote) {
       h += `<div class=kwnote>${esc(keywordRules.sheetNote)}</div>`;
     }
-    if (coverage.placed.length > 0) {
+    const placed = arr<NonNullable<Audit['keywordCoverage']>['placed'][number]>(coverage.placed);
+    const backendOnly = arr<{ term: string; why: string }>(coverage.backendOnly);
+    const negatives = arr<{ term: string; why: string }>(coverage.negatives);
+    const recaptured = arr<{ term: string; via: string; why: string }>(coverage.recaptured);
+    const candidatesKw = arr<{ term: string; home: string; why: string }>(coverage.candidates);
+    const notTargeted = arr<{ term: string; why: string }>(coverage.notTargeted);
+    if (placed.length > 0) {
       h += '<table><tr><th>Term</th><th>Tier</th><th>Verified on</th><th>Why</th></tr>';
-      for (const r of coverage.placed) {
+      for (const r of placed) {
         h +=
           `<tr><td class=v>${esc(r.term)}</td><td>${esc(String(r.tier))}</td>` +
           `<td class=v>${esc(r.surfaces.join(', '))}</td><td>${esc(r.why)}</td></tr>`;
       }
       h += '</table>';
     }
-    if (coverage.backendOnly.length > 0) {
+    if (backendOnly.length > 0) {
       h +=
         '<div class=f><div class=fh><div><b>Backend only</b> <code>keywords.backend</code></div></div>' +
         `<div class=bx>${esc(coverage.backendOnly.map((r) => r.term).join(', '))}</div>` +
         '<div class=note>Verified present in the search-terms field and absent from every visible surface. Never repeat one in customer copy — the bytes are the point.</div></div>';
     }
-    if (coverage.negatives.length > 0) {
+    if (negatives.length > 0) {
       h += '<div class=f><div class=fh><div><b>Negative list — must appear NOWHERE</b></div></div>';
       h += '<table style="margin-top:6px"><tr><th>Term</th><th>Why</th></tr>';
-      for (const r of coverage.negatives) {
+      for (const r of negatives) {
         h += `<tr><td class=v>${esc(r.term)}</td><td>${esc(r.why)}</td></tr>`;
       }
       h +=
         '</table><div class=note>Each was verified absent from every surface, backend included. A rival brand name in ALT text or copy is invisible on the page and a real trademark exposure.</div></div>';
     }
-    if (coverage.recaptured.length > 0) {
+    if (recaptured.length > 0) {
       h += '<div class=f><div class=fh><div><b>Demand recapture (K4)</b></div></div>';
       h += '<table style="margin-top:6px"><tr><th>Demand we do not write</th><th>How it still reaches this listing</th></tr>';
-      for (const r of coverage.recaptured) {
+      for (const r of recaptured) {
         h += `<tr><td class=v>${esc(r.term)}</td><td>${esc(r.via)}</td></tr>`;
       }
       h +=
         '</table><div class=note>This map is why the term below is absent. Before anyone re-adds one because it has volume: the volume is already being captured, and this row says how.</div></div>';
     }
-    if (coverage.candidates.length > 0 || coverage.notTargeted.length > 0) {
+    if (candidatesKw.length > 0 || notTargeted.length > 0) {
       h += '<div class=f><div class=fh><div><b>Held back and deliberately skipped</b></div></div>';
       h += '<table style="margin-top:6px"><tr><th>Term</th><th>Status</th><th>Why / where it lives</th></tr>';
-      for (const r of coverage.candidates) {
+      for (const r of candidatesKw) {
         h += `<tr><td class=v>${esc(r.term)}</td><td>candidate</td><td>${esc([r.home, r.why].filter(Boolean).join(' — '))}</td></tr>`;
       }
-      for (const r of coverage.notTargeted) {
+      for (const r of notTargeted) {
         h += `<tr><td class=v>${esc(r.term)}</td><td>not targeted</td><td>${esc(r.why)}</td></tr>`;
       }
       h +=
@@ -691,19 +739,19 @@ ul.ops{margin:8px 0 0;padding-left:20px}
       `<div class=meta>current <b>${before ? before.total : '—'}</b> &rarr; proposed <b>${after ? after.total : '—'}</b> / 100</div></div>` +
       '<div class=note>Each side is scored over the principles that are KNOWABLE for it and renormalized, so a principle marked unknown deflates neither number. ' +
       'This is a content score, not the verify verdict: the gate decides whether this listing may publish.</div></div>';
-    if (before && after) {
+    if (before && after && Array.isArray(before.perPrinciple) && Array.isArray(after.perPrinciple)) {
       const rows = before.perPrinciple.map((b) => ({
-        id: b.id,
+        id: b?.id,
         before: b,
-        after: after.perPrinciple.find((x) => x.id === b.id),
+        after: arr<{ id: string; score: string; rationale: string }>(after.perPrinciple).find((x) => x?.id === b?.id),
       }));
       h += '<table><tr><th>Principle</th><th>Current</th><th>Proposed</th><th>Why (proposed)</th></tr>';
-      for (const r of rows) {
+      for (const r of rows.filter(Boolean)) {
         const a = r.after;
-        const moved = a && a.score !== r.before.score;
+        const moved = a && a.score !== r.before?.score;
         h +=
           `<tr><td><code>${esc(r.id)}</code></td>` +
-          `<td>${esc(r.before.score)}</td>` +
+          `<td>${esc(r.before?.score)}</td>` +
           `<td class="${moved ? 'ok' : ''}">${esc(a?.score ?? '—')}</td>` +
           `<td>${esc(a?.rationale ?? '')}</td></tr>`;
       }
@@ -728,7 +776,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   }
   if (timing?.headline) {
     h += `<div class=f><div class=fh><div><b>${esc(timing.headline)}</b> <code>${esc(timing.id)}</code></div></div>`;
-    h += `<ul class=ops>${(timing.notes ?? []).map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>`;
+    h += `<ul class=ops>${arr<string>(timing.notes).map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>`;
   }
 
   // --- WS7: the MARKETPLACE / OPS checklist (pack data) ---
@@ -739,7 +787,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   // the rule has one, and a VOLATILE marker where the underlying list moves —
   // because the one thing worse than not having the approved-provider list is
   // having last quarter's copy of it and believing it.
-  const marketplace = postPublish?.marketplaceChecklist ?? [];
+  const marketplace = arr<MarketplaceChecklistItem>(postPublish?.marketplaceChecklist);
   if (marketplace.length > 0) {
     if (postPublish?.marketplaceChecklistNote) {
       h += `<div class=stale>${esc(postPublish.marketplaceChecklistNote)}</div>`;
@@ -767,12 +815,12 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   //      that silently dropped it would read as "they have no A+".
   // -------------------------------------------------------------------------
   const benchmark = audit?.benchmark;
-  if (benchmark) {
+  if (benchmark && typeof benchmark === 'object') {
     h += '<h2>16 · Competitor benchmark</h2>';
     h += `<p class=sub>${benchmark.ingested} of ${benchmark.requested} competitor ASIN(s) ingested. Structural comparison only — no rival copy is reproduced here, and a rival brand name belongs on the negative keyword list, not in your listing.</p>`;
     h += '<table><tr><th>ASIN</th><th>Title chars</th><th>Bullets</th><th>Attributes</th><th>A+</th></tr>';
     const bmRow = (label: string, r: typeof benchmark.subject, emphasis = false): string => {
-      if (r.status === 'failed') {
+      if (!r || r.status !== 'ok') {
         return `<tr><td class=v>${esc(label)}</td><td colspan=4 class=bad>not ingested — ${esc(r.note ?? '')}</td></tr>`;
       }
       const cell = (v: unknown): string => `<td class=v>${esc(v)}</td>`;
@@ -784,9 +832,9 @@ ul.ops{margin:8px 0 0;padding-left:20px}
         `<td class="${r.aplusPresent ? 'ok' : 'bad'}">${r.aplusPresent ? 'yes' : 'no'}</td></tr>`
       );
     };
-    h += bmRow(`${benchmark.subject.asin} (proposed)`, benchmark.subject, true);
-    h += bmRow(`${benchmark.current.asin} (current)`, benchmark.current);
-    for (const r of benchmark.rows) h += bmRow(r.asin, r);
+    h += bmRow(`${benchmark.subject?.asin} (proposed)`, benchmark.subject ?? { asin: '', status: 'failed' }, true);
+    h += bmRow(`${benchmark.current?.asin} (current)`, benchmark.current ?? { asin: '', status: 'failed' });
+    for (const r of arr<typeof benchmark.subject>(benchmark.rows)) h += bmRow(r?.asin ?? '', r ?? { asin: '', status: 'failed' });
     h += '</table>';
   }
 
@@ -797,14 +845,14 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   //      were rejected by the SAME lexicon the gate enforces, which is exactly
   //      the "reviews may carry symptom words, your copy may not" rule.
   // -------------------------------------------------------------------------
-  const rejected = audit?.reviewLanguageRejected ?? [];
+  const rejected = arr<{ fragment?: string; why?: string }>(audit?.reviewLanguageRejected);
   if (rejected.length > 0) {
     h += '<h2>17 · Review phrasing that was not used</h2>';
     h +=
       '<p class=sub>Reviewers may lawfully write things your listing may not. These fragments were screened out of the copy guidance by the same compliance lexicon the gate enforces.</p>';
     h += '<table><tr><th>Fragment</th><th>Why it was not mirrored</th></tr>';
-    for (const r of rejected.slice(0, 40)) {
-      h += `<tr><td>${esc(r.fragment)}</td><td class=bad>${esc(r.why)}</td></tr>`;
+    for (const r of rejected.slice(0, 40).filter(Boolean)) {
+      h += `<tr><td>${esc(r?.fragment)}</td><td class=bad>${esc(r?.why)}</td></tr>`;
     }
     h += '</table>';
   }

@@ -50,6 +50,9 @@ export async function GET(
     asin: run.asin,
     product_name: run.product_name,
     created_at: run.created_at,
+    // WS10 — the scraped listing, so the sheet can mark the brand identity that
+    // came off the live page as a value to CONFIRM rather than an answer.
+    snapshot: run.snapshot,
     pack: loadPack(asPackId(run.pack_id)),
   });
   return new Response(html, {

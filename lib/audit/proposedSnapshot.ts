@@ -1,3 +1,4 @@
+import { arr } from '@/lib/gate/util';
 import type { ListingSnapshot, OptimizedListing } from '@/lib/types';
 
 /**
@@ -47,13 +48,13 @@ export function proposedAsSnapshot(
 ): ListingSnapshot {
   const a = proposed.aplusContent;
   const aplusText = [
-    ...(Array.isArray(a?.modules) ? a.modules : []).map(
+    ...arr<{ headline?: unknown; body?: unknown; subcopy?: unknown }>(a?.modules).map(
       (m) => `${str(m?.headline)} ${str(m?.body)} ${str(m?.subcopy)}`,
     ),
-    ...(Array.isArray(a?.comparison?.rows) ? a.comparison.rows : []).map(
+    ...arr<{ label?: unknown; ours?: unknown; typical?: unknown }>(a?.comparison?.rows).map(
       (r) => `${str(r?.label)} ${str(r?.ours)} ${str(r?.typical)}`,
     ),
-    ...(Array.isArray(a?.faq) ? a.faq : []).map((f) => `${str(f?.q)} ${str(f?.a)}`),
+    ...arr<{ q?: unknown; a?: unknown }>(a?.faq).map((f) => `${str(f?.q)} ${str(f?.a)}`),
   ]
     .join(' \n ')
     .trim();
@@ -66,7 +67,7 @@ export function proposedAsSnapshot(
   return {
     ...current,
     title: str(proposed.title75) || str(proposed.title),
-    bullets: (Array.isArray(proposed.bullets) ? proposed.bullets : []).map(str),
+    bullets: arr<unknown>(proposed.bullets).map(str),
     description: str(proposed.description),
     attributes,
     raw: { ...(typeof current.raw === 'object' && current.raw !== null ? current.raw : {}), aplusText },

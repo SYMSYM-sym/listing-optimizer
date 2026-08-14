@@ -378,7 +378,7 @@ describe('no false positives on legitimate compliant copy', () => {
 
   for (const text of SAFE) {
     it(`bullet stays clean: "${text.slice(0, 46)}..."`, () => {
-      const l = mut((x) => { x.bullets[0] = `${text}*`; });
+      const l = mut((x) => { x.bullets[0] = `Label detail: ${text}*`; });
       const f = failures(l).filter((y) => y.field === 'bullets[0]');
       expect(f, JSON.stringify(f)).toEqual([]);
     });

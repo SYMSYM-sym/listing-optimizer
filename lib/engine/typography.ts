@@ -75,7 +75,7 @@ export function normalizeListingTypography(l: OptimizedListing): OptimizedListin
     title: t(l.title),
     title75: t(l.title75),
     itemHighlights: t(l.itemHighlights),
-    bullets: (l.bullets ?? []).map(t),
+    bullets: (Array.isArray(l.bullets) ? l.bullets : []).map(t),
     description: t(l.description),
     backendSearchTerms: t(l.backendSearchTerms),
     productName: t(l.productName),
@@ -101,7 +101,7 @@ export function normalizeListingTypography(l: OptimizedListing): OptimizedListin
       },
       faq: (l.aplusContent?.faq ?? []).map((f) => ({ ...f, q: t(f.q), a: t(f.a) })),
     },
-    imagePlan: (l.imagePlan ?? []).map((s) => ({
+    imagePlan: (Array.isArray(l.imagePlan) ? l.imagePlan : []).map((s) => ({
       ...s,
       purpose: t(s.purpose),
       spec: t(s.spec),

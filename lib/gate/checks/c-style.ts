@@ -1,5 +1,5 @@
 import type { Failure, KnowledgePack, OptimizedListing, StyleRules } from '@/lib/types';
-import { compatibilityVariant, decodeEntities, normalize, subtractDisclaimers, utf8Bytes } from '../util';
+import { arr, compatibilityVariant, decodeEntities, normalize, subtractDisclaimers, utf8Bytes } from '../util';
 import { aplusSurfaces, disclaimerVariantsOf, fail } from './shared';
 
 /**
@@ -57,7 +57,7 @@ export function styleSurfaces(l: OptimizedListing): StyleSurface[] {
     { field: 'title', group: 'title', text: s(l.title) },
     { field: 'title75', group: 'title75', text: s(l.title75) },
     { field: 'itemHighlights', group: 'itemHighlights', text: s(l.itemHighlights) },
-    ...(l.bullets ?? []).map((b, i) => ({ field: `bullets[${i}]`, group: 'bullets', text: s(b) })),
+    ...arr<unknown>(l.bullets).map((b, i) => ({ field: `bullets[${i}]`, group: 'bullets', text: s(b) })),
     { field: 'description', group: 'description', text: s(l.description) },
   ];
   for (const [field, text] of aplusSurfaces(l.aplusContent)) {
@@ -72,7 +72,7 @@ export function styleSurfaces(l: OptimizedListing): StyleSurface[] {
   });
   // EVERY image-plan text field: purpose and spec render as on-image copy just
   // as often as notes do, so a $ price or an ALL-CAPS banner hides there too.
-  (l.imagePlan ?? []).forEach((slot, i) => {
+  arr<Record<string, unknown>>(l.imagePlan).forEach((slot, i) => {
     out.push({ field: `imagePlan[${i}].purpose`, group: 'images', text: s(slot?.purpose) });
     out.push({ field: `imagePlan[${i}].spec`, group: 'images', text: s(slot?.spec) });
     out.push({ field: `imagePlan[${i}].notes`, group: 'images', text: s(slot?.notes) });
@@ -438,7 +438,7 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   // in this check: a claim-bearing bullet that carries the required disclaimer
   // ends with the disclaimer's own full stop and used to fail the
   // trailing-punctuation rule for text the gate itself demands be there.
-  (l.bullets ?? []).forEach((raw, i) => {
+  arr<string>(l.bullets).forEach((raw, i) => {
     const text = clean(raw);
     if (!text) return;
     if (style.bulletMustStartCapital) {

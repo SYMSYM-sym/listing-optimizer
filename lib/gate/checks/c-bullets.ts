@@ -1,4 +1,5 @@
 import type { Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
+import { arr } from '../util';
 import { fail } from './shared';
 
 /**
@@ -41,7 +42,7 @@ export function c25BulletClaimMarker(l: OptimizedListing, pack: KnowledgePack): 
   if (!marker) return [];
   const flags = l.bulletClaimBearing;
   if (!Array.isArray(flags)) return [];
-  const bullets = l.bullets ?? [];
+  const bullets = arr<unknown>(l.bullets);
   const out: Failure[] = [];
   bullets.forEach((raw, i) => {
     if (flags[i] !== true) return;

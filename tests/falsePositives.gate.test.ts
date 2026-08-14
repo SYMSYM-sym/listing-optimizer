@@ -86,7 +86,7 @@ const LEGITIMATE: [string, string][] = [
  * the Q&A / A+ answers are marked non-claim-bearing.
  */
 const SURFACES: [string, (l: OptimizedListing, s: string) => void][] = [
-  ['bullets[0]', (l, s) => { l.bullets[0] = `Good to know ${s}`; }],
+  ['bullets[0]', (l, s) => { l.bullets[0] = `Good to know: ${s}`; }],
   ['description', (l, s) => { l.description = `${l.description} ${s}`; }],
   ['qa[0].a', (l, s) => { l.qa[0] = { q: 'What should I know?', a: s, claimBearing: false }; }],
   ['attributes.special_ingredients', (l, s) => { l.attributes.special_ingredients = s; }],
@@ -131,7 +131,7 @@ describe('FALSE POSITIVES — the fix did not re-open the bypass it replaced', (
     ['tum ors', 'tumor'],
   ];
   it.each(claims)('the split claim "%s" still FAILS C6 (term: %s)', (payload) => {
-    const l = mut((x) => { x.bullets[1] = `Daily support for ${payload} in adults*`; });
+    const l = mut((x) => { x.bullets[1] = `Daily support: for ${payload} in adults*`; });
     expect(runGate(l, pack, ctx).failures.some((f) => f.checkId === 'C6' && f.field === 'bullets[1]')).toBe(true);
   });
 
@@ -140,12 +140,12 @@ describe('FALSE POSITIVES — the fix did not re-open the bypass it replaced', (
     'multiple sclerosis', 'amyotrophic lateral sclerosis', 'adhd', 'mononucleosis',
   ];
   it.each(longForms)('the unambiguous long form "%s" still FAILS C6', (term) => {
-    const l = mut((x) => { x.bullets[1] = `Daily support for ${term} in adults*`; });
+    const l = mut((x) => { x.bullets[1] = `Daily support: for ${term} in adults*`; });
     expect(runGate(l, pack, ctx).failures.some((f) => f.checkId === 'C6' && f.field === 'bullets[1]')).toBe(true);
   });
 
   it('a benign seasonal span does NOT launder an actual prevention claim', () => {
-    const l = mut((x) => { x.bullets[1] = 'Prevents colds during cold and flu season*'; });
+    const l = mut((x) => { x.bullets[1] = 'Season note: prevents colds during cold and flu season*'; });
     expect(runGate(l, pack, ctx).failures.some((f) => f.checkId === 'C6' && f.field === 'bullets[1]')).toBe(true);
   });
 });
@@ -298,7 +298,7 @@ describe('U4 — C12 no longer treats every potency figure as the headline poten
     const l = mut((x) => {
       x.facts.potency = '1500 mg';
       x.attributes.active_ingredients = copy;
-      x.bullets[1] = `Formulated with ${copy}*`;
+      x.bullets[1] = `Formula: formulated with ${copy}*`;
     });
     expect(c12On(l, 'bullets[1]')).toEqual([]);
   });
@@ -307,7 +307,7 @@ describe('U4 — C12 no longer treats every potency figure as the headline poten
     const l = mut((x) => {
       x.facts.potency = '500 mg';
       x.attributes.active_ingredients = 'Turmeric 500 mg';
-      x.bullets[1] = 'Maximum-strength Turmeric 2000 mg in every batch*';
+      x.bullets[1] = 'Batch note: maximum-strength Turmeric 2000 mg in every batch*';
     });
     expect(c12On(l, 'bullets[1]').length).toBeGreaterThan(0);
   });
@@ -316,7 +316,7 @@ describe('U4 — C12 no longer treats every potency figure as the headline poten
     const l = mut((x) => {
       x.facts.potency = '500 mg';
       x.attributes.active_ingredients = 'Turmeric 500 mg, Black Pepper Extract 2000 mg';
-      x.bullets[1] = 'Maximum-strength Black Pepper Extract 2000 mg in every batch*';
+      x.bullets[1] = 'Batch note: maximum-strength Black Pepper Extract 2000 mg in every batch*';
     });
     expect(c12On(l, 'bullets[1]')).toEqual([]);
   });
@@ -324,7 +324,7 @@ describe('U4 — C12 no longer treats every potency figure as the headline poten
   it('an UNATTRIBUTED figure that contradicts facts.potency still FAILS', () => {
     const l = mut((x) => {
       x.facts.potency = '1500 mg';
-      x.bullets[1] = 'Now with 900 mg in every bottle for adults*';
+      x.bullets[1] = 'Bottle note: now with 900 mg in every bottle for adults*';
     });
     expect(c12On(l, 'bullets[1]').length).toBeGreaterThan(0);
   });
@@ -332,7 +332,7 @@ describe('U4 — C12 no longer treats every potency figure as the headline poten
   it('two UNATTRIBUTED figures in one surface are still an internal conflict', () => {
     const l = mut((x) => {
       x.facts.potency = '1500 mg';
-      x.bullets[1] = 'A 1500 mg blend and also 900 mg of the same blend*';
+      x.bullets[1] = 'Blend note: a 1500 mg blend and also 900 mg of the same blend*';
     });
     expect(c12On(l, 'bullets[1]').length).toBeGreaterThan(0);
   });
@@ -353,7 +353,7 @@ describe('U5 — C12 day figures need a supply cue', () => {
     'Most routines settle within 30 days of consistent use',
     'Return it within 45 days if it is not for you',
   ])('"%s" produces NO C12 failure', (copy) => {
-    const l = mut((x) => { x.facts.daySupply = 60; x.bullets[1] = `${copy}*`; });
+    const l = mut((x) => { x.facts.daySupply = 60; x.bullets[1] = `Label detail: ${copy}*`; });
     expect(c12On(l, 'bullets[1]')).toEqual([]);
   });
 
@@ -361,7 +361,7 @@ describe('U5 — C12 day figures need a supply cue', () => {
     'A 90 day supply in every bottle',
     'One bottle lasts 90 days of daily use',
   ])('the supply claim "%s" still FAILS', (copy) => {
-    const l = mut((x) => { x.facts.daySupply = 60; x.bullets[1] = `${copy}*`; });
+    const l = mut((x) => { x.facts.daySupply = 60; x.bullets[1] = `Label detail: ${copy}*`; });
     expect(c12On(l, 'bullets[1]').length).toBeGreaterThan(0);
   });
 });
@@ -390,7 +390,7 @@ describe('U6 — C17 ALL-CAPS rules no longer fail ordinary sentence case', () =
     'IFOS BSCG HACCP SQF audited every year',
     'Certified IFOS BSCG HACCP SQF BRCGS IGEN NSF USP GMP',
   ])('"%s" produces NO C17 failure', (copy) => {
-    const l = mut((x) => { x.bullets[1] = `${copy}*`; });
+    const l = mut((x) => { x.bullets[1] = `Label detail: ${copy}*`; });
     expect(c17On(l, 'bullets[1]')).toEqual([]);
   });
 
@@ -400,7 +400,7 @@ describe('U6 — C17 ALL-CAPS rules no longer fail ordinary sentence case', () =
     'THIS IS SHOUTING LOUD at the customer',
     'SAME NON USA GABA blend',
   ])('genuine shouting "%s" still FAILS C17', (copy) => {
-    const l = mut((x) => { x.bullets[1] = `${copy}*`; });
+    const l = mut((x) => { x.bullets[1] = `Label detail: ${copy}*`; });
     expect(c17On(l, 'bullets[1]').length).toBeGreaterThan(0);
   });
 });
@@ -412,14 +412,14 @@ describe('U7 — a weight in pounds is not a price claim', () => {
     'Net weight 2 pounds of loose product',
     'Ships at 3 pounds boxed',
   ])('"%s" produces NO C18 failure', (copy) => {
-    const l = mut((x) => { x.bullets[1] = `${copy}*`; });
+    const l = mut((x) => { x.bullets[1] = `Label detail: ${copy}*`; });
     expect(runGate(l, pack, ctx).failures.filter((f) => f.checkId === 'C18' && f.field === 'bullets[1]')).toEqual([]);
   });
 
   it.each(['Only £19.95 today', 'Just 19 dollars and 95 cents', 'A steal at 20 euros'])(
     'the real price claim "%s" still FAILS C18',
     (copy) => {
-      const l = mut((x) => { x.bullets[1] = `${copy}*`; });
+      const l = mut((x) => { x.bullets[1] = `Label detail: ${copy}*`; });
       expect(runGate(l, pack, ctx).failures.some((f) => f.checkId === 'C18' && f.field === 'bullets[1]')).toBe(true);
     },
   );
@@ -438,7 +438,7 @@ describe('U8 — natural states and ambiguous names are not diseases on their ow
     'Made for the years around menopause',
     'Reviewed by Dr Nash in our own laboratory',
   ])('"%s" produces NO C6 failure', (copy) => {
-    const l = mut((x) => { x.bullets[1] = `${copy}*`; });
+    const l = mut((x) => { x.bullets[1] = `Label detail: ${copy}*`; });
     expect(c6On(l, 'bullets[1]')).toEqual([]);
   });
 
@@ -447,7 +447,7 @@ describe('U8 — natural states and ambiguous names are not diseases on their ow
     'Reverses perimenopause for good',
     'Treats nash and restores the liver',
   ])('the therapeutic-action claim "%s" still FAILS C6', (copy) => {
-    const l = mut((x) => { x.bullets[1] = `${copy}*`; });
+    const l = mut((x) => { x.bullets[1] = `Label detail: ${copy}*`; });
     expect(c6On(l, 'bullets[1]').length).toBeGreaterThan(0);
   });
 });

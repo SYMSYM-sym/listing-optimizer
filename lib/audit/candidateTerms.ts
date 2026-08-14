@@ -42,7 +42,7 @@ function sourceText(current: ListingSnapshot): string {
   return normalize(
     [
       current.title ?? '',
-      ...(current.bullets ?? []),
+      ...(Array.isArray(current.bullets) ? current.bullets : []),
       current.description ?? '',
       ...Object.values(current.attributes ?? {}),
     ].join(' \n '),

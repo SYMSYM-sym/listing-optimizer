@@ -47,7 +47,7 @@ export function bulletArchitectureGaps(
   const gaps: AuditGap[] = [];
   // `String(...)`: the audit must survive malformed structural input exactly
   // as the gate does — a numeric bullet is REPORTED, never thrown on.
-  const bullets = (proposed.bullets ?? []).map((b) => String(b ?? ''));
+  const bullets = (Array.isArray(proposed.bullets) ? proposed.bullets : []).map((b) => String(b ?? ''));
   const arch = pack.rules?.bulletArchitecture;
   const slots = arch?.slots ?? [];
 

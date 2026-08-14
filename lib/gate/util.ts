@@ -1177,6 +1177,19 @@ const STOPWORDS = new Set([
 ]);
 
 /** Lowercased, stemmed (trailing s stripped) content tokens. */
+/**
+ * NULL-SAFE array coercion.
+ *
+ * `(x ?? [])` guards `null`/`undefined` and NOTHING else: a field the model
+ * emitted as an object or a string still reaches `.forEach` and throws, and a
+ * thrown gate is a fail-OPEN in practice because the caller never receives
+ * `verified:false` at all. Every surface builder and every exporter walks
+ * LLM-shaped data, so they all go through this.
+ */
+export function arr<T>(v: unknown): T[] {
+  return Array.isArray(v) ? (v as T[]) : [];
+}
+
 export function tokenSet(text: string): Set<string> {
   const tokens = normalize(text)
     .toLowerCase()

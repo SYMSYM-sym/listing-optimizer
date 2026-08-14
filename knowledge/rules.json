@@ -1102,5 +1102,54 @@
       "carouselTrim": "A+ image carousels are trimmed on render: a card set built at full length will not all display, and the cards past the cut are not indexed either. Front-load the cards that matter and treat the tail as expendable rather than assuming all of them show.",
       "premiumScope": "Premium A+ (the wider layout, in-module video and hover/hotspot cards) is deliberately OUT OF SCOPE for this app: it changes the module set and the asset specs, and generating copy against a tier the account may not hold would produce a pack that cannot be pasted. The modules below are the standard tier."
     }
+  },
+  "_bulletFormatComment": [
+    "WS10 / R4+R6 — the two BULLET FORMAT rules that are deterministically checkable (gate C31).",
+    "",
+    "R6 COLON HEADER. The marketplace documents the bullet pattern as a header fragment, a colon,",
+    "then the body (\"Cotton fabric: Made from 100% cotton\"). A bullet with no header is a sentence",
+    "in a list, and it also loses the scannable label a mobile reader actually reads.",
+    "",
+    "R4 WORD REPETITION, and why the cap is 3 rather than 2. The TITLE rule is at most twice and C1",
+    "enforces exactly that. A BULLET is different: it names the dosage form, the count and the routine",
+    "in one sentence, so \"One capsule daily: 60 vegetable capsules ... at one capsule per day\" uses the",
+    "same content word three times and is ordinary, correct copy. Setting the cap at 2 would fail it,",
+    "and failing lawful copy trains an operator to ignore the gate. A FOURTH occurrence is not that",
+    "shape any more - it is stuffing, which lowers the assistant trust score. So the cap is the",
+    "stuffing floor, not a style preference. Raise it in pack data if a category genuinely needs to.",
+    "",
+    "Title Case per word and the write-out-numbers-under-ten rule are deliberately NOT here: both have",
+    "legitimate exceptions this system cannot distinguish (registered ingredient marks keep their own",
+    "casing; measurements stay numeric), so they stay prompt-guided, exactly as the playbook left them."
+  ],
+  "bulletFormat": {
+    "requireColonHeader": true,
+    "headerMaxChars": 60,
+    "headerMinChars": 3,
+    "wordRepetitionMax": 3,
+    "stopwords": [
+      "a",
+      "an",
+      "the",
+      "and",
+      "or",
+      "for",
+      "of",
+      "in",
+      "on",
+      "with",
+      "to",
+      "by"
+    ]
+  },
+  "_copySurfaceNotesComment": [
+    "WS10 — two facts about HOW the marketplace renders these fields that decide whether the copy works,",
+    "and that neither the gate nor the generator can enforce because they are about the reader, not the text.",
+    "Rendered beside the field they are about, so they are read where they are acted on."
+  ],
+  "copySurfaceNotes": {
+    "descriptionWithAplus": "R12: keep this field FILLED even once A+ is live. A+ body text is not indexed by classic search - the description is, and the shopping assistant reads it directly. Moving indexable copy out of the description and into A+ loses the indexing and keeps none of it.",
+    "mobileFrontLoad": "R11: on mobile the description renders ABOVE the bullets and is truncated behind Read more, and chat takes half the screen. Whatever has to be read has to be in the first two lines - the rest is opened by a minority.",
+    "brandConfirm": "CONFIRM - scraped value. This came off the live page, not from the Brand Registry, and a scraped brand string is routinely a seller-entered variant. Check it against Brand Registry before it goes anywhere near a feed: it is backend-only and must never appear in customer copy."
   }
 }

@@ -53,7 +53,7 @@ const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
  * and verbatim disclaimer, the Q&A answer is marked non-claim-bearing).
  */
 const SURFACES: [string, (l: OptimizedListing, s: string) => void][] = [
-  ['bullets[0]', (l, s) => { l.bullets[0] = `Good to know ${s}*`; }],
+  ['bullets[0]', (l, s) => { l.bullets[0] = `Good to know: ${s}*`; }],
   ['description', (l, s) => { l.description = `${l.description} ${s}`; }],
   ['qa[0].a', (l, s) => { l.qa[0] = { q: 'What should I know?', a: s, claimBearing: false }; }],
   ['aplus.faq[0].a', (l, s) => { l.aplusContent.faq[0] = { q: 'What should I know?', a: s, claimBearing: false }; }],
@@ -113,7 +113,7 @@ describe('C22 — lawful natural-state and structure/function copy is never bloc
 
   /** The same copy read through the cosmetics pack (the mirrored lists). */
   it.each(MUST_PASS)('"%s" raises no C22 failure under the cosmetics pack either', (text) => {
-    const l = mut((x) => { x.bullets[0] = `Good to know ${text}*`; });
+    const l = mut((x) => { x.bullets[0] = `Good to know: ${text}*`; });
     expect(c22NaturalState(l, cosmetics).filter((f) => f.field === 'bullets[0]')).toEqual([]);
   });
 });
@@ -147,7 +147,7 @@ describe('C22 — the abnormal or therapeutic form of the same sentiment fails',
   }
 
   it.each(MUST_FAIL)('"%s" makes the whole gate fail', (text) => {
-    const l = mut((x) => { x.bullets[0] = `Good to know ${text}*`; });
+    const l = mut((x) => { x.bullets[0] = `Good to know: ${text}*`; });
     expect(runGate(l, pack, ctx).pass).toBe(false);
   });
 });
@@ -162,7 +162,7 @@ describe('C22 — obfuscation is covered and ordinary copy is not touched', () =
   const c22On = (l: OptimizedListing, field: string): Failure[] =>
     c22NaturalState(l, pack).filter((f) => f.field === field);
   const plant = (text: string): OptimizedListing =>
-    mut((x) => { x.bullets[0] = `Good to know ${text}*`; });
+    mut((x) => { x.bullets[0] = `Good to know: ${text}*`; });
 
   it.each([
     'Tr3ats menopause',
@@ -216,7 +216,7 @@ describe('PRECEDENCE — disease noun > abnormality marker > lawful qualifier', 
     'healthy help with hypertension',
     'temporary support for depression',
   ])('a lawful qualifier NEVER rescues the disease noun in "%s"', (text) => {
-    const l = mut((x) => { x.bullets[0] = `Good to know ${text}*`; });
+    const l = mut((x) => { x.bullets[0] = `Good to know: ${text}*`; });
     expect(c6On(l, 'bullets[0]').length).toBeGreaterThan(0);
   });
 
@@ -230,12 +230,12 @@ describe('PRECEDENCE — disease noun > abnormality marker > lawful qualifier', 
   ];
 
   it.each(MARKER_PAIRS)('lawful: "%s"', (lawful) => {
-    const l = mut((x) => { x.bullets[0] = `Good to know ${lawful}*`; });
+    const l = mut((x) => { x.bullets[0] = `Good to know: ${lawful}*`; });
     expect(c22On(l, 'bullets[0]')).toEqual([]);
   });
 
   it.each(MARKER_PAIRS)('…but the marked form of it FAILS: "%s" -> "%s"', (_lawful, marked) => {
-    const l = mut((x) => { x.bullets[0] = `Good to know ${marked}*`; });
+    const l = mut((x) => { x.bullets[0] = `Good to know: ${marked}*`; });
     expect(c22On(l, 'bullets[0]').length).toBeGreaterThan(0);
   });
 
@@ -253,7 +253,7 @@ describe('PRECEDENCE — disease noun > abnormality marker > lawful qualifier', 
     ['Helps with mild mood changes associated with the menstrual cycle', true],
     ['Stops the menstrual cycle', false],
   ] as [string, boolean][])('"%s" — lawful: %s', (text, lawful) => {
-    const l = mut((x) => { x.bullets[0] = `Good to know ${text}*`; });
+    const l = mut((x) => { x.bullets[0] = `Good to know: ${text}*`; });
     const hits = c22On(l, 'bullets[0]');
     if (lawful) expect(hits).toEqual([]);
     else expect(hits.length).toBeGreaterThan(0);
@@ -273,7 +273,7 @@ describe('PRECEDENCE — disease noun > abnormality marker > lawful qualifier', 
       cp.abnormalOnlySymptomNouns = [];
       cp.abnormalityMarkers = [];
     }
-    const l = mut((x) => { x.bullets[0] = 'Good to know Cures aging*'; });
+    const l = mut((x) => { x.bullets[0] = 'Good to know: Cures aging*'; });
     expect(c22NaturalState(l, broken).length).toBe(0);
     // …and the gate still refuses to pass, because the manifest fails closed.
     expect(runGate(l, broken, ctx).failures.some((f) => f.checkId === 'PACK')).toBe(true);
@@ -292,7 +292,7 @@ describe('the two symptom tiers behave differently, by design', () => {
   const c22On = (l: OptimizedListing, field: string): Failure[] =>
     c22NaturalState(l, pack).filter((f) => f.field === field);
   const plant = (text: string): OptimizedListing =>
-    mut((x) => { x.bullets[0] = `Good to know ${text}*`; });
+    mut((x) => { x.bullets[0] = `Good to know: ${text}*`; });
 
   it.each([
     'Helps reduce hot flashes',

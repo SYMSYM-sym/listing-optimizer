@@ -320,17 +320,17 @@ describe('no false positives — legitimate copy still passes', () => {
   });
 
   it('"Gluten free and dairy free formula" is clean', () => {
-    const l = mut((x) => { x.bullets[0] = 'Gluten free and dairy free formula'; });
+    const l = mut((x) => { x.bullets[0] = 'Label detail: gluten free and dairy free formula'; });
     expect(fieldFailures(l, 'bullets[0]')).toEqual([]);
   });
 
   it('"Supports a healthy inflammatory response" is clean', () => {
-    const l = mut((x) => { x.bullets[0] = 'Supports a healthy inflammatory response'; });
+    const l = mut((x) => { x.bullets[0] = 'Label detail: supports a healthy inflammatory response'; });
     expect(fieldFailures(l, 'bullets[0]')).toEqual([]);
   });
 
   it('"No artificial dyes or fillers*" is clean', () => {
-    const l = mut((x) => { x.bullets[0] = 'No artificial dyes or fillers*'; });
+    const l = mut((x) => { x.bullets[0] = 'Label detail: no artificial dyes or fillers*'; });
     expect(fieldFailures(l, 'bullets[0]')).toEqual([]);
   });
 

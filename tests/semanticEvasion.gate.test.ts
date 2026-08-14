@@ -94,7 +94,7 @@ const SAFETY_COPY: string[] = [
 
 /** Surfaces a claim can hide on. Each plant leaves every OTHER rule satisfied. */
 const SURFACES: [string, (l: OptimizedListing, s: string) => void][] = [
-  ['bullets[1]', (l, s) => { l.bullets[1] = `Daily support that ${s}*`; }],
+  ['bullets[1]', (l, s) => { l.bullets[1] = `Daily support: that ${s}*`; }],
   ['description', (l, s) => { l.description = `${l.description} It ${s}.`; }],
   ['qa[0].a', (l, s) => { l.qa[0] = { q: 'What should I know?', a: `It ${s}`, claimBearing: false }; }],
   ['aplus.faq[0].a', (l, s) => { l.aplusContent.faq[0] = { q: 'What should I know?', a: `It ${s}`, claimBearing: false }; }],
@@ -118,14 +118,14 @@ describe('R1 — semantic drug claims with zero listed tokens now FAIL (C21)', (
   it.each(EVASIONS)('"%s" uses no term the LEXICON tier (C6) can see', (payload) => {
     // The point of the fix: C6 alone is blind to every one of these, which is
     // why the gate needed a shape tier rather than more nouns.
-    const l = mut((x) => { x.bullets[1] = `Daily support that ${payload}*`; });
+    const l = mut((x) => { x.bullets[1] = `Daily support: that ${payload}*`; });
     const failures = onField(l, 'bullets[1]');
     expect(failures.some((f) => f.checkId === 'C21')).toBe(true);
     expect(failures.every((f) => f.checkId !== 'C6')).toBe(true);
   });
 
   it.each(EVASIONS)('"%s" can never come back verified', (payload) => {
-    const l = mut((x) => { x.bullets[1] = `Daily support that ${payload}*`; });
+    const l = mut((x) => { x.bullets[1] = `Daily support: that ${payload}*`; });
     expect(runGate(l, pack, ctx).pass).toBe(false);
     expect(buildAudit(snapshot, l, pack, ctx).verified).toBe(false);
   });
@@ -139,7 +139,7 @@ describe('R1 — semantic drug claims with zero listed tokens now FAIL (C21)', (
   });
 
   it('the cosmetics pack catches the same shapes', () => {
-    const l = mut((x) => { x.bullets[1] = 'Daily support that shrinks the lump in your breast*'; });
+    const l = mut((x) => { x.bullets[1] = 'Daily support: that shrinks the lump in your breast*'; });
     const failures = runGate(l, cosmeticsPack, { subcategories: ['skincare'] }).failures;
     expect(failures.some((f) => f.checkId === 'C21' && f.field === 'bullets[1]')).toBe(true);
   });
@@ -186,7 +186,7 @@ describe('R1 — determiner-scoped targets', () => {
     'Removes the guesswork from cell growth support',
     'A blend that supports muscle mass in adults',
   ])('"%s" is clean', (text) => {
-    const l = mut((x) => { x.bullets[1] = `${text}*`; });
+    const l = mut((x) => { x.bullets[1] = `Label detail: ${text}*`; });
     expect(onField(l, 'bullets[1]')).toEqual([]);
   });
 
@@ -194,7 +194,7 @@ describe('R1 — determiner-scoped targets', () => {
     'Melts the growth away in weeks',
     'Dissolves the stone in a fortnight',
   ])('"%s" fails C21', (text) => {
-    const l = mut((x) => { x.bullets[1] = `${text}*`; });
+    const l = mut((x) => { x.bullets[1] = `Label detail: ${text}*`; });
     expect(onField(l, 'bullets[1]').some((f) => f.checkId === 'C21')).toBe(true);
   });
 });
@@ -258,7 +258,7 @@ describe('R2 — context-qualified targets, both directions', () => {
   });
 
   it.each(QUALIFIED_BLOCKED)('[%s] the drug-claim form "%s" fails C21', (_term, text) => {
-    const l = mut((x) => { x.bullets[1] = `${text}*`; });
+    const l = mut((x) => { x.bullets[1] = `Label detail: ${text}*`; });
     expect(onField(l, 'bullets[1]').some((f) => f.checkId === 'C21')).toBe(true);
   });
 
@@ -278,7 +278,7 @@ describe('R2 — context-qualified targets, both directions', () => {
     'Clears the cyst away',
     'Removes the lesion in days',
   ])('unconditional target: "%s" fails C21 with no context word present', (text) => {
-    const l = mut((x) => { x.bullets[1] = `${text}*`; });
+    const l = mut((x) => { x.bullets[1] = `Label detail: ${text}*`; });
     expect(onField(l, 'bullets[1]').some((f) => f.checkId === 'C21')).toBe(true);
   });
 });
@@ -357,9 +357,12 @@ describe('R3 — the variant passes introduce no false positives', () => {
     'do not stop taking your medication without talking to a doctor',
     'this is not a substitute for prescription medication',
   ])('"%s" is clean with every variant class armed', (text) => {
-    // Sentence-cased so C17's bullet-capitalisation rule cannot mask the point.
+    // Sentence-cased so C17's bullet-capitalisation rule cannot mask the
+    // point, and carried in the documented colon-header bullet shape so C31's
+    // FORMAT rule cannot mask it either — the subject of this suite is the
+    // phrase, not the wrapper.
     const bullet = `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
-    const l = mut((x) => { x.bullets[1] = `${bullet}*`; });
+    const l = mut((x) => { x.bullets[1] = `Label detail: ${bullet}*`; });
     expect(onField(l, 'bullets[1]')).toEqual([]);
   });
 });

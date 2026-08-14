@@ -530,7 +530,7 @@ describe('no false positives — legitimate copy on every surface', () => {
     disclaimer,
   ];
   const SURFACES: [string, (l: OptimizedListing, s: string) => void][] = [
-    ['bullets[1]', (l, s) => { l.bullets[1] = `Daily support with ${s} for adults`; }],
+    ['bullets[1]', (l, s) => { l.bullets[1] = `Daily support: with ${s} for adults`; }],
     ['itemHighlights', (l, s) => { l.itemHighlights = `Blend with ${s}`; }],
     ['qa[0].a', (l, s) => { l.qa[0] = { ...l.qa[0]!, a: `Yes - ${s}` }; }],
     ['imagePlan[0].notes', (l, s) => { l.imagePlan[0] = { ...l.imagePlan[0]!, notes: `Overlay: ${s}` }; }],

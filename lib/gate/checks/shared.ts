@@ -6,6 +6,7 @@ import type {
   UnitRules,
 } from '@/lib/types';
 import {
+  arr,
   collapseDoublesTerms,
   deobfuscatedVariants,
   doubleCollapsedVariants,
@@ -56,14 +57,14 @@ export function customerSurfaces(l: OptimizedListing): [string, string][] {
     ['itemHighlights', str(l.itemHighlights)],
     ['description', str(l.description)],
     ['backendSearchTerms', str(l.backendSearchTerms)],
-    ...(l.bullets ?? []).map((b, i) => [`bullets[${i}]`, str(b)] as [string, string]),
+    ...arr<unknown>(l.bullets).map((b, i) => [`bullets[${i}]`, str(b)] as [string, string]),
   ];
   // Q&A + image plan (brain/02: disease terms banned on every surface including Q&A/images)
-  (l.qa ?? []).forEach((item, i) => {
+  arr<{ q?: unknown; a?: unknown }>(l.qa).forEach((item, i) => {
     out.push([`qa[${i}].q`, str(item?.q)]);
     out.push([`qa[${i}].a`, str(item?.a)]);
   });
-  (l.imagePlan ?? []).forEach((slot, i) => {
+  arr<{ purpose?: unknown; spec?: unknown; notes?: unknown; altText?: unknown }>(l.imagePlan).forEach((slot, i) => {
     out.push([`imagePlan[${i}].purpose`, str(slot?.purpose)]);
     out.push([`imagePlan[${i}].spec`, str(slot?.spec)]);
     out.push([`imagePlan[${i}].notes`, str(slot?.notes)]);
@@ -76,8 +77,8 @@ export function customerSurfaces(l: OptimizedListing): [string, string][] {
   // reads the images, so they are copy and are scanned as copy.
   const video = l.videoBrief;
   if (video && typeof video === 'object') {
-    (video.shots ?? []).forEach((b, i) => out.push([`videoBrief.shots[${i}]`, str(b)]));
-    (video.onScreenText ?? []).forEach((t, i) =>
+    arr<unknown>(video.shots).forEach((b, i) => out.push([`videoBrief.shots[${i}]`, str(b)]));
+    arr<unknown>(video.onScreenText).forEach((t, i) =>
       out.push([`videoBrief.onScreenText[${i}]`, str(t)]),
     );
     out.push(['videoBrief.notes', str(video.notes)]);
@@ -143,7 +144,7 @@ export function allGeneratedSurfaces(l: OptimizedListing): [string, string][] {
 export function aplusSurfaces(a: AplusContent | null | undefined): [string, string][] {
   const out: [string, string][] = [];
   if (!a) return out;
-  (a.modules ?? []).forEach((m, idx) => {
+  arr<{ id?: unknown; headline?: unknown; body?: unknown; subcopy?: unknown; bannerAltText?: unknown }>(a.modules).forEach((m, idx) => {
     const id = str(m?.id) || String(idx);
     out.push([`aplus.modules[${id}].headline`, str(m?.headline)]);
     out.push([`aplus.modules[${id}].body`, str(m?.body)]);
@@ -151,12 +152,12 @@ export function aplusSurfaces(a: AplusContent | null | undefined): [string, stri
     // WS8: banner ALT is customer-facing text on a customer-facing module.
     if (m?.bannerAltText) out.push([`aplus.modules[${id}].bannerAltText`, str(m.bannerAltText)]);
   });
-  (a.comparison?.rows ?? []).forEach((r, i) => {
+  arr<{ label?: unknown; ours?: unknown; typical?: unknown }>(a.comparison?.rows).forEach((r, i) => {
     out.push([`aplus.comparison[${i}].label`, str(r?.label)]);
     out.push([`aplus.comparison[${i}].ours`, str(r?.ours)]);
     out.push([`aplus.comparison[${i}].typical`, str(r?.typical)]);
   });
-  (a.faq ?? []).forEach((f, i) => {
+  arr<{ q?: unknown; a?: unknown }>(a.faq).forEach((f, i) => {
     out.push([`aplus.faq[${i}].q`, str(f?.q)]);
     out.push([`aplus.faq[${i}].a`, str(f?.a)]);
   });
@@ -593,7 +594,7 @@ export function declaredFigures(
   keys: string[] | undefined,
   units: UnitRules,
 ): UnitNumber[] | null {
-  const list = (keys ?? []).map((k) => k.trim()).filter(Boolean);
+  const list = arr<string>(keys).map((k) => String(k ?? '').trim()).filter(Boolean);
   if (list.length === 0) return null;
   const attrs = l.attributes ?? {};
   const text = list.map((k) => normalize(attrs[k] ?? '')).join(' ; ');

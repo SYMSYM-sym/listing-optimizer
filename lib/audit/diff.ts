@@ -8,7 +8,7 @@ import type {
 import { allDiseaseNouns } from '@/lib/gate/checks';
 import { bulletArchitectureGaps } from './bulletLints';
 import { unevidencedHeaderClaims } from './substantiation';
-import { normalize, scanTerms, subtractDisclaimers, utf8Bytes } from '@/lib/gate/util';
+import { arr, normalize, scanTerms, subtractDisclaimers, utf8Bytes } from '@/lib/gate/util';
 
 /**
  * Field-by-field gaps between the CURRENT listing and the PROPOSED one.
@@ -39,7 +39,7 @@ export function diff(
     const surfaces: [string, string][] = [
       ['title', current.title],
       ['description', current.description],
-      ...(current.bullets ?? []).map((b, i) => [`bullets[${i}]`, b ?? ''] as [string, string]),
+      ...arr<string>(current.bullets).map((b, i) => [`bullets[${i}]`, b ?? ''] as [string, string]),
     ];
     // The accepted VARIANTS matter most here — this is the current-listing
     // audit path, where a seller's copy legitimately carries the CFR singular
@@ -194,16 +194,16 @@ export function diff(
   }
   if (
     current.bullets.length === pack.rules.bulletCount &&
-    (proposed.bullets ?? []).length === pack.rules.bulletCount
+    arr<string>(proposed.bullets).length === pack.rules.bulletCount
   ) {
     const changed = current.bullets.filter(
-      (b, i) => normalize(b) !== normalize((proposed.bullets ?? [])[i] ?? ''),
+      (b, i) => normalize(b) !== normalize(arr<string>(proposed.bullets)[i] ?? ''),
     ).length;
     if (changed >= 3) {
       gaps.push({
         field: 'bullets',
         current: clip(current.bullets[0] ?? '', 100),
-        proposed: clip((proposed.bullets ?? [])[0] ?? '', 100),
+        proposed: clip(arr<string>(proposed.bullets)[0] ?? '', 100),
         why: `${changed}/5 bullets rewritten with distinct situational anchors and compliant structure/function framing.`,
         severity: 'P2',
       });

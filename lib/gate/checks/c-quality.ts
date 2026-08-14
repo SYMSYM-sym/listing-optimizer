@@ -1,5 +1,5 @@
 import type { AllergenRule, CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
-import { normalize } from '../util';
+import { arr, normalize } from '../util';
 import {
   aplusFactSurfaces,
   attributeComplianceSurfaces,
@@ -137,7 +137,7 @@ export function c9Allergen(l: OptimizedListing, pack: KnowledgePack): Failure[] 
   const declarationField = `attributes.${f.declaration}`;
   const out: Failure[] = [];
   const attrs = l.attributes ?? {};
-  const all = `${l.title ?? ''} ${l.description ?? ''} ${(l.bullets ?? []).map((b) => b ?? '').join(' ')} ${Object.values(attrs).join(' ')}`;
+  const all = `${l.title ?? ''} ${l.description ?? ''} ${arr<unknown>(l.bullets).map((b) => b ?? '').join(' ')} ${Object.values(attrs).join(' ')}`;
   const present = presentAllergens(l, cp);
   if (present.length === 0) return [];
   const normalizedAll = normalize(all).toLowerCase();
@@ -160,7 +160,7 @@ export function c9Allergen(l: OptimizedListing, pack: KnowledgePack): Failure[] 
     if (requires('attribute') && attrs[f.declaration] !== rule.canonicalString) {
       out.push(fail('C9', declarationField, attrs[f.declaration] ?? '(empty)', `${f.declaration} must equal exactly '${rule.canonicalString}'`));
     }
-    if (requires('bullet') && !(l.bullets ?? []).some((b) => allergenMentioned(b ?? '', rule, cp))) {
+    if (requires('bullet') && !arr<unknown>(l.bullets).some((b) => allergenMentioned(String(b ?? ''), rule, cp))) {
       out.push(fail('C9', 'bullets', `no bullet declares ${rule.class}`, `Declare the allergen ('${rule.canonicalString}') in at least one bullet — as a TRAILING clause, never the bullet's opening`));
     }
     if (requires('description') && !allergenMentioned(l.description ?? '', rule, cp)) {

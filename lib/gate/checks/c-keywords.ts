@@ -6,7 +6,7 @@ import type {
   KnowledgePack,
   OptimizedListing,
 } from '@/lib/types';
-import { normalize, subtractDisclaimers, termRegex } from '../util';
+import { arr, normalize, subtractDisclaimers, termRegex } from '../util';
 import { disclaimerVariantsOf, fail } from './shared';
 import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
 
@@ -60,10 +60,10 @@ function aplusText(l: OptimizedListing): string {
   const a = l.aplusContent;
   if (!a || typeof a !== 'object') return '';
   const parts: string[] = [];
-  for (const m of a.modules ?? []) {
+  for (const m of arr<{ headline?: unknown; body?: unknown; subcopy?: unknown }>(a.modules)) {
     parts.push(str(m?.headline), str(m?.body), str(m?.subcopy));
   }
-  for (const r of a.comparison?.rows ?? []) {
+  for (const r of arr<{ label?: unknown; ours?: unknown; typical?: unknown }>(a.comparison?.rows)) {
     parts.push(str(r?.label), str(r?.ours), str(r?.typical));
   }
   return parts.join(' \n ');
@@ -76,7 +76,7 @@ function aplusText(l: OptimizedListing): string {
  * caller turns into a FAILURE, never a skip.
  */
 export function keywordSurfaceText(l: OptimizedListing, name: string): string | null {
-  const bullets = l.bullets ?? [];
+  const bullets = arr<unknown>(l.bullets);
   const bulletMatch = /^bullet(\d+)$/i.exec(name);
   if (bulletMatch) {
     const idx = Number(bulletMatch[1]) - 1;
@@ -99,15 +99,15 @@ export function keywordSurfaceText(l: OptimizedListing, name: string): string | 
     case 'backend':
       return str(l.backendSearchTerms);
     case 'attributes':
-      return Object.values(l.attributes ?? {}).map(str).join(' \n ');
+      return Object.values(l.attributes && typeof l.attributes === 'object' ? l.attributes : {}).map(str).join(' \n ');
     case 'aplus':
       return aplusText(l);
     case 'faq':
-      return (l.aplusContent?.faq ?? []).map((f) => `${str(f?.q)} ${str(f?.a)}`).join(' \n ');
+      return arr<{ q?: unknown; a?: unknown }>(l.aplusContent?.faq).map((f) => `${str(f?.q)} ${str(f?.a)}`).join(' \n ');
     case 'qa':
-      return (l.qa ?? []).map((f) => `${str(f?.q)} ${str(f?.a)}`).join(' \n ');
+      return arr<{ q?: unknown; a?: unknown }>(l.qa).map((f) => `${str(f?.q)} ${str(f?.a)}`).join(' \n ');
     case 'images':
-      return (l.imagePlan ?? [])
+      return arr<{ purpose?: unknown; spec?: unknown; notes?: unknown; altText?: unknown }>(l.imagePlan)
         .map((s) => `${str(s?.purpose)} ${str(s?.spec)} ${str(s?.notes)} ${str(s?.altText)}`)
         .join(' \n ');
     default:

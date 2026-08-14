@@ -154,7 +154,7 @@ describe('FIX 1 — the oral/dental disease lexicon exists and is enforced', () 
       // violation only when paired with a disease noun (C6), a condition
       // (action-paired tier) or a natural state (C22 R3).
       const l = mut((x) => {
-        x.bullets[1] = 'A traditional home remedy passed down for generations';
+        x.bullets[1] = 'Heritage: a traditional home remedy passed down for generations';
       });
       expect(onField(l, 'bullets[1]')).toEqual([]);
     });

@@ -165,6 +165,31 @@ export interface TitleWordRepetitionRules {
   stopwords: string[];
 }
 
+/**
+ * WS10 / R4+R6 — BULLET FORMAT rules (pack data, gate C31).
+ *
+ * Only the two rules a machine can decide without guessing. Title Case per
+ * word and the write-out-numbers rule stay prompt-guided: each has a lawful
+ * exception (registered ingredient marks, measurements) that a check cannot
+ * tell from a violation, and over-blocking is as severe as a bypass.
+ */
+export interface BulletFormatRules {
+  /** Require the documented "Header fragment: body" pattern. */
+  requireColonHeader: boolean;
+  /** The colon must fall inside this many leading characters. */
+  headerMaxChars: number;
+  /** Minimum length of the header fragment itself. */
+  headerMinChars: number;
+  /**
+   * Max occurrences of one stemmed content word WITHIN one bullet.
+   * See `knowledge/rules.json` for why the shipped value is the stuffing
+   * floor rather than the title rule's stricter cap.
+   */
+  wordRepetitionMax: number;
+  /** Short function words exempt from the count. */
+  stopwords: string[];
+}
+
 /** Substring cues gate A4 uses to find the required A+ modules by id (pack data). */
 export interface AplusModuleCues {
   brandStory: string;
@@ -454,6 +479,23 @@ export interface AplusNotes {
   premiumScope: string;
 }
 
+/**
+ * WS10 — notes about HOW a surface RENDERS, rather than about what it says.
+ *
+ * Neither the gate nor the generator can act on these: they are facts about
+ * the reader (mobile truncation) and about the indexing model (A+ body text is
+ * not indexed by classic search), so they are rendered beside the field they
+ * are about and read where they are acted on.
+ */
+export interface CopySurfaceNotes {
+  /** R12 — keep the description filled even once A+ is live. */
+  descriptionWithAplus: string;
+  /** R11 — mobile renders the description above the bullets and truncates it. */
+  mobileFrontLoad: string;
+  /** WS10 — the scraped-brand confirmation marker. */
+  brandConfirm: string;
+}
+
 /** WS8 — the visual production architecture (pack data). */
 export interface ImageArchitecture {
   slots: ImageSlotSpec[];
@@ -490,6 +532,8 @@ export interface RuleSet {
   factFields: FactFieldRules;
   /** Title word-repetition limit + stopwords (gate C1). */
   titleWordRepetition: TitleWordRepetitionRules;
+  /** WS10 bullet colon-header + word-repetition rules (gate C31). */
+  bulletFormat?: BulletFormatRules;
   /** Required A+ module ids (rendered into the A+ prompt). */
   aplusModuleIds: string[];
   /** Id cues gate A4 locates the required A+ modules with. */
@@ -508,6 +552,8 @@ export interface RuleSet {
   postPublish?: PostPublishRules;
   /** WS8 image/video architecture (images prompt + gate C29/C30 + the sheet). */
   imageArchitecture?: ImageArchitecture;
+  /** WS10 rendering notes the sheet prints beside the field they are about. */
+  copySurfaceNotes?: CopySurfaceNotes;
   /** R48 positioning anchor (prompt + ship-sheet strategy note). */
   positioningAnchor?: PositioningAnchor;
   /** AM-1 / C24 dosage-attribute guard. */

@@ -5,7 +5,7 @@ import type {
   KnowledgePack,
   OptimizedListing,
 } from '@/lib/types';
-import { normalize } from '../util';
+import { arr, normalize } from '../util';
 import { fail } from './shared';
 
 /**
@@ -60,8 +60,8 @@ export function c29ImagePlanContent(l: OptimizedListing, pack: KnowledgePack): F
   if (!arch) return [];
 
   const out: Failure[] = [];
-  const plan = Array.isArray(l.imagePlan) ? l.imagePlan : [];
-  const specs = (arch.slots ?? []).filter((s) => typeof s?.slot === 'number');
+  const plan = arr<{ slot?: unknown; purpose?: unknown; spec?: unknown; notes?: unknown }>(l.imagePlan);
+  const specs = arr<(typeof arch.slots)[number]>(arch.slots).filter((s) => typeof s?.slot === 'number');
 
   if (specs.length > 0 && plan.length !== specs.length) {
     out.push(
@@ -88,7 +88,7 @@ export function c29ImagePlanContent(l: OptimizedListing, pack: KnowledgePack): F
       continue;
     }
     const hay = slotText(emitted);
-    for (const group of spec.requiredTokens ?? []) {
+    for (const group of arr<ImageSpecTokenGroup>(spec.requiredTokens)) {
       if (!groupSatisfied(hay, group)) {
         out.push(
           fail(
@@ -137,13 +137,15 @@ export function c29ImagePlanContent(l: OptimizedListing, pack: KnowledgePack): F
           ),
         );
       }
-      if (!Array.isArray(brief.shots) || brief.shots.filter((b) => normalize(str(b))).length === 0) {
-        out.push(fail(C29, 'videoBrief.shots', '(empty)', 'The brief needs a shot list'));
+      // STRINGS, not merely non-empty: a shot emitted as a number or an
+      // object is malformed output, and coercing it would report the brief as
+      // written when nobody could render it.
+      const realStrings = (v: unknown): string[] =>
+        arr<unknown>(v).filter((x) => typeof x === 'string' && normalize(x).trim() !== '') as string[];
+      if (realStrings(brief.shots).length === 0) {
+        out.push(fail(C29, 'videoBrief.shots', '(empty)', 'The brief needs a shot list of real strings'));
       }
-      if (
-        !Array.isArray(brief.onScreenText) ||
-        brief.onScreenText.filter((t) => normalize(str(t))).length === 0
-      ) {
+      if (realStrings(brief.onScreenText).length === 0) {
         out.push(
           fail(
             C29,
@@ -179,8 +181,20 @@ export function c30ImageAltText(l: OptimizedListing, pack: KnowledgePack): Failu
   if (!arch || typeof max !== 'number' || max <= 0) return [];
 
   const out: Failure[] = [];
-  (Array.isArray(l.imagePlan) ? l.imagePlan : []).forEach((slot, i) => {
-    const alt = str(slot?.altText);
+  arr<{ altText?: unknown }>(l.imagePlan).forEach((slot, i) => {
+    const raw = slot?.altText;
+    if (raw !== undefined && raw !== null && typeof raw !== 'string') {
+      out.push(
+        fail(
+          C30,
+          `imagePlan[${i}].altText`,
+          `(${typeof raw})`,
+          'ALT text must be a string — a non-string value is malformed output, not a short ALT',
+        ),
+      );
+      return;
+    }
+    const alt = str(raw);
     if (!normalize(alt)) {
       out.push(
         fail(
@@ -206,9 +220,20 @@ export function c30ImageAltText(l: OptimizedListing, pack: KnowledgePack): Failu
 
   // A+ banner ALT is OPTIONAL (a text-only module has no banner), but a
   // present one is held to the same cap.
-  (l.aplusContent?.modules ?? []).forEach((m, i) => {
+  arr<{ bannerAltText?: unknown }>(l.aplusContent?.modules).forEach((m, i) => {
     const alt = m?.bannerAltText;
     if (alt === undefined || alt === null) return;
+    if (typeof alt !== 'string') {
+      out.push(
+        fail(
+          C30,
+          `aplus.modules[${i}].bannerAltText`,
+          `(${typeof alt})`,
+          'A+ banner ALT text must be a string — a non-string value is malformed output',
+        ),
+      );
+      return;
+    }
     if (String(alt).length > max) {
       out.push(
         fail(

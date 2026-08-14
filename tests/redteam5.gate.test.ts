@@ -346,19 +346,19 @@ describe('routing is 100% pack data', () => {
 describe('FIX 6a — C17 subtracts the disclaimer before the bullet-only rules', () => {
   it('a bullet that carries the verbatim disclaimer no longer fails on trailing punctuation', () => {
     const l = mut((x) => {
-      x.bullets[1] = `Supports a balanced gut* ${pack.compliancePack!.disclaimer}`;
+      x.bullets[1] = `Gut support: supports a balanced gut* ${pack.compliancePack!.disclaimer}`;
     });
     expect(runGate(l, pack, ctx).failures.filter((f) => f.field === 'bullets[1]')).toEqual([]);
   });
 
   it('a bullet that genuinely ends in punctuation still fails C17', () => {
-    const l = mut((x) => { x.bullets[1] = 'Supports a balanced gut.'; });
+    const l = mut((x) => { x.bullets[1] = 'Gut support: supports a balanced gut.'; });
     expect(runGate(l, pack, ctx).failures.some((f) => f.checkId === 'C17' && f.field === 'bullets[1]')).toBe(true);
   });
 
   it('a lowercase bullet still fails C17 after subtraction', () => {
     const l = mut((x) => {
-      x.bullets[1] = `supports a balanced gut* ${pack.compliancePack!.disclaimer}`;
+      x.bullets[1] = `gut support: supports a balanced gut* ${pack.compliancePack!.disclaimer}`;
     });
     expect(runGate(l, pack, ctx).failures.some((f) => f.checkId === 'C17' && f.field === 'bullets[1]')).toBe(true);
   });

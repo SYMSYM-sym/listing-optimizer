@@ -1,5 +1,5 @@
 import type { Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
-import { normalize, tokenSet, utf8Bytes } from '../util';
+import { arr, normalize, tokenSet, utf8Bytes } from '../util';
 import { fail } from './shared';
 
 /**
@@ -67,7 +67,12 @@ export function c1TitleLength(l: OptimizedListing, pack: KnowledgePack): Failure
  */
 export function c2Bullets(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const out: Failure[] = [];
-  const bullets = l.bullets ?? [];
+  // Array.isArray, not `?? []`: a `bullets` field the model emitted as a
+  // string or an object must FAIL, never throw (a thrown gate is a fail-OPEN).
+  const bullets = arr<unknown>(l.bullets);
+  if (!Array.isArray(l.bullets)) {
+    out.push(fail('C2', 'bullets', '(not a list)', 'The bullet block is not a list of strings — the contract requires exactly five'));
+  }
   if (bullets.length !== pack.rules.bulletCount) {
     out.push(fail('C2', 'bullets', `${bullets.length} bullets`, `Exactly ${pack.rules.bulletCount} bullets required`));
   }
