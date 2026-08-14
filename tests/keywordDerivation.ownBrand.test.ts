@@ -296,14 +296,22 @@ describe('(d) manufacturer-only and productName-only matches are exempted too', 
     expect(runGate(l, pack, ctx).pass).toBe(true);
   });
 
-  it('PRODUCTNAME-only: exempted from a snapshot carrying NO brand fields and no title', () => {
-    const bare: ListingSnapshot = { ...snapshot, title: '', attributes: {} };
+  it('PRODUCTNAME-only: exempted from a snapshot carrying NO brand fields, when the TITLE agrees', () => {
+    // No brand attributes at all — the only corroboration available is the
+    // scraped title, and it leads with the canonical name.
+    const titleOnly: ListingSnapshot = { ...snapshot, attributes: {} };
     expect(clean.productName).toBe(PRODUCT_NAME);
-    const identity = ownBrandIdentity(clean, bare);
-    expect([...identity]).toEqual(['brandx probiotic']);
+    expect(titleOnly.title.toLowerCase().startsWith('brandx probiotic')).toBe(true);
+    const identity = ownBrandIdentity(clean, titleOnly);
+    expect(identity.has('brandx probiotic')).toBe(true);
 
     const l = clone();
-    const derived = deriveKeywordPlacement([negativeRow(PRODUCT_NAME, 'Brand term')], l, pack, bare);
+    const derived = deriveKeywordPlacement(
+      [negativeRow(PRODUCT_NAME, 'Brand term')],
+      l,
+      pack,
+      titleOnly,
+    );
     expect(derived[0]!.status).toBe('placed');
     expect(derived[0]!.surfaces).toContain('title');
     expect(derived[0]!.note).toContain('OWN brand identity');
@@ -311,6 +319,22 @@ describe('(d) manufacturer-only and productName-only matches are exempted too', 
     l.keywords = [...derived, ...NEGATIVE_FLOOR];
     expect(c28(l)).toEqual([]);
     expect(runGate(l, pack, ctx).pass).toBe(true);
+  });
+
+  it('PRODUCTNAME with NOTHING to corroborate it (no title, no brand fields) is NOT admitted', () => {
+    // G2 — `productName` is written by the MODEL. With a snapshot that declares
+    // no brand and carries no title there is nothing it can agree with, so the
+    // identity narrows to EMPTY rather than to whatever the model chose. The
+    // direction matters: narrowing KEEPS the negative and fails the run
+    // visibly; widening ships a rival brand.
+    const bare: ListingSnapshot = { ...snapshot, title: '', attributes: {} };
+    expect(clean.productName).toBe(PRODUCT_NAME);
+    expect([...ownBrandIdentity(clean, bare)]).toEqual([]);
+
+    const l = clone();
+    const derived = deriveKeywordPlacement([negativeRow(PRODUCT_NAME, 'Brand term')], l, pack, bare);
+    expect(derived[0]!.status).toBe('negative');
+    expect(derived[0]!.note).toBeUndefined();
   });
 
   it('punctuation and case are normalised the same way the rest of the keyword code does', () => {
@@ -398,5 +422,104 @@ describe('the keywords prompt carries the own-brand line, from pack data', () =>
     delete p.rules.keywordRules!.ownBrandNote;
     const rendered = buildGroupPrompts(p).keywords(snapshot, clean);
     expect(rendered).not.toContain('NEVER A NEGATIVE TERM');
+  });
+});
+
+// ===========================================================================
+// (f) G2 — `productName` IS MODEL-AUTHORED, SO IT IS CORROBORATED FIRST
+// ===========================================================================
+
+/**
+ * THE EXPLOIT. `ownBrandIdentity` added `listing.productName` unconditionally,
+ * and `productName` is written by the MODEL. Setting it to a rival's brand
+ * therefore exempted that rival's `negative` row outright — the header's claim
+ * that the identity "keys off the snapshot, never the model" was false as
+ * written. It was CONTAINED (the same tampering trips C7/C8/C15/A3/A4, so the
+ * run stayed unverified), but "another check happens to co-fire" is the
+ * crash-vs-detection confusion this project refuses to rely on, and it is not a
+ * property of THIS function.
+ *
+ * THE RULE. `productName` is admitted only when its leading words AGREE with
+ * something the model did not write — the scraped title, or a declared snapshot
+ * brand — over at least TWO words, which is the bound source 4 already used.
+ * Both directions: an AGREEING productName still exempts (the live shape must
+ * keep working), a DISAGREEING one does not and the rival still fails C28.
+ */
+describe('(f) a model-authored productName cannot invent an identity', () => {
+  const RIVAL = 'GreenLuxe';
+
+  it('THE EXPLOIT: productName set to the rival no longer exempts its negative row', () => {
+    const l = clone();
+    l.productName = RIVAL;
+    const identity = ownBrandIdentity(l, snapshot);
+    expect(identity.has('greenluxe')).toBe(false);
+    // the snapshot's own brand fields are still there — the set NARROWED, it
+    // did not empty for the wrong reason
+    expect(identity.has(BRAND.toLowerCase())).toBe(true);
+
+    l.title = `${RIVAL} ${l.title}`;
+    l.keywords = deriveKeywordPlacement(l.keywords ?? [], l, pack, snapshot);
+    const row = rowFor(l.keywords, 'greenluxe');
+    expect(row.status).toBe('negative');
+    expect(row.note).toBeUndefined();
+    expect(
+      c28(l).some((f) => f.context.toLowerCase().includes('negative term') && f.context.includes('greenluxe')),
+      JSON.stringify(c28(l).map((f) => f.context)),
+    ).toBe(true);
+    expect(runGate(l, pack, ctx).pass).toBe(false);
+  });
+
+  it('AGREEING with the scraped title: the productName is admitted and still exempts', () => {
+    // The live shape. The fixture title leads with the canonical name.
+    expect(snapshot.title.toLowerCase().startsWith('brandx probiotic')).toBe(true);
+    expect(ownBrandIdentity(clean, snapshot).has('brandx probiotic')).toBe(true);
+
+    const l = clone();
+    const derived = deriveKeywordPlacement([negativeRow(PRODUCT_NAME, 'Brand term')], l, pack, snapshot);
+    expect(derived[0]!.status).not.toBe('negative');
+    expect(derived[0]!.note).toContain('OWN brand identity');
+  });
+
+  it('AGREEING with a declared snapshot BRAND is enough when the title does not lead with it', () => {
+    const reordered: ListingSnapshot = {
+      ...snapshot,
+      title: '50 Billion CFU Probiotic Capsules, 60 Count',
+      attributes: { brand_name: 'Northwind Apothecary' },
+    };
+    const l = clone();
+    l.productName = 'Northwind Apothecary Daily';
+    const identity = ownBrandIdentity(l, reordered);
+    expect(identity.has('northwind apothecary daily')).toBe(true);
+    expect(identity.has('northwind apothecary')).toBe(true);
+  });
+
+  it('ONE agreeing word is never enough — the same two-word bound source 4 uses', () => {
+    const share: ListingSnapshot = {
+      ...snapshot,
+      title: 'BrandX Immunity Blend, 60 Count',
+      attributes: {},
+    };
+    const l = clone();
+    l.productName = 'BrandX Probiotic';
+    // 'brandx' agrees, 'probiotic' does not: one word, so nothing is admitted.
+    expect([...ownBrandIdentity(l, share)]).toEqual([]);
+  });
+
+  it('a productName that disagrees with EVERYTHING narrows the set rather than widening it', () => {
+    const l = clone();
+    l.productName = 'Harbor Row Botanicals';
+    const identity = ownBrandIdentity(l, snapshot);
+    expect(identity.has('harbor row botanicals')).toBe(false);
+    // and the snapshot-derived identity is exactly what it was without a name
+    expect([...identity].sort()).toEqual(
+      [...ownBrandIdentity({ productName: '' } as OptimizedListing, snapshot)].sort(),
+    );
+  });
+
+  it('the fixture run is UNCHANGED — the live shape still converges to zero failures', () => {
+    const l = clone();
+    l.keywords = deriveKeywordPlacement(l.keywords ?? [], l, pack, snapshot);
+    expect(c28(l)).toEqual([]);
+    expect(runGate(l, pack, ctx)).toEqual({ pass: true, failures: [] });
   });
 });

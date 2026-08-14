@@ -105,11 +105,17 @@ import type {
  * when the term, normalised, EQUALS one of the identity strings. A term that
  * merely shares a word with the brand is NOT exempt — a brand of the shape
  * "<Word> <Category>" exempts itself and never the category word that happens
- * to sit inside it. Nothing is read from the model: the identity comes from
- * the snapshot, plus the canonical product name the run pinned (itself held to
- * the snapshot's brand by C7 and to the title by C8/C15). Every genuine rival
- * brand marked `negative` still fails from every surface, the invisible ones
- * included — `tests/keywordDerivation.ownBrand.test.ts` plants one in each.
+ * to sit inside it. NOTHING IS BELIEVED FROM THE MODEL UNCORROBORATED: sources
+ * 1, 2 and 4 are the snapshot's own fields, and the one model-authored source
+ * (`productName`) is admitted only when its leading words AGREE with the
+ * scraped title or a declared snapshot brand — see `ownBrandIdentity`. An
+ * earlier version of this note claimed the identity "comes from the snapshot"
+ * while `productName` was in fact added unconditionally; setting `productName`
+ * to a rival's brand exempted that rival's row, and the run only stayed
+ * unverified because C7/C8/C15/A3/A4 co-fired on the same tampering. Every
+ * genuine rival brand marked `negative` still fails from every surface, the
+ * invisible ones included — `tests/keywordDerivation.ownBrand.test.ts` plants
+ * one in each.
  *
  * THE FLOOR CANNOT BE GAMED. `minNegatives` is counted by C28 over the FINAL
  * artifact, so a reclassified row is no longer a negative when the floor is
@@ -156,11 +162,32 @@ const BRAND_IDENTITY_ATTRIBUTES = ['brand_name', 'manufacturer'] as const;
  * dash folding, whitespace collapse), then case-folded and stripped of
  * punctuation so `BrandX Labs, LLC.` and `brandx labs llc` are one string.
  */
-const identityKey = (v: unknown): string =>
+export const identityKey = (v: unknown): string =>
   normalize(str(v))
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
+
+const words = (key: string): string[] => key.split(' ').filter(Boolean);
+
+/**
+ * How many LEADING words two identity keys agree on.
+ *
+ * The one shared primitive behind both places identity is widened, so the two
+ * can never drift into meaning different things by "agrees with".
+ */
+const agreeingPrefix = (a: string[], b: string[]): number => {
+  let k = 0;
+  while (k < a.length && k < b.length && a[k] === b[k]) k++;
+  return k;
+};
+
+/**
+ * The minimum agreement that may widen the identity. TWO words, everywhere:
+ * one leading word is generic often enough that agreeing on it says nothing,
+ * and every widening here EXEMPTS a row from the negative scan.
+ */
+const MIN_AGREEING_WORDS = 2;
 
 /**
  * THE SUBJECT PRODUCT'S OWN BRAND IDENTITY, resolved from the run rather than
@@ -169,9 +196,9 @@ const identityKey = (v: unknown): string =>
  * FOUR SOURCES, each of which is the product's own name by definition:
  *   1-2. the ingested snapshot's `brand_name` and `manufacturer` — the live
  *        page's own brand fields;
- *   3.   the run's resolved canonical `productName` — the identifier C8/C15
- *        force to the head of the title and title75 and C7 holds to the
- *        snapshot's brand string, so it cannot quietly become a rival's name;
+ *   3.   the run's resolved canonical `productName`, ADMITTED ONLY WHEN IT
+ *        AGREES WITH THE SNAPSHOT — see the next note, which is the whole of
+ *        why this source is no longer taken on trust;
  *   4.   THE BRAND TOKEN IN THE TITLE — the leading words the scraped title and
  *        a declared brand string agree on, which is how a corporate suffix is
  *        handled ("Instant Immunity LLC" + title "Instant Immunity Support ..."
@@ -179,12 +206,35 @@ const identityKey = (v: unknown): string =>
  *        least TWO words, so a single generic leading word can never become an
  *        exemption on its own.
  *
+ * SOURCE 3 IS MODEL-AUTHORED, SO IT IS CORROBORATED BEFORE IT IS BELIEVED.
+ * `productName` is written by the MODEL. The header of this module claimed the
+ * identity "comes from the snapshot" and that claim was FALSE as written: a run
+ * whose `productName` was set to a rival's brand exempted that rival's
+ * `negative` row outright. (It was contained in practice — the same tampering
+ * trips C7/C8/C15/A3/A4 and the run stayed unverified — but "another check
+ * happens to co-fire" is exactly the crash-vs-detection confusion this project
+ * refuses to rely on, and it is not a property of THIS function.) So
+ * `productName` is admitted only when it AGREES with something the model did
+ * not write: the scraped title, or a declared snapshot brand, over at least
+ * MIN_AGREEING_WORDS leading words — the very rule source 4 already used, and
+ * the reason a two-word bound is the right one is unchanged.
+ *
+ * WITH NO SNAPSHOT THE IDENTITY NARROWS TO NOTHING, and that is the correct
+ * direction: there is then nothing to corroborate against, and this set only
+ * ever REMOVES rows from the negative scan. Narrowing keeps the negative and
+ * fails the run visibly; widening ships a rival brand. Never the second one.
+ *
  * Returned as normalised keys, matched by EQUALITY only. A term that merely
  * contains, or is contained by, a brand string is not this product's identity
  * and is not exempted.
  */
 export function ownBrandIdentity(
-  listing: OptimizedListing,
+  /**
+   * The listing, when there is one. A caller resolving the identity BEFORE
+   * generation has none, and that is the narrow direction: the model-authored
+   * `productName` source simply contributes nothing.
+   */
+  listing: OptimizedListing | undefined,
   snapshot?: ListingSnapshot,
 ): Set<string> {
   const out = new Set<string>();
@@ -192,18 +242,38 @@ export function ownBrandIdentity(
     const k = identityKey(v);
     if (k) out.add(k);
   };
+  // SOURCES 1-2 — the snapshot's own brand fields. Nothing the model wrote.
   const attributes = snapshot?.attributes ?? {};
   for (const key of BRAND_IDENTITY_ATTRIBUTES) add(attributes[key]);
-  add(listing?.productName);
 
-  const titleWords = identityKey(snapshot?.title).split(' ').filter(Boolean);
+  const titleWords = words(identityKey(snapshot?.title));
+  // Snapshot-declared brands ONLY — the corroboration set for source 3 must not
+  // include anything source 3 itself put there.
+  const declaredKeys = [...out];
+
+  // SOURCE 3 — the model-authored canonical name, CORROBORATED. It is admitted
+  // only when its leading words agree with the scraped title or with a declared
+  // snapshot brand. No snapshot => nothing agrees => it is not admitted, and the
+  // identity narrows to empty rather than to whatever the model chose to write.
+  const nameWords = words(identityKey(listing?.productName));
+  if (
+    nameWords.length > 0 &&
+    (agreeingPrefix(nameWords, titleWords) >= MIN_AGREEING_WORDS ||
+      declaredKeys.some((d) => agreeingPrefix(nameWords, words(d)) >= MIN_AGREEING_WORDS))
+  ) {
+    out.add(nameWords.join(' '));
+  }
+
+  // SOURCE 4 — the brand token the title and an already-admitted identity agree
+  // on, which is how a corporate suffix is handled.
   if (titleWords.length > 0) {
     for (const declared of [...out]) {
-      const words = declared.split(' ').filter(Boolean);
-      let k = 0;
-      while (k < words.length && k < titleWords.length && words[k] === titleWords[k]) k++;
-      // k === words.length is the declared string itself, already present.
-      if (k >= 2 && k < words.length) out.add(words.slice(0, k).join(' '));
+      const declaredWords = words(declared);
+      const k = agreeingPrefix(declaredWords, titleWords);
+      // k === declaredWords.length is the declared string itself, already present.
+      if (k >= MIN_AGREEING_WORDS && k < declaredWords.length) {
+        out.add(declaredWords.slice(0, k).join(' '));
+      }
     }
   }
   return out;
@@ -217,8 +287,9 @@ export function deriveKeywordPlacement(
    * The INGESTED snapshot, the only non-model source of the product's own brand
    * identity. Optional so a caller holding a listing but no snapshot (a stored
    * run re-derived against fresh copy, a stateless audit) still works — and it
-   * fails toward KEEPING the negative: with no snapshot the identity narrows to
-   * the canonical product name, so fewer rows are exempted, never more.
+   * fails toward KEEPING the negative: with no snapshot there is nothing to
+   * corroborate the model-authored `productName` against, so the identity is
+   * EMPTY and no row is exempted at all.
    */
   snapshot?: ListingSnapshot,
 ): KeywordTerm[] {
