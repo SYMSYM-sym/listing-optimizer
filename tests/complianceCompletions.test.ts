@@ -97,6 +97,37 @@ describe('C24 dosage-attribute guard (AM-1)', () => {
     expect(idsOf(l)).not.toContain('C12');
   });
 
+  /**
+   * F6 — A RECORDED PARITY LIMITATION, PINNED SO IT CANNOT BE REDISCOVERED.
+   *
+   * The check is DIGIT-ANCHORED: its value pattern is `\d[\d,.]*` followed by
+   * a hero unit, exactly as the harness kit's `checkC24` was. A hero figure
+   * spelled out in words ("Fifty Billion CFU") therefore passes, and so does
+   * C12, whose scan is unit-anchored on digits for the same reason.
+   *
+   * This is NOT fixed here, and the omission is deliberate rather than
+   * overlooked: the check is a PORT, its behaviour is the kit's behaviour, and
+   * widening it silently would make the app and the kit disagree about what
+   * C24 means with nothing recording why. It is written down in
+   * CONFORMANCE-DEVIATIONS.md (item 2) as a known limitation with the
+   * conditions any future fix must meet. This test exists so the boundary is
+   * asserted rather than assumed — if someone widens the pattern, this test
+   * fails and they are forced to update the record in the same commit.
+   */
+  it('KNOWN LIMITATION (recorded): the guard is digit-anchored, so a spelled-out figure passes', () => {
+    const digits = mut((x) => {
+      x.attributes.maximum_dosage = '50 Billion CFU';
+    });
+    const words = mut((x) => {
+      x.attributes.maximum_dosage = 'Fifty Billion CFU';
+    });
+    expect(c24DosageAttributeGuard(digits, pack)).toHaveLength(1);
+    expect(c24DosageAttributeGuard(words, pack)).toEqual([]);
+    // and C12 does not catch it either — same digit anchor, same reason
+    expect(idsOf(words)).not.toContain('C12');
+    expect(idsOf(words)).not.toContain('C24');
+  });
+
   it('covers every key shape the pack pattern names', () => {
     for (const key of ['maximum_dosage', 'product_strength', 'potency_level', 'dose_per_unit']) {
       const l = mut((x) => {

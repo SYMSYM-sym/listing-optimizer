@@ -6,6 +6,15 @@ backend search terms, full attribute set, A+ content, image plan, ~15 Q&A)
 plus a gap audit against the current listing. Supplements first; the core is
 category-agnostic via pluggable knowledge packs.
 
+## Known deviations
+
+Where this app knowingly differs from the source playbook and harness kit — and
+where the repository's own record was wrong — is recorded in
+[`CONFORMANCE-DEVIATIONS.md`](./CONFORMANCE-DEVIATIONS.md). It also carries the
+check-ID census and the table of IDs the kit and this app use for **different**
+checks (`C25`, `C28`, `C30`, `C31`), which you want before reading a kit check
+number against this repository.
+
 ## Ingestion: legal / ToS note (read this)
 
 This app **never operates its own Amazon scraper**. It ingests listings via:
