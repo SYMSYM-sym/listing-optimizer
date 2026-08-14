@@ -164,18 +164,36 @@ for the same reason.
 | C-checks | `C1`–`C12`, `C15`–`C31` | **29** |
 | A-checks (A+ content) | `A1`–`A9` | **9** |
 | pack integrity | `PACK` | 1 |
+| degraded-group fail-closed | `GEN` | 1 |
 | gate boundary | `GATE` | 1 |
-| **total distinct ids** | | **40** |
+| **total distinct ids** | | **41** |
+
+**CORRECTED.** This table said **40** and omitted `GEN` entirely. `GEN` was
+added by D1 (`lib/gate/runGate.ts`, the second `guarded(...)` row) and is a
+blocking failure like any other, so the census that claimed authority over the
+check ids was wrong about how many there are. The count is now **pinned to the
+code by a test** — `tests/census.test.ts` reads the `guarded('…')` wiring out of
+`lib/gate/runGate.ts`, derives every number in this table from it, and fails if
+this file and that file disagree. A census in prose is the same mistake as a
+coverage claim in a commit message (item 1); this one now lives in a test.
 
 `C13` and `C14` do not exist in this app — the numbering has a gap, and the gap
 is real rather than a bookkeeping error (see 4.2: the kit's `C13`/`C14` are
 file-and-repo-hygiene checks with no analogue in a web app).
 
-`GATE` is not a content rule. `runGate` runs **every** check inside its own
+`GATE` is not a content rule, and it is the one id that is not WIRED: it is
+emitted by the boundary itself. `runGate` runs **every** check inside its own
 boundary; a check that throws becomes a **blocking** `GATE` failure naming the
 check and carrying the error. A crash can therefore never return `pass: true`,
 and one broken check cannot blind the other thirty-nine. That is the playbook's
 exit-code-3 contract made structural.
+
+`GEN` is not a content rule either. D1 lets a group whose output could not be
+validated DEGRADE rather than throw the whole run away (`lib/engine/optimize.ts`
+records the group name on `degradedGroups`); `genDegradedGroups` turns every
+recorded name into a **blocking** failure, so a partial answer can never come
+back verified. Degrading is how the operator gets an answer AND the truth about
+it — it is never how a run passes.
 
 `PACK` is the fail-closed manifest of `REQUIRED_PACK_PIECES` (see item 3): a
 missing or emptied required piece is a blocking failure that names the piece and
@@ -267,12 +285,14 @@ still re-resolves the carried-forward rows against the strings that ship.
 
 **`captured-via` is derived-exempt on purpose.** Its whole meaning is that the
 term is deliberately ABSENT; deriving it would downgrade every lawfully
-recaptured row and destroy K4.
+recaptured row and destroy K4. **Derivation-exempt is not gate-exempt** — the
+gate scans that absence, which is item 6.
 
 **C28 IS NOT WEAKENED — nothing was removed from it.** A `negative` term
 appearing anywhere still fails (R50/AM-9, including the A+ banner ALT and video
 brief surfaces of item 1); a `backend` row on a visible surface still fails; a
-`captured-via` row with no `via` still fails; a banned-lexicon term that ends up
+`captured-via` row with no `via` still fails, and (since item 6) one whose term
+is in the copy fails too; a banned-lexicon term that ends up
 targeted still fails the four-test screen; an unknown surface in pack config
 still fails closed-world; a missing or malformed artifact still fails closed.
 **The placement leg is kept as well**, so a stored or hand-edited artifact that
@@ -296,3 +316,189 @@ asserted and hoped for.
 accepts `surfaces`), `KeywordTerm.surfaces`/`note` in `lib/types.ts`, the
 "derived" labelling in the Ship Sheet / Markdown / Keywords tab, and
 `tests/keywordDerivation.ws3.test.ts`.
+
+---
+
+## 6. CORRECTED RECORD — `captured-via` was checked for its ROUTE and not for its ABSENCE.
+
+C28's own docstring defined the status, in as many words:
+
+> `captured-via` — NOT scanned (the term is deliberately absent), but the
+> compliant route MUST be documented in `via` (K4).
+
+The parenthetical states a **fact about the copy** — the term is absent — and
+nothing anywhere enforced it. The check validated only that `via` was non-empty.
+The sibling `candidate` status, which makes the *same* claim about the copy
+("this term is not in the current listing"), had the everywhere-scan the whole
+time; `captured-via` had none.
+
+**The consequence was a second, complete bypass of R50**, on the same surfaces
+item 1 closed for a reader hole — this time through a **status word** rather
+than through an unread field. Reproduced end to end:
+
+```
+the keyword reference's rival-brand row 'GreenLuxe'
+  status: 'negative'  ->  status: 'captured-via', via: 'quality cluster'
+'GreenLuxe' appended to imagePlan[2].altText
+=> runGate().pass === true, failures === []   (a verified run, rival brand shipped)
+```
+
+**Status: FIXED.** `captured-via` now gets the same `everywhere()` absence scan
+`candidate` gets, over the same corpus, with the same `termRegex`. The `via` leg
+is untouched, and both legs can fail at once.
+
+**K4 IS NOT WEAKENED — that is the harder half of the fix.** The entire point of
+the status is that a listing may reach banned demand through a compliant
+cluster, so a `captured-via` row whose term is genuinely absent must still pass,
+on every surface, with the route recorded. `tests/capturedVia.gate.test.ts`
+holds both directions: 15 planted-surface cases FAIL (title, title75,
+itemHighlights, bullets, description, backend, attributes, A+ body, A+
+`bannerAltText`, FAQ, Q&A, image `altText`, image `notes`, video
+`onScreenText`, video `notes`), and lawful recapture rows — one, several, and
+the rival-brand row itself while the copy is clean — still raise nothing and
+still leave the golden fixture at zero gate failures.
+
+**A future change to this must also change:** the status list in C28's header,
+`tests/capturedVia.gate.test.ts`, and item 5's claim about what C28 still does.
+
+---
+
+## 7. FLAGGED ADDITION — the operator's competitor ASINs are an automatic rival-brand negative set.
+
+### 7.1 What was wrong
+
+C28's `negative` leg is the whole of this app's R50 (rival-brand exclusion)
+enforcement, and **every word of it is conditioned on the MODEL having written
+`negative` in the row.** The four-test screen that would otherwise catch a
+mislabelled row reads the compliance pack's disease nouns, action-paired nouns
+and superlative bans — and a rival **brand name is in none of those lexicons**,
+because a brand name is not a lexicon item, it is a fact about the market.
+
+So C28 guaranteed **labelled-negative absence**, never **rival absence**. Label
+the rival `placed` instead and the row is *correct* by every rule the check has:
+the term really is in the title, the surfaces really do carry it. Verified run,
+competitor's brand in shipped copy.
+
+### 7.2 The signal, and why it is code rather than a better prompt
+
+The operator typed the competitor ASINs. WS9 already **ingests** them
+(`audit.benchmark` measures their snapshots), and each snapshot carries the
+rival's brand in the same two structural fields the subject's own identity is
+read from. "Is this string the brand of a competitor the operator supplied" is a
+fact **code can compute exactly** from an operator-supplied input — the same
+argument that moved the placement map and the own-brand coherence check into
+code.
+
+`lib/audit/rivalBrands.ts` resolves the set; **`buildAudit` supplies it**, because
+`verified` is computed there and a route cannot forget to thread something it is
+never handed. `lib/pipeline/run.ts` derives the same set for the repair loop so
+the loop sees the failure the final audit will see and gets rounds in which to
+clear it.
+
+### 7.3 The four bounds — over-blocking is as severe as a bypass
+
+| bound | why |
+| --- | --- |
+| never fires when no competitors were supplied | the default path is byte-identical to before this existed |
+| structural brand fields only (`brand_name`, `manufacturer`) | guessing where a brand ends inside a rival's TITLE is the unreliable step, and a wrong guess blocks lawful copy |
+| the subject's own identity is subtracted | an operator who pastes their own ASIN into the competitor box must not turn the listing's own brand into a term it may not carry — that is an unwinnable run, the exact defect item 5's own-brand reclassification ended |
+| a single-word brand is never admitted | the `ownBrandIdentity` two-word bound, reused |
+
+### 7.4 KNOWN LIMITATION, recorded rather than traded away silently
+
+**A single-word rival brand is not covered.** The bound is not cosmetic: real
+supplement brands *are* single ordinary words — "NOW" is a shipping brand in
+this very category — and an automatic negative on the word "now" would fail
+lawful copy that never mentioned anybody. Since over-blocking is treated here as
+exactly as severe as a bypass, the one-word case is left to the model's
+`negative` row (which still works, and still fails from every surface).
+
+**If this is ever widened it must be a FLAGGED ADDITION, not a silent change:**
+recorded here, with both-direction tests, and with the disambiguating signal held
+as **data** (the subject's own scraped copy, the pack's vocabulary) rather than
+as a literal in the gate.
+
+### 7.5 What it deliberately does NOT do
+
+It does not touch the keyword artifact, so `minNegatives` still counts only the
+rows the reference itself records: **supplying competitors can never satisfy the
+negative floor**. It adds no lexicon and no literal — every string comes from a
+page the operator asked for, at run time, which is why
+`tests/category.literals.test.ts` stays green. A brand the reference already
+records as `negative` is reported once, by the row that owns it.
+
+Both directions in `tests/rivalBrands.gate.test.ts` (24 cases): the mislabelled
+`placed` rival passes with no competitors and FAILS with them, from eight
+surfaces including the invisible ones; and every bound above is asserted not to
+fire.
+
+**A future change to this must also change:** `lib/audit/rivalBrands.ts`,
+`GateContext.rivalBrands`, the automatic-negative block in
+`lib/gate/checks/c-keywords.ts`, and `tests/rivalBrands.gate.test.ts`.
+
+---
+
+## 8. CORRECTED RECORD — the own-brand identity trusted a MODEL-authored field.
+
+`lib/engine/keywordPlacement.ts` says the own-brand identity is resolved "from
+the run rather than from the model" and listed four sources. Source 3 was
+`listing.productName` — **which the model writes** — and it was added
+unconditionally. Setting `productName` to a rival's brand therefore exempted
+that rival's `negative` row from the R50 scan outright.
+
+It was **contained**: the same tampering trips C7 (brand leakage), C8/C15
+(product-name lead) and A3/A4 (A+ brand/product name), so the run stayed
+unverified. But "another check happens to co-fire" is precisely the
+crash-vs-detection confusion the `GATE` boundary exists to end (item 4.1), it is
+not a property of this function, and the header's claim was **false as written**.
+
+**Status: FIXED.** `productName` is admitted only when its leading words AGREE
+with something the model did not write — the scraped title, or a declared
+snapshot brand — over at least **two** words. That is the same rule identity
+source 4 already used for the title token, and the two now share one primitive
+so they cannot drift apart.
+
+**With no snapshot the identity narrows to EMPTY**, which is the correct
+direction: there is nothing to corroborate against, and this set only ever
+REMOVES rows from the negative scan. Narrowing keeps the negative and fails the
+run visibly; widening ships a rival brand.
+
+**The cost, stated.** A run whose scraped title does not lead with the brand and
+whose declared brand is a single word will no longer admit the full canonical
+`productName`. The declared brand itself is still admitted, so only a `negative`
+row naming the *exact full canonical name* loses its exemption — and it loses it
+by failing, visibly, rather than by passing.
+
+Both directions in `tests/keywordDerivation.ownBrand.test.ts` §(f): the exploit
+(`productName = 'GreenLuxe'`) no longer exempts and the rival still fails C28; an
+agreeing `productName` still exempts, whether it agrees with the title or with a
+declared brand; one agreeing word is never enough; and the golden fixture still
+converges to zero failures.
+
+---
+
+## 9. CORRECTED RECORD — regenerate dropped one of the three per-run operator inputs.
+
+`app/api/regenerate/route.ts` carried `fictionPhrases` (R45/C11) and
+`panelFacts` (WS5.5) and **did not carry the WS9 `reviewsText`**. A regenerated
+group is written from scratch, so the one group an operator asked to redo came
+back written **without** the mined buyer-language block every other group had
+been written with — a listing that half mirrors the operator's buyers, with
+nothing anywhere saying so.
+
+**Status: FIXED.** The route accepts `reviewsText`, mines it through
+`mineReviewLanguage` exactly as the pipeline does (the filter is the gate's own
+compliance lexicons, so a symptom word a reviewer lawfully wrote can never
+become a line of our copy), passes the mined phrasing to the prompts, and gives
+the audit the same tokens so P11 is scored against the same evidence rather than
+left `unknown`. `app/operatorInputs.ts` sends it on a regenerate call.
+
+**COMPETITORS are still not sent, and that is a different case rather than the
+same oversight:** they feed the BENCHMARK, a measurement of pages a single-group
+regeneration does not re-ingest, and their absence changes no copy.
+
+Both directions in `tests/regenerate.route.test.ts` → "WS9 review text (G4)":
+present, the regenerated group's prompt carries the same `buyerLanguageBlock`
+the optimize path renders and none of the fragments the filter rejected; absent
+— including a whitespace-only value, because absence and emptiness are different
+statements — the prompts are byte-identical and P11 stays `unknown`.
