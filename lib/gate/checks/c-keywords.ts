@@ -35,6 +35,19 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  *                    undocumented captured-via is a banned term with a label on it.
  *   `not-targeted` — NOT scanned; a deliberate strategy call.
  *
+ * WHERE THE ROWS COME FROM NOW, and why this check did not shrink. The
+ * `surfaces` list and the placement status are no longer written by the model:
+ * it was asserting where its own copy had put a term and was wrong 21-22 times
+ * per live run on all three ASINs, and the repair loop could not converge
+ * because each regeneration produced a fresh set of confident wrong claims.
+ * `lib/engine/keywordPlacement.ts` DERIVES them from the finished copy using
+ * the very reader below, so the artifact reaching this check is true by
+ * construction. Not one rule here was relaxed for it: the placement leg stays
+ * because a STORED or hand-edited artifact never went through that derivation,
+ * and the negative / backend-leak / captured-via / four-test / closed-world /
+ * fail-closed legs are all untouched. What disappeared is a class of failure,
+ * not a class of enforcement.
+ *
  * THE FOUR-TEST SCREEN (K4), reusing the gate's OWN lexicons. A term the
  * compliance pack already bans can never be `placed` or `backend`, whatever
  * the model declared: the screen's legality leg is not a second opinion, it is

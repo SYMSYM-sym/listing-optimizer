@@ -98,8 +98,8 @@ export function toMarkdown(listing: OptimizedListing, audit: Audit): string {
   if (coverage && typeof coverage === 'object' && coverage.total > 0) {
     lines.push('## Keyword reference');
     if (arr<unknown>(coverage.placed).length > 0) {
-      lines.push('### Placed (verified on every surface declared)');
-      lines.push('| Term | Tier | Verified on | Why |');
+      lines.push('### Placed (surfaces DERIVED from the copy, then gate-verified)');
+      lines.push('| Term | Tier | Derived placement | Why |');
       lines.push('|---|---|---|---|');
       for (const r of arr<{ term: string; tier: unknown; surfaces: string[]; why: string }>(coverage.placed)) {
         lines.push(`| ${r.term} | ${String(r.tier)} | ${arr<string>(r.surfaces).join(', ')} | ${r.why} |`);
@@ -126,7 +126,7 @@ export function toMarkdown(listing: OptimizedListing, audit: Audit): string {
     }
     if (arr<unknown>(coverage.candidates).length > 0 || arr<unknown>(coverage.notTargeted).length > 0) {
       lines.push('### Held back / deliberately skipped');
-      for (const r of arr<{ term: string; home: string; why: string }>(coverage.candidates)) lines.push(`- **${r.term}** — candidate; ${[r.home, r.why].filter(Boolean).join(' — ')}`);
+      for (const r of arr<{ term: string; home: string; why: string; note?: string }>(coverage.candidates)) lines.push(`- **${r.term}** — candidate; ${[r.home, r.why, r.note].filter(Boolean).join(' — ')}`);
       for (const r of arr<{ term: string; why: string }>(coverage.notTargeted)) lines.push(`- **${r.term}** — not targeted; ${r.why}`);
       lines.push('');
     }

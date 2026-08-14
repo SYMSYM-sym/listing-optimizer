@@ -4,13 +4,22 @@ import { demandRecaptureBlock, keywordVocabularyBlock, snapshotBlock } from './s
 /**
  * WS3 — the KEYWORD REFERENCE prompt (playbook Phase 7).
  *
- * WHY IT RUNS LAST (phase 3, after every copy group). The reference declares
- * WHERE each term sits, and gate C28 verifies every one of those declarations
- * against the emitted strings. A declaration written BEFORE the copy exists
- * could only ever be a guess — exactly the hand-written "all placed"
- * checkmarks the playbook names as the pattern that failed nine times. So the
- * model is shown the FINISHED surfaces and asked to READ them; the gate then
- * independently verifies the reading. Worker != checker, one more time.
+ * WHY IT RUNS LAST (phase 3, after every copy group). The reference is about
+ * the FINISHED listing — which terms it targets, which it deliberately avoids,
+ * and which demand it recaptures — so it is written against copy that exists
+ * rather than copy that is being written at the same instant.
+ *
+ * WHAT IS NO LONGER ASKED FOR: the PLACEMENT MAP. This prompt used to require
+ * the model to state which surfaces its own copy had placed each term on, and
+ * on all three live ASINs it was wrong 21–22 times per run ("declared placed
+ * on 'title' but does not appear there"), never converging, because each
+ * repair round invented a fresh set of confident wrong claims. Whether an
+ * exact string occurs in an exact field is a fact CODE CAN COMPUTE, so code
+ * computes it (`lib/engine/keywordPlacement.ts`) from these very strings and
+ * the gate re-derives it independently. Worker != checker: the model is asked
+ * only for what it alone can judge — which terms matter, why, and which ones
+ * must be kept OUT. Asking for a field and then overwriting it would spend
+ * output tokens on drift.
  *
  * QUALITATIVE BY MANDATE. The playbook forbids search-volume tools, and this
  * system calls none: a term earns its tier from evidence that can be pointed
@@ -83,7 +92,7 @@ export function keywordsPrompt(
       ? `, at most ${kr.whyMaxChars} characters`
       : '';
   const surfaces = [
-    'THE FINISHED COPY (read it — every placement you declare is machine-verified against these exact strings):',
+    'THE FINISHED COPY (read it — this is the listing your reference describes, and the placement map is computed from these exact strings):',
     `title: ${emitted.title}`,
     `title75: ${emitted.title75}`,
     `itemHighlights: ${emitted.itemHighlights}`,
@@ -107,12 +116,12 @@ TASK: The keyword reference for this listing — one row per term.
 ${budget}
 ${recapture}
 - QUALITATIVE ONLY. Never cite, invent or imply a search-volume figure: a row earns its tier from evidence you can point at (what the category leaders lead with, what the label states, what a shopper would type), never from a number.
-- Read the finished copy above and declare the truth about it. A row whose declared surfaces do not match the strings above is a hard failure, so declare only what you can see.
-- Use the surface names from the vocabulary above, exactly as written.
+- DO NOT list surfaces, and do not say where a term sits. The placement map is computed from the copy above after you answer (see the STATUS note above) — a list you write here would only be overwritten, so spend the words on WHICH terms belong in the reference and WHY.
+- Choose the status from the vocabulary above. The judgements are yours: what must appear nowhere (every rival brand name and every term the compliance rules above forbid), what is deliberately left alone, what is held back for a later cycle, and what demand is recaptured through a compliant cluster named in "via".
 - "why" is required on every row: ONE short sentence of evidence${whyLimit}. It is evidence, not an essay.
 - A row that says a rival's brand name, or any term the compliance rules above forbid, belongs on the negative list. Every negative row states its reason in "why".
 - Cover the listing properly WITHIN THAT BUDGET: the head terms, the named entities, the qualifier and trust terms, the buyer-language phrases, the invisible-only variants, and the terms this listing deliberately leaves alone. Spend the rows on the terms that decide the listing; a near-duplicate of a row you have already written earns nothing.
 
-Return JSON: { "keywords": [{ "term", "tier", "status", "surfaces": [], "why", "via", "home" } ...] }
-"via" is required for recaptured demand; "home" is required for a future-cycle row; both are omitted elsewhere. "surfaces" is [] for rows that sit on none.`;
+Return JSON: { "keywords": [{ "term", "tier", "status", "why", "via", "home" } ...] }
+"via" is required for recaptured demand; "home" is required for a future-cycle row; both are omitted elsewhere. There is no "surfaces" field — the placement map is computed from the copy above.`;
 }

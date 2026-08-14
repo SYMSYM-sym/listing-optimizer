@@ -156,11 +156,16 @@ export async function runRepairLoop(
       failureContext[g] = failureContext[g] ? `${failureContext[g]}\n${line}` : line;
     }
     // WS3 — COUPLING, stated explicitly rather than left to a second round.
-    // The keyword reference DECLARES where each term sits, so the moment any
-    // copy group is rewritten every declaration about it is stale. Regenerating
-    // the copy without re-reading it would make C28 fail on the NEXT round for
-    // a reason the current round already created, burning an iteration on a
-    // self-inflicted failure. The reference is re-read in the same round.
+    // The reference is about the FINISHED copy, so the moment any copy group is
+    // rewritten the SET of terms worth recording can be stale — a term the new
+    // copy no longer carries, a phrase it now leads with. The reference is
+    // re-read in the same round rather than a round later.
+    //
+    // The PLACEMENT half of that staleness is no longer this coupling's job:
+    // `optimize()` re-derives every row's surfaces from the copy that actually
+    // ships on EVERY round (see `lib/engine/keywordPlacement.ts`), so even a
+    // round that did not regenerate this group cannot emit a map describing
+    // copy that no longer exists.
     if (groups.size > 0 && [...groups].some((g) => g !== 'keywords')) {
       groups.add('keywords');
     }

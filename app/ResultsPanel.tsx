@@ -501,13 +501,15 @@ export function ResultsPanel({
       {/*
         WS3 — THE KEYWORD REFERENCE.
 
-        This is the artifact gate C28 has already verified against the emitted
-        copy: every `placed` term was machine-checked to appear on each surface
-        it declares, every `backend` term to sit in the search-terms field and
-        nowhere a customer reads, every `negative` term to appear NOWHERE at
-        all. Rendering it is not decoration — the playbook's own failure mode
-        was a hand-written "all placed" checklist, and this is the view where
-        an operator sees the machine-checked version of it.
+        The SURFACES column is DERIVED: code reads the finished copy and
+        records where each term actually landed (the model is not asked — when
+        it was, it was wrong ~21 times per live run and the repair loop could
+        never converge). Gate C28 then re-verifies the whole artifact
+        independently: every `backend` term sits in the search-terms field and
+        nowhere a customer reads, every `negative` term appears NOWHERE at all.
+        Rendering it is not decoration — the playbook's own failure mode was a
+        hand-written "all placed" checklist, and this is the view where an
+        operator sees the computed version of it.
       */}
       {tab === 'keywords' && (
         <section className="space-y-4">
@@ -571,7 +573,9 @@ export function ResultsPanel({
                       <th className="py-1 pr-3">Term</th>
                       <th className="py-1 pr-3">Tier</th>
                       <th className="py-1 pr-3">Status</th>
-                      <th className="py-1 pr-3">Surfaces</th>
+                      <th className="py-1 pr-3" title="Computed from the finished copy — not declared">
+                        Surfaces (derived)
+                      </th>
                       <th className="py-1">Why</th>
                     </tr>
                   </thead>
@@ -592,7 +596,10 @@ export function ResultsPanel({
                             <span className="italic text-zinc-600">none — deliberately</span>
                           )}
                         </td>
-                        <td className="py-2 text-zinc-500">{k.why}</td>
+                        <td className="py-2 text-zinc-500">
+                          {k.why}
+                          {k.note && <span className="block text-zinc-600 italic">{k.note}</span>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

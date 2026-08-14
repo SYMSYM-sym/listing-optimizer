@@ -13,6 +13,7 @@ import { logServer } from '@/lib/server/log';
 import { sanitizeBackendSearchTerms } from './backendSanitize';
 import { sanitizeBullets } from './bulletSanitize';
 import { buildFacts } from './facts';
+import { deriveKeywordPlacement } from './keywordPlacement';
 import { normalizeListingTypography } from './typography';
 import { generateGroup, GroupGenerationError, type LlmClient } from './llm';
 import { buildGroupPrompts, buildSystemPrompt, type OperatorPromptContext } from './prompts';
@@ -388,14 +389,18 @@ export async function optimize(
   // ---------------------------------------------------------------------------
   // PHASE 3 — the KEYWORD REFERENCE (WS3).
   //
-  // WHY IT IS A THIRD PHASE rather than a ninth parallel call. The reference
-  // declares WHERE each term sits and gate C28 verifies every one of those
-  // declarations against the emitted strings. A declaration written at the same
-  // instant as the copy could only be a guess — which is exactly the
-  // hand-written "all placed" checkmark the playbook names as the pattern that
-  // failed nine times. So this call is handed the FINISHED, typography-folded
-  // surfaces and asked to READ them; the gate then re-derives the truth
-  // independently and fails closed on any disagreement.
+  // WHY IT IS A THIRD PHASE rather than a ninth parallel call. The reference is
+  // about the FINISHED listing, so it is written against copy that exists
+  // rather than copy being written at the same instant.
+  //
+  // THE MODEL IS NO LONGER ASKED WHERE ITS TERMS LANDED. It used to be, and on
+  // all three live ASINs it was wrong 21-22 times per run, every run, never
+  // converging: "declared placed on 'title' but does not appear there". That is
+  // a fact CODE CAN COMPUTE EXACTLY, so `deriveKeywordPlacement` computes it
+  // below from the finished, typography-folded strings using C28's own
+  // pack-driven surface readers. The model contributes the terms, the tiers,
+  // the evidence and the intent-bearing statuses; the gate still re-derives
+  // everything independently and still fails closed.
   //
   // COST: one short call, and only when `keywords` is in scope — a repair round
   // that regenerates nothing else makes no other call at all.
@@ -426,9 +431,14 @@ export async function optimize(
       ...degraded,
     ]),
   ];
+  // WS3 - the placement map is DERIVED from the copy that actually ships, on
+  // EVERY round. That matters most on a repair round which regenerated copy but
+  // not the keyword group: the carried-forward rows are re-resolved against the
+  // NEW strings, so the artifact can never describe a listing that no longer
+  // exists. See `lib/engine/keywordPlacement.ts`.
   return {
     ...copy,
-    keywords: normalizeKeywords(keywords.keywords),
+    keywords: deriveKeywordPlacement(normalizeKeywords(keywords.keywords), copy, pack),
     ...(degradedGroups.length > 0 ? { degradedGroups } : {}),
   };
 }
@@ -436,10 +446,12 @@ export async function optimize(
 /**
  * Deterministic tidy-up of the keyword artifact.
  *
- * Trims, drops blank rows and de-duplicates on the term. It does NOT rewrite a
- * status, a surface list or a tier: doing so would launder exactly the
- * disagreement C28 exists to report. The only thing removed is noise that
- * could never be a meaningful declaration in the first place.
+ * Trims, drops blank rows and de-duplicates on the term. It rewrites no `tier`,
+ * no `why` and no INTENT status: a model judgement laundered here would be a
+ * judgement nothing ever reviewed. Placement is a different thing entirely -
+ * it is not a judgement but a measurement, and `deriveKeywordPlacement` takes
+ * it over the moment this function has produced clean rows. `surfaces` starts
+ * empty here because the model is no longer asked for one.
  */
 export function normalizeKeywords(rows: unknown): KeywordTerm[] {
   if (!Array.isArray(rows)) return [];
@@ -453,14 +465,13 @@ export function normalizeKeywords(rows: unknown): KeywordTerm[] {
     const key = term.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    const surfaces = Array.isArray(r.surfaces)
-      ? [...new Set(r.surfaces.map((s) => String(s ?? '').trim()).filter(Boolean))]
-      : [];
     const row: KeywordTerm = {
       term,
       tier: r.tier as KeywordTier,
       status: String(r.status ?? '').trim() as KeywordStatus,
-      surfaces,
+      // Derived downstream, never carried from the model - a volunteered list
+      // is dropped here rather than half-honoured (see the header note).
+      surfaces: [],
       why: String(r.why ?? '').trim(),
     };
     const via = String(r.via ?? '').trim();

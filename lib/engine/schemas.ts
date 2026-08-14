@@ -264,9 +264,18 @@ export const qaGroupSchema = z.object({
  * WS3 — the KEYWORD REFERENCE group.
  *
  * STRUCTURE ONLY, as everywhere else at this boundary: the schema guarantees a
- * well-shaped artifact; gate C28 is what verifies that a declaration is TRUE.
+ * well-shaped artifact; gate C28 is what verifies that a row is TRUE.
  * `tier` is coerced from the model's string ("1", "backend") because the kit's
  * schema mixes numeric tiers with label tiers in the same field.
+ *
+ * `surfaces` IS NOT ASKED FOR. The model was required to state which surfaces
+ * its own copy had placed each term on, and it was wrong ~21 times per live
+ * run on all three ASINs — a fact code can compute exactly, asked of a model
+ * that could only guess. `lib/engine/keywordPlacement.ts` derives it from the
+ * finished copy instead. Asking for a field only to overwrite it would spend
+ * output tokens on drift, so the field is gone from the contract; a model that
+ * volunteers one anyway has it stripped here (`z.object` drops unknown keys)
+ * rather than half-honoured.
  */
 const keywordTierField = z.preprocess((v) => {
   if (typeof v === 'number') return v;
@@ -307,13 +316,11 @@ export function keywordsGroupSchemaFor(kr: KeywordRules | undefined) {
       ...o,
       term: o.term ?? o.t ?? o.keyword ?? o.phrase,
       why: o.why ?? o.evidence ?? o.rationale ?? o.reason,
-      surfaces: Array.isArray(o.surfaces) ? o.surfaces : o.surfaces == null ? [] : [o.surfaces],
     };
   }, z.object({
     term: z.string().min(2),
     tier: keywordTierField,
     status: z.string().min(3),
-    surfaces: z.array(z.string()),
     // `why` is the row's only free prose and therefore the only field that can
     // make a row unboundedly large. The prompt states a SHORTER limit than
     // this one, so an ordinary overshoot never costs a reparse round while the
@@ -339,7 +346,9 @@ export const KEYWORD_MIN_TERMS = 8;
  * at roughly 3 characters per token, and the budget is the ceiling of that —
  * so the model can always finish the largest artifact the schema will accept.
  * It is a CEILING, not a target: the prompt's cap is what the model actually
- * writes to, and unused budget costs nothing.
+ * writes to, and unused budget costs nothing. The row no longer carries
+ * `surfaces` at all (it is derived), which only makes the real row SMALLER
+ * than this ceiling — the budget stays deliberately above the bound.
  */
 const KEYWORD_ROW_FIXED_CHARS = 400;
 const KEYWORD_WRAPPER_CHARS = 64;

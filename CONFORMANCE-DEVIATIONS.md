@@ -224,3 +224,75 @@ buys a nicer table at the cost of the audit trail.
 
 Anyone reading a kit check number against this repository should use this table
 first.
+
+---
+
+## 5. ARCHITECTURE CHANGE — WS3's placement map is **DERIVED**, not declared.
+
+WS3.1 of `CONFORMANCE-GAME-PLAN.md` lists the keyword artifact as carrying a
+"surfaces placement map", and until now the **model** wrote that map: each row
+declared which surfaces its own copy had placed the term on, and gate C28
+verified every declaration.
+
+**Why it changed.** On all three live production ASINs, on every run, C28
+produced **21–22 failures of one single shape**:
+
+```
+keywords[2] 'digestive and immune support' declared placed on 'title' but does not appear there
+keywords[4] 'lgg strain'                   declared placed on 'title'/'itemHighlights' but does not appear there
+keywords[8] 'vegetarian capsules'          declared placed on 'bullet4'/'description' but does not appear there
+```
+
+The repair loop could not converge on them, because each regeneration produced
+a **fresh** set of confident wrong claims rather than correcting the old ones.
+The root cause is not prompt quality. "Does this exact string occur in that
+exact field" is a fact **code can compute exactly**; asking a language model to
+assert it, and then failing the run on every disagreement with the code that
+computes it, violates the project's own **worker ≠ checker** rule in the one
+direction that cannot be repaired by trying again.
+
+**What the model now owns:** `term`, `tier`, `why`, and the four
+**intent-bearing** statuses only judgement can produce — `negative` (rival
+brands and forbidden vocabulary, R50), `not-targeted`, `candidate`, and
+`captured-via` (+ its `via`). None of those is a claim about the copy.
+
+**What code now owns** (`lib/engine/keywordPlacement.ts`): `surfaces`, and the
+placement status of every other row, read off the **finished** copy through
+C28's own pack-driven surface readers (`keywordSurfaceText`) with the same
+disclaimer subtraction the check applies — visible hit → `placed` with the
+derived surface list, backend-only hit → `backend`, no hit anywhere →
+**downgraded** to `candidate` with the downgrade recorded in `note`. It runs on
+every round, so a repair round that regenerates copy but not the keyword group
+still re-resolves the carried-forward rows against the strings that ship.
+
+**`captured-via` is derived-exempt on purpose.** Its whole meaning is that the
+term is deliberately ABSENT; deriving it would downgrade every lawfully
+recaptured row and destroy K4.
+
+**C28 IS NOT WEAKENED — nothing was removed from it.** A `negative` term
+appearing anywhere still fails (R50/AM-9, including the A+ banner ALT and video
+brief surfaces of item 1); a `backend` row on a visible surface still fails; a
+`captured-via` row with no `via` still fails; a banned-lexicon term that ends up
+targeted still fails the four-test screen; an unknown surface in pack config
+still fails closed-world; a missing or malformed artifact still fails closed.
+**The placement leg is kept as well**, so a stored or hand-edited artifact that
+never went through derivation is still verified against the copy. Only one
+*class* of failure disappears — self-report vs reality — and it disappears
+because the self-report no longer exists, not because a rule was relaxed.
+
+**Against the WS3 acceptance line** ("run emits the tiered map; placement check
+green; a placed-but-absent keyword fails; disease-term keywords auto-blocked"):
+all four still hold. A placed-but-absent row still fails C28
+(`tests/keywordPlacement.gate.test.ts` FALSE_PLACEMENTS,
+`tests/keywordDerivation.ws3.test.ts` "the stale downgrade fails"); what changed
+is that the generator no longer *emits* one. The plan's intent was a truthful
+placement map, and derivation delivers that more strongly than declaration
+could: the map is now true by construction and verified afterwards, rather than
+asserted and hoped for.
+
+**A future change to this must also change:** the keywords prompt
+(`lib/engine/prompts/keywords.ts` + the STATUS note in
+`keywordVocabularyBlock`), the group schema (`keywordsGroupSchemaFor` no longer
+accepts `surfaces`), `KeywordTerm.surfaces`/`note` in `lib/types.ts`, the
+"derived" labelling in the Ship Sheet / Markdown / Keywords tab, and
+`tests/keywordDerivation.ws3.test.ts`.

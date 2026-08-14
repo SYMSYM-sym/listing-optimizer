@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { deriveKeywordPlacement } from '@/lib/engine/keywordPlacement';
 import { optimize } from '@/lib/engine/optimize';
 import { c28KeywordPlacement, keywordSurfaceText, type GateContext } from '@/lib/gate/checks';
 import { runGate } from '@/lib/gate/runGate';
@@ -151,6 +152,12 @@ describe('C28 negative terms — the video brief, field by field', () => {
       onScreenText: ['One capsule daily', 'Shelf stable, no refrigeration'],
       notes: 'Shot vertical throughout. Assume it is watched muted.',
     };
+    // The placement map is DERIVED from the copy (WS3), so replacing a whole
+    // surface means re-deriving it — which is exactly what the engine does on
+    // every round, including a repair round that regenerates only the images
+    // group. The negative rows this block is about are model-owned and are
+    // carried through derivation untouched.
+    l.keywords = deriveKeywordPlacement(l.keywords ?? [], l, pack);
     expect(c28(l)).toEqual([]);
     expect(runGate(l, pack, ctx).pass).toBe(true);
   });

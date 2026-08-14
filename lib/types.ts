@@ -1205,7 +1205,19 @@ export interface KeywordTerm {
   term: string;
   tier: KeywordTier;
   status: KeywordStatus;
-  /** Declared surfaces. Required and non-empty for `placed`; `["backend"]` for `backend`. */
+  /**
+   * DERIVED, never declared. The surfaces the FINISHED COPY actually carries
+   * this term on, computed by `lib/engine/keywordPlacement.ts` through C28's
+   * own pack-driven surface readers.
+   *
+   * The model used to be asked for this and was wrong ~21 times per live run
+   * ("declared placed on 'title' but does not appear there"), which no repair
+   * round could converge on because each regeneration produced a fresh set of
+   * confident wrong claims. It is a fact code can compute exactly, so code
+   * computes it — worker != checker. Empty for every intent-bearing status
+   * (`negative`, `not-targeted`, `candidate`, `captured-via`), which place
+   * nothing by definition.
+   */
   surfaces: string[];
   /** The evidence/rationale (`evidence` or `why` in the kit's schema). */
   why: string;
@@ -1213,6 +1225,12 @@ export interface KeywordTerm {
   via?: string;
   /** `candidate` ONLY: where the term lives until it enters copy (PPC / off-site). */
   home?: string;
+  /**
+   * DERIVED. Set only when derivation CHANGED the row — today, when a term the
+   * copy carries nowhere is downgraded to `candidate`. It exists so a downgrade
+   * is visible in the deliverable rather than a silent edit.
+   */
+  note?: string;
 }
 
 /** Element lifecycle: advances to 'verified' only when the gate is green. */
@@ -1397,8 +1415,12 @@ export interface KeywordCoverage {
   negatives: { term: string; why: string }[];
   /** K4 — banned demand and the compliant cluster it reaches the listing through. */
   recaptured: { term: string; via: string; why: string }[];
-  /** Held back for a later cycle; verified NOT to be in the current copy. */
-  candidates: { term: string; home: string; why: string }[];
+  /**
+   * Held back for a later cycle; verified NOT to be in the current copy.
+   * `note` is present when the row was DOWNGRADED here by derivation (the copy
+   * carries the term on no surface) rather than proposed as a candidate.
+   */
+  candidates: { term: string; home: string; why: string; note?: string }[];
   /** Deliberate strategy calls — recorded so a later session can tell them from an oversight. */
   notTargeted: { term: string; why: string }[];
 }

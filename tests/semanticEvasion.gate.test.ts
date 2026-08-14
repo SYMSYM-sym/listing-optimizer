@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { deriveKeywordPlacement } from '@/lib/engine/keywordPlacement';
 import { optimize } from '@/lib/engine/optimize';
 import { runGate } from '@/lib/gate/runGate';
 import { buildAudit } from '@/lib/audit/buildAudit';
@@ -41,7 +42,16 @@ const mut = (fn: (l: OptimizedListing) => void): OptimizedListing => {
   const copy = JSON.parse(JSON.stringify(clean)) as OptimizedListing;
   fn(copy);
   // Keep the parallel claim-bearing flags coherent with the rewritten text.
-  return withCoherentBulletFlags(copy);
+  const coherent = withCoherentBulletFlags(copy);
+  // WS3 — the keyword placement map is DERIVED from the copy, so a fixture
+  // that rewrites a whole surface (this file replaces `qa` wholesale) re-derives
+  // it, exactly as the engine does on every round. Nothing about C28 is
+  // relaxed: `negative`/`candidate` rows are model-owned and pass through
+  // untouched, which is what the R50 legs elsewhere depend on.
+  return {
+    ...coherent,
+    keywords: deriveKeywordPlacement(coherent.keywords ?? [], coherent, pack),
+  };
 };
 
 /** The ten payloads the adversarial auditor proved were passing, verbatim. */

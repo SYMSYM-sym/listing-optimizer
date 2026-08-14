@@ -900,7 +900,7 @@
         "Every candidate term passes a four-test screen before it may be placed: legality, marketplace policy, substantiation, and conversion economics. A term can be lawful and still be strategically negative when the intent it brings converts badly."
       ]
     },
-    "sheetNote": "Every PLACED term below was machine-verified to appear on each surface it declares; every BACKEND-only term was verified to sit in the search-terms field and nowhere a customer can read; every NEGATIVE term was verified to appear nowhere at all. Rival brand names belong in the negative list — they are a trademark exposure, not an opportunity."
+    "sheetNote": "The placement column below is DERIVED: code read the finished copy and recorded where each term actually landed, and the gate then re-verified the whole table independently. Every BACKEND-only term was verified to sit in the search-terms field and nowhere a customer can read; every NEGATIVE term was verified to appear nowhere at all. Rival brand names belong in the negative list — they are a trademark exposure, not an opportunity."
   },
   "_postPublishComment": [
     "WS6/WS7 — the POST-PUBLISH phase the ship sheet renders.",

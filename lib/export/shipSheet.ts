@@ -671,11 +671,12 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   // -------------------------------------------------------------------------
   // 13 · Keyword reference — WS3. The one section on this sheet that is about
   //      what the listing DELIBERATELY does not say as much as what it does.
-  //      Every row here was machine-verified by gate C28 against the exact
-  //      strings the cards above serve, so a "placed" row is a measurement,
-  //      not a checkmark somebody typed. The playbook is explicit that the
-  //      hand-written version of this table is the pattern that failed nine
-  //      times, which is why the sheet prints the verification, not the claim.
+  //      The "Derived placement" column is COMPUTED from the exact strings the
+  //      cards above serve — nobody, human or model, types it — and gate C28
+  //      re-verifies the whole table independently. The playbook is explicit
+  //      that the hand-written version of this table is the pattern that failed
+  //      nine times; the model's own version of it was wrong ~21 times per live
+  //      run, which is why neither is asked for.
   // -------------------------------------------------------------------------
   const coverage = audit?.keywordCoverage;
   const keywordRules = rules.keywordRules;
@@ -690,10 +691,10 @@ ul.ops{margin:8px 0 0;padding-left:20px}
     const backendOnly = arr<{ term: string; why: string }>(coverage.backendOnly);
     const negatives = arr<{ term: string; why: string }>(coverage.negatives);
     const recaptured = arr<{ term: string; via: string; why: string }>(coverage.recaptured);
-    const candidatesKw = arr<{ term: string; home: string; why: string }>(coverage.candidates);
+    const candidatesKw = arr<{ term: string; home: string; why: string; note?: string }>(coverage.candidates);
     const notTargeted = arr<{ term: string; why: string }>(coverage.notTargeted);
     if (placed.length > 0) {
-      h += '<table><tr><th>Term</th><th>Tier</th><th>Verified on</th><th>Why</th></tr>';
+      h += '<table><tr><th>Term</th><th>Tier</th><th>Derived placement (computed from the copy)</th><th>Why</th></tr>';
       for (const r of placed) {
         h +=
           `<tr><td class=v>${esc(r.term)}</td><td>${esc(String(r.tier))}</td>` +
@@ -729,7 +730,7 @@ ul.ops{margin:8px 0 0;padding-left:20px}
       h += '<div class=f><div class=fh><div><b>Held back and deliberately skipped</b></div></div>';
       h += '<table style="margin-top:6px"><tr><th>Term</th><th>Status</th><th>Why / where it lives</th></tr>';
       for (const r of candidatesKw) {
-        h += `<tr><td class=v>${esc(r.term)}</td><td>candidate</td><td>${esc([r.home, r.why].filter(Boolean).join(' — '))}</td></tr>`;
+        h += `<tr><td class=v>${esc(r.term)}</td><td>candidate</td><td>${esc([r.home, r.why, r.note].filter(Boolean).join(' — '))}</td></tr>`;
       }
       for (const r of notTargeted) {
         h += `<tr><td class=v>${esc(r.term)}</td><td>not targeted</td><td>${esc(r.why)}</td></tr>`;

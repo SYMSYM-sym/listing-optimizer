@@ -1,3 +1,4 @@
+import { MODEL_OWNED_STATUSES } from '../keywordPlacement';
 import type {
   BulletArchitecture,
   KeywordRules,
@@ -279,13 +280,25 @@ export function keywordVocabularyBlock(kr: KeywordRules | undefined): string {
   const backend = (kr?.backendSurfaces ?? []).filter((s) => s.trim() !== '');
   const statuses = (kr?.statuses ?? []).filter((s) => s.trim() !== '');
   if (visible.length === 0 || statuses.length === 0) return '';
+  const modelOwnedStatuses = statuses.filter((s) =>
+    (MODEL_OWNED_STATUSES as readonly string[]).includes(s),
+  );
+  const derivedStatuses = statuses.filter(
+    (s) => !(MODEL_OWNED_STATUSES as readonly string[]).includes(s),
+  );
   return [
     'KEYWORD REFERENCE VOCABULARY (pack data — the gate enforces exactly this):',
     `- Visible surface names: ${visible.join(', ')}.`,
     `- Invisible (indexed) surface name: ${backend.join(', ') || '(none)'}.`,
     `- Statuses: ${statuses.join(' | ')}.`,
     '- Tiers: 1 = own-the-lane head terms for the single intent cluster this listing owns; 2 = named entities (each component by its full name, the headline spec, the formula callout) because those are what an assistant quotes back; 3 = qualifier and trust terms (diet flags, origin, count, supply) that act as filters and tie-breakers; 4 = conversational buyer-language phrases. A row that is not tier 1-4 carries one of these tier labels instead: backend, demand, strategy, candidate, negative.',
-    `- A row with the '${statuses[0]}' status must appear on EVERY surface it lists. A row on the invisible surface must appear there and NOWHERE visible. A row on the negative list must appear nowhere at all.`,
+    // WS3 — the STATUS SPLIT, from pack data. The placement statuses are
+    // COMPUTED from the finished copy (`lib/engine/keywordPlacement.ts`); the
+    // rest are judgements about intent and are carried through untouched. The
+    // model used to be asked which surfaces its own copy had used, and on all
+    // three live ASINs it was wrong 21-22 times per run, so it is not asked.
+    `- STATUS: ${derivedStatuses.join(' / ') || '(none)'} ${derivedStatuses.length === 1 ? 'is' : 'are'} COMPUTED from the finished copy after you answer — never declare one and never list surfaces; a term the copy carries visibly is recorded with the exact surfaces carrying it, a term only in the invisible field is recorded as invisible-only, and a term the copy carries nowhere is moved to the held-back row rather than left claiming a placement.`,
+    `- These statuses are YOURS and are never overwritten: ${modelOwnedStatuses.join(', ') || '(none)'}. A row on the invisible surface must appear there and NOWHERE visible. A row on the negative list must appear nowhere at all.`,
   ].join('\n');
 }
 
