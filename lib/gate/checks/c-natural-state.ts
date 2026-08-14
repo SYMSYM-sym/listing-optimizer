@@ -66,7 +66,7 @@ import {
  *    suppresses, exempts or otherwise reaches C6, so a lawful qualifier can
  *    never launder a named disease;
  *  - an ABNORMALITY MARKER (R1/R2) is evaluated BEFORE the qualifier escape and
- *    is never subject to it — a marker shots a qualifier by construction;
+ *    is never subject to it — a marker beats a qualifier by construction;
  *  - the LAWFUL QUALIFIER escape exists only inside R3.
  *
  * COVERAGE, stated plainly and not overstated: this is a proximity heuristic
@@ -301,7 +301,7 @@ function scanVariant(text: string, cfg: NaturalStateConfig, seen: Set<string>, o
 
   // R1 — abnormality marker beside a natural state / normal symptom.
   // Evaluated FIRST and never subject to the qualifier escape: an abnormality
-  // marker shots a lawful qualifier.
+  // marker beats a lawful qualifier.
   for (const s of marked) {
     for (const m of markers) {
       if (gapBetween(s, m) > cfg.window) continue;

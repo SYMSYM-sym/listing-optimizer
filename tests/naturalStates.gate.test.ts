@@ -220,7 +220,7 @@ describe('PRECEDENCE — disease noun > abnormality marker > lawful qualifier', 
     expect(c6On(l, 'bullets[0]').length).toBeGreaterThan(0);
   });
 
-  /** TIER 2 — an abnormality marker shots a natural state AND a qualifier. */
+  /** TIER 2 — an abnormality marker beats a natural state AND a qualifier. */
   const MARKER_PAIRS: [string, string][] = [
     ['Supports comfort during menopause', 'Supports comfort during severe menopause'],
     ['Helps prevent mild memory loss associated with aging', 'Helps prevent mild clinical memory loss associated with aging'],

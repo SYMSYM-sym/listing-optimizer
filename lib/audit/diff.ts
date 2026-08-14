@@ -80,7 +80,7 @@ export function diff(
       field: 'title75',
       current: `${current.title.length}-char title; no 75-char variant`,
       proposed: clip(proposed.title75 ?? ''),
-      why: 'Amazon\'s 75-char title policy (eff. Jul 27 2026) will AI-rewrite longer titles — a controlled 75-char title shots an automated rewrite.',
+      why: 'Amazon\'s 75-char title policy (eff. Jul 27 2026) will AI-rewrite longer titles — a controlled 75-char title beats an automated rewrite.',
       severity: 'P1',
     });
   }
