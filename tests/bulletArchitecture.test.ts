@@ -9,6 +9,7 @@ import { runGate } from '@/lib/gate/runGate';
 import { mapProduct } from '@/lib/ingest/providers/rainforest';
 import { toSnapshot } from '@/lib/ingest/toSnapshot';
 import { loadPack } from '@/lib/knowledge/loadPack';
+import { isBulletArchitectureGap } from '@/lib/shared/bulletLintTags';
 import type { KnowledgePack, OptimizedListing } from '@/lib/types';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
@@ -331,5 +332,43 @@ describe('slot-job and anchor lints are ADVISORY (P2) and both-directional', () 
     const audit = buildAudit(snapshot, l, pack, ctx);
     expect(audit.gaps.some((g) => g.severity === 'P2')).toBe(true);
     expect(audit.verified).toBe(runGate(l, pack, ctx).pass);
+  });
+});
+
+// ===========================================================================
+// F4 — THE TAG THE RESULTS PANEL PARTITIONS ON
+// ===========================================================================
+
+/**
+ * The lints travel inside `audit.gaps` beside ordinary field-level diffs, and
+ * the results panel renders them as their own advisory section. That partition
+ * is only sound if the tag recognises EVERY lint and NOTHING else — a producer
+ * whose wording drifts would silently move a lint into the gaps table (or, far
+ * worse, move a real field gap into an advisory box). Both directions.
+ */
+describe('WS4 — every lint is tagged, and only lints are', () => {
+  it('every gap the lint producer emits is recognised', () => {
+    // A listing that trips several lints at once: an empty slot, a lead
+    // allergen declaration and a stray claim marker.
+    const l = mut((x) => {
+      x.bullets[4] = '';
+      x.bullets[1] = `${x.bullets[1]} *`;
+      x.aplusContent.modules.forEach((m) => (m.claimBearing = false));
+    });
+    const lints = bulletArchitectureGaps(l, pack);
+    expect(lints.length).toBeGreaterThan(0);
+    for (const gap of lints) {
+      expect(isBulletArchitectureGap(gap), gap.why).toBe(true);
+    }
+  });
+
+  it('no gap from the rest of the audit is mistaken for one', () => {
+    const audit = buildAudit(snapshot, clean, pack, ctx);
+    const lintWhys = new Set(bulletArchitectureGaps(clean, pack).map((g) => g.why));
+    const others = audit.gaps.filter((g) => !lintWhys.has(g.why));
+    expect(others.length).toBeGreaterThan(0);
+    for (const gap of others) {
+      expect(isBulletArchitectureGap(gap), gap.why).toBe(false);
+    }
   });
 });

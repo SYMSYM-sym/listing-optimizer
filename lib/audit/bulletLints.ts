@@ -1,6 +1,7 @@
 import type { AuditGap, CompliancePack, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { allergenMentioned, presentAllergens } from '@/lib/gate/checks';
 import { normalize } from '@/lib/gate/util';
+import { BULLET_LINT_TAGS } from '@/lib/shared/bulletLintTags';
 
 /**
  * WS4 — BULLET-ARCHITECTURE LINTS (advisory, never a gate rule).
@@ -63,7 +64,7 @@ export function bulletArchitectureGaps(
         field: `bullets[${i}]`,
         current: 'n/a',
         proposed: `${slot.id} — ${slot.job}`,
-        why: `Bullet architecture: slot ${slot.id} is empty. Every slot is separately indexed surface; an unwritten one is lost.`,
+        why: `${BULLET_LINT_TAGS.slot} slot ${slot.id} is empty. Every slot is separately indexed surface; an unwritten one is lost.`,
         severity: 'P2',
       });
       return;
@@ -74,7 +75,7 @@ export function bulletArchitectureGaps(
       field: `bullets[${i}]`,
       current: clip(bullets[i] ?? ''),
       proposed: `${slot.id} — ${slot.job}`,
-      why: `Bullet architecture: slot ${slot.id} does not read as filled (${slot.guidance}). Check that this bullet is doing its declared job rather than repeating another slot's.`,
+      why: `${BULLET_LINT_TAGS.slot} slot ${slot.id} does not read as filled (${slot.guidance}). Check that this bullet is doing its declared job rather than repeating another slot's.`,
       severity: 'P2',
     });
   });
@@ -90,8 +91,8 @@ export function bulletArchitectureGaps(
       proposed: anchors.join(' | '),
       why:
         distinct.size < filled.length
-          ? 'Bullet architecture: two bullets share a situational anchor — each bullet should anchor a DIFFERENT moment, audience or environment.'
-          : 'Bullet architecture: a bullet carries no situational anchor — an unanchored bullet is a claim nothing can quote back to a shopper.',
+          ? `${BULLET_LINT_TAGS.slot} two bullets share a situational anchor — each bullet should anchor a DIFFERENT moment, audience or environment.`
+          : `${BULLET_LINT_TAGS.slot} a bullet carries no situational anchor — an unanchored bullet is a claim nothing can quote back to a shopper.`,
       severity: 'P2',
     });
   }
@@ -114,7 +115,7 @@ export function bulletArchitectureGaps(
           field: `bullets[${i}]`,
           current: clip(bullet),
           proposed: `Move the '${rule.canonicalString}' declaration to the END of the bullet as a trailing clause`,
-          why: `AM-3: the allergen declaration opens this bullet (character ${at}). The declaration stays required in this bullet — C9 is unchanged — but it belongs in the trailing clause: leading with it turns a benefit slot into a warning label.`,
+          why: `${BULLET_LINT_TAGS.allergenPosition} the allergen declaration opens this bullet (character ${at}). The declaration stays required in this bullet — C9 is unchanged — but it belongs in the trailing clause: leading with it turns a benefit slot into a warning label.`,
           severity: 'P1',
         });
       });
@@ -134,7 +135,7 @@ export function bulletArchitectureGaps(
         field: `bullets[${i}]`,
         current: clip(bullet),
         proposed: `Either flag this bullet as claim-bearing or drop the trailing '${marker}'`,
-        why: `Claim-marker discipline: this bullet carries the '${marker}' claim marker but was not generated as claim-bearing. Over-disclosure is never blocked — but a marker on a non-claim line trains readers to ignore it.`,
+        why: `${BULLET_LINT_TAGS.claimMarker} this bullet carries the '${marker}' claim marker but was not generated as claim-bearing. Over-disclosure is never blocked — but a marker on a non-claim line trains readers to ignore it.`,
         severity: 'P2',
       });
     });

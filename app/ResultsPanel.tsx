@@ -7,9 +7,11 @@ import { toMarkdown } from '@/lib/export/markdown';
 import type { GroupName } from '@/lib/engine/optimize';
 import { toSellerCentralDescription } from '@/lib/export/descriptionHtml';
 import { downloadShipSheet, openShipSheet } from './shipSheetClient';
+import { isBulletArchitectureGap } from '@/lib/shared/bulletLintTags';
+import { regenerateOperatorInputs, EMPTY_OPERATOR_INPUTS, type OperatorInputForm } from './operatorInputs';
 import { CopyButton, Field, SeverityBadge } from './ui';
 
-export type ResultsTab = 'listing' | 'aplus' | 'images' | 'qa' | 'audit';
+export type ResultsTab = 'listing' | 'aplus' | 'images' | 'keywords' | 'qa' | 'audit';
 
 export interface ResultsModel {
   optimized: OptimizedListing;
@@ -18,6 +20,22 @@ export interface ResultsModel {
   iterations?: number;
   snapshot?: ListingSnapshot;
   runId?: string | null;
+}
+
+/** Status colouring for the keyword table — the six C28 statuses. */
+function statusColor(status: string): string {
+  switch (status) {
+    case 'placed':
+      return 'text-emerald-400';
+    case 'backend':
+      return 'text-sky-400';
+    case 'negative':
+      return 'text-red-400';
+    case 'captured-via':
+      return 'text-amber-400';
+    default:
+      return 'text-zinc-400';
+  }
 }
 
 function gateFailedOn(failures: Failure[], field: string): boolean {
@@ -58,10 +76,19 @@ export function ResultsPanel({
   result,
   headers,
   onUpdated,
+  operatorInputs = EMPTY_OPERATOR_INPUTS,
 }: {
   result: ResultsModel;
   headers: HeadersInit;
   onUpdated: (next: ResultsModel) => void;
+  /**
+   * The per-run operator inputs the run was started with. A REGENERATION must
+   * carry the ones that still apply (C11 phrases, the confirmed panel), or a
+   * single-group regenerate becomes a way to escape them. Defaulted so the
+   * history view — which replays a stored run and has no form beside it —
+   * behaves exactly as it did.
+   */
+  operatorInputs?: OperatorInputForm;
 }) {
   const [tab, setTab] = useState<ResultsTab>('listing');
   const [regenerating, setRegenerating] = useState<GroupName | null>(null);
@@ -117,6 +144,7 @@ export function ResultsPanel({
           listing: result.optimized,
           group,
           runId: result.runId ?? undefined,
+          ...regenerateOperatorInputs(operatorInputs),
         }),
       });
       if (!res.ok) {
@@ -143,6 +171,20 @@ export function ResultsPanel({
   }
 
   const canRegen = Boolean(result.snapshot);
+  const keywords = result.optimized.keywords ?? [];
+  const coverage = result.audit.keywordCoverage;
+  // WS4 — the bullet-architecture lints travel in `audit.gaps`; they are
+  // ADVISORY strategy notes rather than field-level diffs, so they get their
+  // own section instead of being read as one more row about a bullet's text.
+  // The partition uses the tags the producer builds its `why` strings from
+  // (lib/shared/bulletLintTags.ts), so the two cannot drift.
+  const bulletLints = result.audit.gaps.filter(isBulletArchitectureGap);
+  const fieldGaps = result.audit.gaps.filter((g) => !isBulletArchitectureGap(g));
+  const register = result.audit.substantiationRegister ?? [];
+  const candidates = result.audit.candidateTerms ?? [];
+  const benchmark = result.audit.benchmark;
+  const before = result.audit.scorecard;
+  const after = result.audit.scorecardProposed;
 
   return (
     <>
@@ -231,6 +273,7 @@ export function ResultsPanel({
             ['listing', 'Listing'],
             ['aplus', 'A+ Content'],
             ['images', 'Images'],
+            ['keywords', `Keywords (${result.optimized.keywords?.length ?? 0})`],
             ['qa', 'Q&A'],
             ['audit', `Audit (${result.audit.scorecard.total}/100)`],
           ] as [ResultsTab, string][]
@@ -455,6 +498,111 @@ export function ResultsPanel({
         </section>
       )}
 
+      {/*
+        WS3 — THE KEYWORD REFERENCE.
+
+        This is the artifact gate C28 has already verified against the emitted
+        copy: every `placed` term was machine-checked to appear on each surface
+        it declares, every `backend` term to sit in the search-terms field and
+        nowhere a customer reads, every `negative` term to appear NOWHERE at
+        all. Rendering it is not decoration — the playbook's own failure mode
+        was a hand-written "all placed" checklist, and this is the view where
+        an operator sees the machine-checked version of it.
+      */}
+      {tab === 'keywords' && (
+        <section className="space-y-4">
+          <SectionHeader
+            title="Keyword reference"
+            group="keywords"
+            regenerating={regenerating}
+            onRegenerate={canRegen ? regenerate : undefined}
+          />
+          {keywords.length === 0 ? (
+            <p className="text-sm text-zinc-500">
+              This run carries no keyword artifact. A stored run created before the keyword system existed will show
+              none; a fresh run cannot — C28 fails a listing with an empty reference.
+            </p>
+          ) : (
+            <>
+              {coverage && (
+                <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-medium text-zinc-200">
+                      Coverage — {coverage.total} term(s), machine-verified
+                    </h3>
+                    <CopyButton text={JSON.stringify(coverage, null, 2)} label="copy coverage JSON" />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(coverage.byStatus).map(([status, n]) => (
+                      <span
+                        key={status}
+                        className="rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300"
+                      >
+                        {status} <span className="tabular-nums text-zinc-500">{n}</span>
+                      </span>
+                    ))}
+                  </div>
+                  {coverage.negatives.length > 0 && (
+                    <p className="mt-3 text-xs text-zinc-500">
+                      <span className="text-emerald-400">{coverage.negatives.length} negative term(s)</span> verified to
+                      appear nowhere at all — rival brand names belong here (R50), not in the copy.
+                    </p>
+                  )}
+                  {coverage.recaptured.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {coverage.recaptured.map((r) => (
+                        <li key={r.term} className="text-xs text-zinc-400">
+                          <span className="font-mono text-zinc-300">{r.term}</span> → captured via {r.via}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              <div className="overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-medium text-zinc-200">Terms ({keywords.length})</h3>
+                  <CopyButton text={JSON.stringify(keywords, null, 2)} label="copy keywords JSON" />
+                </div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-zinc-500 border-b border-zinc-800">
+                      <th className="py-1 pr-3">Term</th>
+                      <th className="py-1 pr-3">Tier</th>
+                      <th className="py-1 pr-3">Status</th>
+                      <th className="py-1 pr-3">Surfaces</th>
+                      <th className="py-1">Why</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {keywords.map((k, i) => (
+                      <tr key={`${k.term}-${i}`} className="border-t border-zinc-800/60 align-top">
+                        <td className="py-2 pr-3 font-mono text-zinc-200">{k.term}</td>
+                        <td className="py-2 pr-3 text-zinc-500">{String(k.tier)}</td>
+                        <td className={`py-2 pr-3 font-medium ${statusColor(k.status)}`}>{k.status}</td>
+                        <td className="py-2 pr-3 text-zinc-400">
+                          {k.surfaces && k.surfaces.length > 0 ? (
+                            <span className="font-mono">{k.surfaces.join(', ')}</span>
+                          ) : k.via ? (
+                            <span className="italic text-zinc-600">via {k.via}</span>
+                          ) : k.home ? (
+                            <span className="italic text-zinc-600">home: {k.home}</span>
+                          ) : (
+                            <span className="italic text-zinc-600">none — deliberately</span>
+                          )}
+                        </td>
+                        <td className="py-2 text-zinc-500">{k.why}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
       {tab === 'qa' && (
         <section className="space-y-3">
           <SectionHeader
@@ -532,26 +680,213 @@ export function ResultsPanel({
               </p>
             </div>
           )}
+          {/*
+            WS6 — BEFORE -> AFTER, by the SAME scorer.
+
+            `scorecardProposed` is the identical judge run over the proposed
+            listing, so the two columns are comparable by construction. It is
+            never a verdict: `verified` is exactly `gateResult.pass`, and a
+            listing can score well and still be blocked.
+          */}
           <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-            <h3 className="text-sm font-medium text-zinc-200 mb-3">
-              Current listing vs optimization principles — {result.audit.scorecard.total}/100
-            </h3>
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-sm font-medium text-zinc-200">
+                Optimization principles — current {before.total}/100
+                {after && (
+                  <>
+                    {' '}
+                    <span className="text-zinc-600">→</span>{' '}
+                    <span className={after.total >= before.total ? 'text-emerald-300' : 'text-amber-300'}>
+                      proposed {after.total}/100
+                    </span>
+                  </>
+                )}
+              </h3>
+              {after && (
+                <span className="text-xs text-zinc-500">
+                  same scorer, both sides — a score is never a verdict; the gate is
+                </span>
+              )}
+            </div>
             <ul className="space-y-1.5">
-              {result.audit.scorecard.perPrinciple.map((p) => (
-                <li key={p.id} className="text-xs flex gap-2">
-                  <span
-                    className={`w-14 shrink-0 font-mono ${p.score === 'full' ? 'text-emerald-400' : p.score === 'partial' ? 'text-amber-400' : p.score === 'none' ? 'text-red-400' : 'text-zinc-600'}`}
-                  >
-                    {p.id} {p.score === 'unknown' ? '—' : p.score}
-                  </span>
-                  <span className="text-zinc-400">{p.rationale}</span>
-                </li>
-              ))}
+              {before.perPrinciple.map((p) => {
+                const post = after?.perPrinciple.find((q) => q.id === p.id);
+                return (
+                  <li key={p.id} className="text-xs flex gap-2">
+                    <span
+                      className={`w-14 shrink-0 font-mono ${p.score === 'full' ? 'text-emerald-400' : p.score === 'partial' ? 'text-amber-400' : p.score === 'none' ? 'text-red-400' : 'text-zinc-600'}`}
+                    >
+                      {p.id} {p.score === 'unknown' ? '—' : p.score}
+                    </span>
+                    {post && (
+                      <span
+                        className={`w-20 shrink-0 font-mono ${post.score === 'full' ? 'text-emerald-400' : post.score === 'partial' ? 'text-amber-400' : post.score === 'none' ? 'text-red-400' : 'text-zinc-600'}`}
+                        title={post.rationale}
+                      >
+                        → {post.score === 'unknown' ? '—' : post.score}
+                      </span>
+                    )}
+                    <span className="text-zinc-400">{p.rationale}</span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
+
+          {/*
+            R33/R38 — THE SUBSTANTIATION REGISTER.
+
+            Every other compliance check asks "is this phrasing allowed?"; this
+            one asks "can we prove it?", which is the question the marketplace
+            actually asks when it sends a compliance request. The app cannot
+            hold a certificate, so it can only ever say WHERE a claim is being
+            made and whether the source listing was already making it. A
+            PENDING row is a claim the generator introduced by itself.
+          */}
+          {register.length > 0 && (
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 overflow-x-auto">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-medium text-zinc-200">
+                  Substantiation register — {register.filter((r) => r.status === 'PENDING').length} pending /{' '}
+                  {register.length}
+                </h3>
+                <CopyButton text={JSON.stringify(register, null, 2)} label="copy register" />
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-zinc-500">
+                    <th className="py-1 pr-2">Status</th>
+                    <th className="py-1 pr-2">Claim</th>
+                    <th className="py-1 pr-2">Surfaces</th>
+                    <th className="py-1">Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {register.map((r, i) => (
+                    <tr key={i} className="border-t border-zinc-800/60 align-top">
+                      <td className="py-2 pr-2">
+                        <span
+                          className={`rounded border px-1.5 py-0.5 font-semibold ${r.status === 'PENDING' ? 'border-amber-800 bg-amber-950 text-amber-300' : 'border-emerald-800 bg-emerald-950 text-emerald-300'}`}
+                        >
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-2 text-zinc-200">{r.claim}</td>
+                      <td className="py-2 pr-2 font-mono text-zinc-500">{r.surface}</td>
+                      <td className="py-2 text-zinc-500">{r.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/*
+            WS4 — BULLET ARCHITECTURE (advisory).
+
+            Never a gate rule: a bullet whose declared job is unwritten, or
+            whose allergen declaration leads instead of trails, is copy written
+            in the wrong order, and blocking a publish over word order would be
+            over-blocking — which this project treats as exactly as severe as a
+            bypass. So it is shown, and the operator decides.
+          */}
+          {bulletLints.length > 0 && (
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+              <h3 className="text-sm font-medium text-zinc-200 mb-3">
+                Bullet architecture — advisory ({bulletLints.length})
+              </h3>
+              <ul className="space-y-2">
+                {bulletLints.map((g, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs">
+                    <SeverityBadge s={g.severity} />
+                    <span className="font-mono text-zinc-400 whitespace-nowrap">{g.field}</span>
+                    <span className="text-zinc-500">
+                      {g.why} <span className="text-zinc-300">→ {g.proposed}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/*
+            brain/02 — CANDIDATE TERMS. Condition-like vocabulary seen in the
+            SOURCE listing that the lexicon does not know. A proposal for the
+            lexicon owner, never a statement about this copy.
+          */}
+          {candidates.length > 0 && (
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-medium text-zinc-200">
+                  Candidate terms for lexicon review ({candidates.length})
+                </h3>
+                <CopyButton text={candidates.join('\n')} label="copy terms" />
+              </div>
+              <p className="mb-2 text-xs text-zinc-500">
+                Condition-like words found in the CURRENT listing that the compliance lexicon does not contain. They say
+                nothing about the proposed copy — they are a question for whoever owns the lexicon.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {candidates.map((t) => (
+                  <span key={t} className="rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 font-mono text-xs text-zinc-300">
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/*
+            WS9 — COMPETITOR BENCHMARK. Structural facts only: no rival copy
+            and no rival brand name, because their framing is takedown risk
+            rather than inspiration and their brand belongs on the keyword
+            NEGATIVE list.
+          */}
+          {benchmark && (
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 overflow-x-auto">
+              <h3 className="text-sm font-medium text-zinc-200 mb-3">
+                Competitor benchmark — {benchmark.ingested}/{benchmark.requested} ingested
+              </h3>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-zinc-500">
+                    <th className="py-1 pr-2">ASIN</th>
+                    <th className="py-1 pr-2">Title chars</th>
+                    <th className="py-1 pr-2">Bullets</th>
+                    <th className="py-1 pr-2">Attributes</th>
+                    <th className="py-1">A+</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { row: benchmark.subject, label: 'PROPOSED' },
+                    { row: benchmark.current, label: 'CURRENT' },
+                    ...benchmark.rows.map((row) => ({ row, label: '' })),
+                  ].map(({ row, label }, i) => (
+                    <tr key={`${row.asin}-${i}`} className="border-t border-zinc-800/60">
+                      <td className="py-2 pr-2 font-mono text-zinc-300">
+                        {label ? <span className="text-emerald-400">{label}</span> : row.asin}
+                        {row.status === 'failed' && (
+                          <span className="ml-2 text-amber-400" title={row.note}>
+                            not ingested
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-2 tabular-nums text-zinc-400">{row.titleLength ?? '—'}</td>
+                      <td className="py-2 pr-2 tabular-nums text-zinc-400">{row.bulletCount ?? '—'}</td>
+                      <td className="py-2 pr-2 tabular-nums text-zinc-400">{row.attributeCount ?? '—'}</td>
+                      <td className="py-2 text-zinc-400">
+                        {row.status === 'failed' ? '—' : row.aplusPresent ? 'yes' : 'no'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 overflow-x-auto">
             <h3 className="text-sm font-medium text-zinc-200 mb-3">
-              Gaps — current → proposed ({result.audit.gaps.length})
+              Gaps — current → proposed ({fieldGaps.length})
             </h3>
             <table className="w-full text-xs">
               <thead>
@@ -564,7 +899,7 @@ export function ResultsPanel({
                 </tr>
               </thead>
               <tbody>
-                {result.audit.gaps.map((g, i) => (
+                {fieldGaps.map((g, i) => (
                   <tr key={i} className="border-t border-zinc-800/60 align-top">
                     <td className="py-2 pr-2">
                       <SeverityBadge s={g.severity} />

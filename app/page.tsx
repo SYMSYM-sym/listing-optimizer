@@ -2,6 +2,14 @@
 
 import { useCallback, useState } from 'react';
 import type { IngestError, ListingSnapshot } from '@/lib/types';
+import rules from '@/knowledge/rules.json';
+import {
+  buildOperatorInputs,
+  EMPTY_OPERATOR_INPUTS,
+  MAX_COMPETITOR_ASINS,
+  parseCompetitorAsins,
+  type OperatorInputForm,
+} from './operatorInputs';
 import { Steps, type StepState } from './ui';
 import { ResultsPanel, type ResultsModel } from './ResultsPanel';
 import { openShipSheet } from './shipSheetClient';
@@ -36,6 +44,14 @@ export default function Home() {
   const [auditState, setAuditState] = useState<StepState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [suggestPaste, setSuggestPaste] = useState(false);
+  /**
+   * The four OPTIONAL per-run operator inputs (WS9 reviews + competitors,
+   * R45 fiction phrases, WS5.5 confirmed panel). All four already existed on
+   * the API and had no way in; none of them is required, and leaving the
+   * section closed sends exactly the body that was sent before it existed.
+   */
+  const [operatorInputs, setOperatorInputs] = useState<OperatorInputForm>(EMPTY_OPERATOR_INPUTS);
+  const [showOperatorInputs, setShowOperatorInputs] = useState(false);
   const [result, setResult] = useState<ResultsModel | null>(null);
   const [running, setRunning] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -183,7 +199,12 @@ export default function Home() {
       setOptimizeState('running');
       setVerifyState('running');
       setAuditState('running');
-      const optRes = await fetch('/api/optimize', { method: 'POST', headers, body: JSON.stringify({ snapshot }) });
+      const optRes = await fetch('/api/optimize', {
+        method: 'POST',
+        headers,
+        // Untouched optional fields contribute NO key — see ./operatorInputs.
+        body: JSON.stringify({ snapshot, ...buildOperatorInputs(operatorInputs) }),
+      });
       if (!optRes.ok) {
         const e = (await optRes.json()) as { code: string; message: string };
         setOptimizeState('error');
@@ -218,6 +239,15 @@ export default function Home() {
   }
 
   const verified = result?.audit.verified ?? false;
+  const acceptedCompetitors = parseCompetitorAsins(operatorInputs.competitorAsins);
+  const operatorInputBody = buildOperatorInputs(operatorInputs);
+  /** What the closed panel advertises — counts only, never the operator's text. */
+  const operatorInputSummary = [
+    operatorInputBody.reviewsText ? 'reviews' : '',
+    operatorInputBody.competitorAsins ? `${operatorInputBody.competitorAsins.length} competitor(s)` : '',
+    operatorInputBody.fictionPhrases ? `${operatorInputBody.fictionPhrases.length} phrase(s)` : '',
+    operatorInputBody.panelFacts ? `${Object.keys(operatorInputBody.panelFacts).length} panel value(s)` : '',
+  ].filter(Boolean);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-24">
@@ -350,6 +380,119 @@ export default function Home() {
                   )}
                 </div>
               )}
+              {/*
+                OPTIONAL OPERATOR INPUTS (WS9 / R45 / WS5.5).
+
+                Collapsed by default and empty by default: a run that ignores
+                this panel sends the same body it always did. Every control
+                writes into one `OperatorInputForm`, and `buildOperatorInputs`
+                decides what — if anything — reaches the request.
+              */}
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/60">
+                <button
+                  type="button"
+                  aria-expanded={showOperatorInputs}
+                  onClick={() => setShowOperatorInputs((v) => !v)}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-xs text-zinc-400 hover:text-zinc-200"
+                >
+                  <span>
+                    {showOperatorInputs ? '▾' : '▸'} Optional operator inputs
+                    <span className="ml-2 text-zinc-600">
+                      reviews · competitors · known-false phrases · confirmed panel
+                    </span>
+                  </span>
+                  {operatorInputSummary.length > 0 && (
+                    <span className="rounded bg-emerald-950 border border-emerald-800 px-2 py-0.5 text-[11px] text-emerald-300">
+                      {operatorInputSummary.join(' · ')}
+                    </span>
+                  )}
+                </button>
+                {showOperatorInputs && (
+                  <div className="space-y-4 border-t border-zinc-800 px-4 py-4">
+                    <div>
+                      <label className="mb-1 block text-xs text-zinc-300" htmlFor="op-reviews">
+                        Customer reviews — paste (optional)
+                      </label>
+                      <p className="mb-2 text-xs text-zinc-500">
+                        Mined for COMPLIANT buyer phrasing only, through the gate&rsquo;s own lexicons; never copied
+                        verbatim. Leaving it empty leaves principle P11 unscored rather than scoring it zero.
+                      </p>
+                      <textarea
+                        id="op-reviews"
+                        value={operatorInputs.reviewsText}
+                        onChange={(e) => setOperatorInputs({ ...operatorInputs, reviewsText: e.target.value })}
+                        placeholder="Paste review text — one review per block is fine"
+                        rows={4}
+                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs placeholder:text-zinc-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs text-zinc-300" htmlFor="op-competitors">
+                        Competitor ASINs — up to {MAX_COMPETITOR_ASINS} (optional)
+                      </label>
+                      <p className="mb-2 text-xs text-zinc-500">
+                        Bare ASINs or product URLs, separated by spaces, commas or newlines. Each one is a paid
+                        ingestion call; a competitor that cannot be ingested is reported as failed and never loses the
+                        run.
+                      </p>
+                      <input
+                        id="op-competitors"
+                        value={operatorInputs.competitorAsins}
+                        onChange={(e) => setOperatorInputs({ ...operatorInputs, competitorAsins: e.target.value })}
+                        placeholder="B0XXXXXXXX, B0YYYYYYYY"
+                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 font-mono text-xs placeholder:text-zinc-600 focus:outline-none"
+                      />
+                      {operatorInputs.competitorAsins.trim() !== '' && (
+                        <p className="mt-1 text-xs text-zinc-500">
+                          accepted:{' '}
+                          {acceptedCompetitors.length > 0 ? (
+                            <span className="font-mono text-zinc-300">{acceptedCompetitors.join(', ')}</span>
+                          ) : (
+                            <span className="text-amber-400">none — an ASIN is 10 characters, or paste the product URL</span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs text-zinc-300" htmlFor="op-fiction">
+                        Known-false / superseded claims — one per line (optional)
+                      </label>
+                      <p className="mb-2 text-xs text-zinc-500">
+                        Descriptors you KNOW are false for this product: an invented blend name, a retired count, a
+                        claim that keeps coming back from someone&rsquo;s paste buffer. They are added to the gate&rsquo;s
+                        own list for this run only — an operator input can only ever make the gate stricter, and nothing
+                        here is saved.
+                      </p>
+                      <textarea
+                        id="op-fiction"
+                        value={operatorInputs.fictionPhrases}
+                        onChange={(e) => setOperatorInputs({ ...operatorInputs, fictionPhrases: e.target.value })}
+                        placeholder={'clinically formulated blend\ntriple-strength complex'}
+                        rows={3}
+                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs placeholder:text-zinc-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs text-zinc-300" htmlFor="op-panel">
+                        {rules.operatorPanel?.inputLabel ?? 'Confirm label values (optional)'}
+                      </label>
+                      <p className="mb-2 text-xs text-zinc-500">{rules.operatorPanel?.inputHelp}</p>
+                      <textarea
+                        id="op-panel"
+                        value={operatorInputs.panelFacts}
+                        onChange={(e) => setOperatorInputs({ ...operatorInputs, panelFacts: e.target.value })}
+                        placeholder={'serving_size: 1 Capsule\nunit_count: 60 Count\nmaximum_dosage: 50 Billion CFU'}
+                        rows={4}
+                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 font-mono text-xs placeholder:text-zinc-600 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <Steps
                 steps={[
                   { name: 'Ingest', state: ingestState },
@@ -383,7 +526,12 @@ export default function Home() {
             </section>
 
             {result && (
-              <ResultsPanel result={result} headers={headers} onUpdated={setResult} />
+              <ResultsPanel
+                result={result}
+                headers={headers}
+                onUpdated={setResult}
+                operatorInputs={operatorInputs}
+              />
             )}
           </>
         )}
