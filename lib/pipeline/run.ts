@@ -48,6 +48,15 @@ export interface PipelineOptions {
    * See `lib/knowledge/panelFacts.ts`.
    */
   panelFacts?: Readonly<Record<string, string>>;
+  /**
+   * D5 — the absolute epoch-ms mark by which this run must be finished, when
+   * the caller is running under one (the API routes are: the platform kills
+   * the function at `maxDuration` and a killed function is a 502 that loses
+   * the entire run). The repair loop stops starting rounds it cannot finish
+   * and returns what it has, UNVERIFIED. Absent => no time limit, which is
+   * what the deterministic tests use.
+   */
+  deadline?: number;
 }
 
 export async function runPipeline(
@@ -79,6 +88,7 @@ export async function runPipeline(
     undefined,
     usedReviews ? { buyerPhrases: mined.phrases } : undefined,
     opts.panelFacts,
+    opts.deadline,
   );
   // Worker ≠ checker: the audit module independently re-runs the gate and
   // owns `verified` (=== gateResult.pass).

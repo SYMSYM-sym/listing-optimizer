@@ -55,6 +55,19 @@ async function ingestCompetitors(input: unknown): Promise<CompetitorIngestion[] 
 export const maxDuration = 300;
 
 /**
+ * D5 — the share of `maxDuration` the pipeline may spend before it must stop
+ * starting repair rounds.
+ *
+ * The platform kills the function at `maxDuration` and a killed function
+ * answers 502, which loses the whole run: every generated surface and every
+ * gate finding. The reserve pays for what happens AFTER the last round — the
+ * audit, the persist, and serializing a large payload — and for a round that
+ * runs longer than the longest one measured so far. Stopping early returns a
+ * complete, honest `verified:false` report; being killed returns nothing.
+ */
+const RUN_BUDGET_FRACTION = 0.8;
+
+/**
  * Full pipeline stage: snapshot -> optimize -> bounded repair loop -> audit.
  * Delegates to the ONE shared `runPipeline` (the exact code path the golden
  * E2E exercises), so the route and the deterministic test can never drift.
@@ -82,6 +95,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (!body.snapshot?.title) {
     return NextResponse.json({ code: 'BAD_REQUEST', message: 'Missing snapshot.' }, { status: 400 });
   }
+  const startedAt = Date.now();
   try {
     // WS9 — competitor ingestion runs BEFORE generation and can never fail the
     // request: a rejected ASIN becomes a failed benchmark row.
@@ -99,6 +113,9 @@ export async function POST(req: Request): Promise<NextResponse> {
         reviewsText: typeof body.reviewsText === 'string' ? body.reviewsText : undefined,
         // WS5.5 — normalized here and never persisted to the pack.
         panelFacts: normalizePanelFacts(body.panelFacts),
+        // D5 — measured from the moment the request arrived, so the ingestion
+        // above is spent out of the same budget the repair loop is checking.
+        deadline: startedAt + maxDuration * 1000 * RUN_BUDGET_FRACTION,
         ...(competitors ? { competitors } : {}),
       },
     );
