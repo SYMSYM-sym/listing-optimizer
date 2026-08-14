@@ -58,7 +58,17 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  *                    checked the status was a documented way to ship a banned
  *                    term: an undocumented captured-via is a banned term with a
  *                    label on it, and a documented one whose term is in the copy
- *                    is the same thing with better paperwork.
+ *                    is the same thing with better paperwork. A later live run
+ *                    then put this status on an ORDINARY DESCRIPTIVE TERM the
+ *                    copy legitimately used, and this leg fired on a listing
+ *                    with nothing wrong with it. That is fixed where the
+ *                    incoherence is MADE — the same derivation boundary, which
+ *                    since E5 treats the absence half of `captured-via` as the
+ *                    claim about the copy it is, corrects the row and keeps
+ *                    `via` for the route leg below. NOT ONE BYTE OF THIS LEG
+ *                    CHANGED: whatever reaches it saying `captured-via` is
+ *                    still scanned everywhere, which is what still catches a
+ *                    STORED or hand-edited artifact.
  *   `not-targeted` — NOT scanned here; the same absence claim as `candidate`
  *                    with a different strategy behind it, and it is derived at
  *                    the same boundary for the same reason. This check's
@@ -73,9 +83,11 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  * `lib/engine/keywordPlacement.ts` DERIVES them from the finished copy using
  * the very reader below, so the artifact reaching this check is true by
  * construction. That derivation covers every status that states A FACT ABOUT
- * THE COPY — `placed`, `backend`, and (since E4) the two absence claims
- * `candidate` and `not-targeted`; only `negative` and `captured-via`, which
- * state an INTENT, are carried through untouched. Not one rule here was
+ * THE COPY — `placed`, `backend`, the two absence claims `candidate` and
+ * `not-targeted` (E4) and the absence half of `captured-via` (E5); only
+ * `negative` is carried through untouched, because its falsification by the
+ * copy is not a mislabelled row to be corrected — it is the R50 violation this
+ * check exists to report. Not one rule here was
  * relaxed for any of it: the placement leg stays because a STORED or
  * hand-edited artifact never went through that derivation, and the negative /
  * backend-leak / candidate / captured-via / four-test / closed-world /

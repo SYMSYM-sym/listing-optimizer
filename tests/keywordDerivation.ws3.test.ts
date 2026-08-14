@@ -206,30 +206,49 @@ describe('(b) R50 — a rival brand marked negative fails from every surface, af
   });
 
   /**
-   * E4 NARROWED THIS FROM FOUR STATUSES TO TWO, and the two that stayed are
-   * the two that state an INTENT. `negative` ("exclude this rival") and
-   * `captured-via` ("reach this demand through another cluster") are
-   * judgements no substring search can make, so derivation never touches them
-   * EVEN WHEN THE TERM IS SITTING IN THE COPY — which is exactly when a
-   * derivation bug would silently promote one to `placed` and launder a rival
-   * brand. `candidate` / `not-targeted` moved to the derived side because they
-   * state a FACT ABOUT THE COPY; `(g)` below holds that leg.
+   * E4 NARROWED THIS FROM FOUR STATUSES TO TWO AND E5 TO ONE. The one that
+   * stayed is the one whose falsification by the copy IS the violation:
+   * `negative` ("exclude this rival") must reach C28 saying exactly that, EVEN
+   * WHEN THE TERM IS SITTING IN THE COPY — which is exactly when a derivation
+   * bug would silently promote it to `placed` and launder a rival brand.
+   * `candidate` / `not-targeted` (E4) and `captured-via` (E5) moved to the
+   * derived side because each states a FACT ABOUT THE COPY; `(g)` below holds
+   * that leg, and `tests/capturedVia.derivation.test.ts` holds E5's.
    */
-  it('derivation NEVER rewrites an intent status — the two are model-owned', () => {
+  it('derivation NEVER rewrites `negative` — the one model-owned status', () => {
     const l = clone();
     const rows: KeywordTerm[] = [
       { term: 'vegan', tier: 'negative', status: 'negative', surfaces: [], why: 'planted' },
-      { term: 'digestive balance', tier: 'demand', status: 'captured-via', surfaces: [], why: 'planted', via: 'cluster' },
     ];
-    // both terms ARE in the copy — the hostile case for an intent status
+    // the term IS in the copy — the hostile case for the intent status
     for (const r of rows) expect(allSurfaces().some((n) => surfaceHas(l, n, r.term)), r.term).toBe(true);
     const derived = deriveKeywordPlacement(rows, l, pack);
-    expect(derived.map((r) => r.status)).toEqual(['negative', 'captured-via']);
+    expect(derived.map((r) => r.status)).toEqual(['negative']);
     expect(derived.every((r) => r.surfaces.length === 0)).toBe(true);
     expect(derived.every((r) => r.note === undefined)).toBe(true);
     for (const s of derived.map((r) => r.status)) expect(MODEL_OWNED_STATUSES).toContain(s);
     // ...and the partition is a PARTITION: no status sits on both sides.
     for (const s of MODEL_OWNED_STATUSES) expect(ABSENCE_CLAIM_STATUSES).not.toContain(s);
+  });
+
+  /**
+   * THE OTHER DIRECTION OF THE SAME PARTITION (E5). A `captured-via` row whose
+   * term IS in the copy is not an intent code must respect — it is a row the
+   * copy has falsified, and it is corrected rather than carried to a gate that
+   * would fail a listing with nothing wrong with it.
+   */
+  it('derivation DOES rewrite a `captured-via` row the copy falsifies', () => {
+    const l = clone();
+    const term = 'digestive balance';
+    expect(allSurfaces().some((n) => surfaceHas(l, n, term))).toBe(true);
+    const derived = deriveKeywordPlacement(
+      [{ term, tier: 'demand', status: 'captured-via', surfaces: [], why: 'planted', via: 'cluster' }],
+      l,
+      pack,
+    );
+    expect(derived[0]!.status).toBe('placed');
+    expect(derived[0]!.surfaces.length).toBeGreaterThan(0);
+    expect(derived[0]!.note ?? '').toContain('captured-via');
   });
 });
 

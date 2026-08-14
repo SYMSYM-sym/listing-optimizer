@@ -269,10 +269,16 @@ assert it, and then failing the run on every disagreement with the code that
 computes it, violates the project's own **worker ≠ checker** rule in the one
 direction that cannot be repaired by trying again.
 
-**What the model now owns:** `term`, `tier`, `why`, and the four
-**intent-bearing** statuses only judgement can produce — `negative` (rival
-brands and forbidden vocabulary, R50), `not-targeted`, `candidate`, and
-`captured-via` (+ its `via`). None of those is a claim about the copy.
+**What the model now owns:** `term`, `tier`, `why`, the **one** status whose
+falsification by the copy is itself the violation — `negative` (rival brands and
+forbidden vocabulary, R50) — and, on a row whose absence claim holds, WHICH KIND
+of absence is meant (`candidate` vs `not-targeted` vs `captured-via`, + its
+`via` route). The statuses this list originally exempted as "intent-bearing"
+were re-derived twice against the rule that **a model may assert an INTENT but
+not a FACT ABOUT THE COPY that code can compute**: E4 moved `candidate` and
+`not-targeted` across, E5 moved the absence half of `captured-via` (item 10).
+`negative` stays because deriving it would convert the R50 violation into a
+relabelling.
 
 **What code now owns** (`lib/engine/keywordPlacement.ts`): `surfaces`, and the
 placement status of every other row, read off the **finished** copy through
@@ -283,10 +289,13 @@ derived surface list, backend-only hit → `backend`, no hit anywhere →
 every round, so a repair round that regenerates copy but not the keyword group
 still re-resolves the carried-forward rows against the strings that ship.
 
-**`captured-via` is derived-exempt on purpose.** Its whole meaning is that the
-term is deliberately ABSENT; deriving it would downgrade every lawfully
-recaptured row and destroy K4. **Derivation-exempt is not gate-exempt** — the
-gate scans that absence, which is item 6.
+**`captured-via` WAS derived-exempt, and item 10 ends that.** The reasoning
+recorded here — "its whole meaning is that the term is deliberately ABSENT, so
+deriving it would downgrade every lawfully recaptured row and destroy K4" — got
+the risk right and the remedy wrong: derivation only rewrites a row whose claim
+the copy FALSIFIES, so a lawfully recaptured row (term absent, route recorded)
+keeps its label and K4 is untouched. **Derivation-exempt was never gate-exempt**
+either: the gate scans that absence (item 6) and still does.
 
 **C28 IS NOT WEAKENED — nothing was removed from it.** A `negative` term
 appearing anywhere still fails (R50/AM-9, including the A+ banner ALT and video
@@ -358,8 +367,17 @@ itemHighlights, bullets, description, backend, attributes, A+ body, A+
 the rival-brand row itself while the copy is clean — still raise nothing and
 still leave the golden fixture at zero gate failures.
 
+**WHAT ITEM 10 LATER CHANGED, AND WHAT IT DID NOT.** This leg is byte-for-byte
+as it was written here. What moved is upstream of it: the GENERATOR no longer
+hands the gate a `captured-via` row whose term is in the copy, because the
+derivation boundary now measures that claim like any other. The scan stays for
+the artifacts derivation never saw — stored runs, hand-edited artifacts, any
+route that skipped it — and `tests/capturedVia.gate.test.ts` still holds all 15
+planted surfaces plus the lawful-recapture direction, unchanged.
+
 **A future change to this must also change:** the status list in C28's header,
-`tests/capturedVia.gate.test.ts`, and item 5's claim about what C28 still does.
+`tests/capturedVia.gate.test.ts`, `tests/capturedVia.derivation.test.ts`, and
+item 5's claim about what C28 still does.
 
 ---
 
@@ -502,3 +520,86 @@ present, the regenerated group's prompt carries the same `buyerLanguageBlock`
 the optimize path renders and none of the fragments the filter rejected; absent
 — including a whitespace-only value, because absence and emptiness are different
 statements — the prompts are byte-identical and P11 stays `unknown`.
+
+---
+
+## 10. CORRECTED RECORD — `captured-via` was left on the model's side of a partition it does not belong on.
+
+### 10.1 The live defect
+
+Production, ASIN **B00WNDG7V8**. One failure, and the run ended
+`verified: false`:
+
+```
+C28 | keywords[1] | captured-via term 'oral probiotic' appears on 'attributes'
+```
+
+`oral probiotic` is an **ordinary descriptive term** for that product and the
+copy uses it legitimately. Nothing about the listing was wrong. The model had
+labelled the row `captured-via`; item 6's absence scan fired on it — correctly,
+by its own rule — and the run failed on a **self-contradictory row** rather than
+on any defect in the copy. No repair round clears that: the fix the failure asks
+for is "remove the term from the copy", and the term is a plain description of
+the product.
+
+### 10.2 The rule, applied one status further along
+
+Items 5 and its E4 successor both turned on one principle: **the model may
+assert an INTENT; it may not assert a FACT ABOUT THE COPY that code can compute
+exactly.** Read `captured-via` against it and it is a compound —
+
+* an INTENT: "reach this demand through the compliant cluster named in `via`";
+* a CLAIM ABOUT THE COPY: "the term itself is deliberately ABSENT".
+
+The second half is word-for-word what `candidate` asserts, and item 6 enforces
+it with word-for-word the same everywhere-scan. So it is derived, exactly like
+`candidate`:
+
+| the copy says | the row becomes |
+| --- | --- |
+| term on ≥1 visible surface | `placed`, derived surfaces, correction on `note` |
+| term only in the backend field | `backend`, same record |
+| term nowhere at all | **label KEPT** — `captured-via`, surfaces empty, K4 intact |
+
+**The `via` route leg survives derivation untouched**, because it is not a claim
+about the copy at all: it states something about the ROW'S OWN completeness,
+which no reading of the listing can supply or refute. A kept `captured-via` row
+with an empty or missing `via` still fails C28 exactly as before.
+
+### 10.3 `negative` is now the ONLY model-owned status, and that is deliberate
+
+`MODEL_OWNED_STATUSES` is `['negative']`. Every other status states something
+the copy can falsify, and a falsified claim is a row to correct — except this
+one. **A `negative` term found in the copy is not a mislabelled row; it IS the
+violation R50 exists to detect.** Deriving it to `placed` would turn the single
+check that keeps rival brands out of shipped copy into a relabelling exercise.
+So `negative` is never derived away, and C28's everywhere-scan for it is
+untouched to the byte.
+
+`tests/capturedVia.derivation.test.ts` → "the partition is pinned against the
+principle" asserts that membership exactly, with the reason each other status
+sits on the derived side written beside it, so a future change has to argue with
+the principle rather than edit an array.
+
+### 10.4 R50 is unweakened, and the tests say so in both directions
+
+`tests/capturedVia.derivation.test.ts` → "(d) R50 is unweakened":
+
+* a rival marked `negative` planted in **title / bullet / description / backend
+  / attributes / A+ `bannerAltText` / `videoBrief` / imagePlan `altText`** —
+  each one still FAILS, after derivation, with the row still reading `negative`;
+* a rival **cannot be laundered by a label**: `captured-via`, `candidate`,
+  `not-targeted` and `placed` all still fail while the brand is in the
+  operator-supplied competitor set (item 7's automatic rival-brand set reads no
+  label at all);
+* and the clean direction still PASSES, so this is not a check that fails
+  everything.
+
+`tests/capturedVia.gate.test.ts` (item 6) is unchanged and still green: the
+absence scan still fires on an artifact that never went through derivation.
+
+**A future change to this must also change:** `MODEL_OWNED_STATUSES` /
+`ABSENCE_CLAIM_STATUSES` in `lib/engine/keywordPlacement.ts` (the one source of
+truth, read by the prompt in `lib/engine/prompts/shared.ts`), C28's status
+docstring, `KeywordStatus` in `lib/types.ts`, item 5 and item 6 above, and
+`tests/capturedVia.derivation.test.ts`.

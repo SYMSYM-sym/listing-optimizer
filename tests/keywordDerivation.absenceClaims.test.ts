@@ -53,7 +53,8 @@ import { rainforestSample } from './fixtures/rainforest.sample';
  * of them are:
  *
  *   negative      INTENT — "exclude this rival brand".              model-owned
- *   captured-via  INTENT — "reach this demand another way".         model-owned
+ *   captured-via  INTENT + CLAIM ABOUT THE COPY — "absent, and      DERIVED
+ *                 reached through `via` instead".                   (since E5)
  *   candidate     CLAIM ABOUT THE COPY — "not currently used".      DERIVED
  *   not-targeted  CLAIM ABOUT THE COPY — "not going after this".    DERIVED
  *
@@ -369,7 +370,23 @@ describe('(d) R50 is unweakened: a rival marked negative still fails from all ei
 describe('(e) captured-via keeps BOTH legs', () => {
   const DEMAND = 'immune boost';
 
-  it('FAILS: a captured-via term that is sitting in the copy', () => {
+  it('UNDERIVED, C28 still FAILS a captured-via term sitting in the copy', () => {
+    // The stored / hand-edited artifact: it never went through derivation, and
+    // the everywhere-scan (item 6 of CONFORMANCE-DEVIATIONS.md) still catches
+    // it. E5 changed the GENERATOR, not this leg — see the next case.
+    const l = clone();
+    l.description = `${l.description}\n${DEMAND} for the whole family.`;
+    l.keywords = [
+      row(DEMAND, 'captured-via', { tier: 'demand', via: 'the compliant daily wellness cluster' }),
+      ...NEGATIVE_FLOOR(),
+    ];
+    expect(
+      c28(l).some((f) => f.context.toLowerCase().includes('captured-via term')),
+    ).toBe(true);
+    expect(runGate(l, pack, ctx).pass).toBe(false);
+  });
+
+  it('DERIVED, the same row is corrected to its real placement instead (E5)', () => {
     const l = clone();
     l.description = `${l.description}\n${DEMAND} for the whole family.`;
     l.keywords = deriveKeywordPlacement(
@@ -378,12 +395,11 @@ describe('(e) captured-via keeps BOTH legs', () => {
       pack,
       snapshot,
     );
-    // derivation did NOT touch it — captured-via is an intent
-    expect(rowFor(l.keywords, DEMAND).status).toBe('captured-via');
-    expect(
-      c28(l).some((f) => f.context.toLowerCase().includes('captured-via term')),
-    ).toBe(true);
-    expect(runGate(l, pack, ctx).pass).toBe(false);
+    const r = rowFor(l.keywords, DEMAND);
+    expect(r.status).toBe('placed');
+    expect(r.surfaces).toContain('description');
+    expect(r.note ?? '').toContain('captured-via');
+    expect(c28(l).some((f) => f.context.toLowerCase().includes('captured-via term'))).toBe(false);
   });
 
   it('FAILS: a captured-via row with no route recorded', () => {
@@ -505,15 +521,21 @@ describe('the status partition is stated once and reaches the prompt', () => {
     for (const s of [...MODEL_OWNED_STATUSES, ...ABSENCE_CLAIM_STATUSES]) {
       expect(kr().statuses).toContain(s);
     }
-    expect([...MODEL_OWNED_STATUSES].sort()).toEqual(['captured-via', 'negative']);
-    expect([...ABSENCE_CLAIM_STATUSES].sort()).toEqual(['candidate', 'not-targeted']);
+    // E5 moved `captured-via` across; the authoritative pin (with the reason
+    // per status) lives in `tests/capturedVia.derivation.test.ts`.
+    expect([...MODEL_OWNED_STATUSES].sort()).toEqual(['negative']);
+    expect([...ABSENCE_CLAIM_STATUSES].sort()).toEqual([
+      'candidate',
+      'captured-via',
+      'not-targeted',
+    ]);
   });
 
   it('the keyword prompt tells the model the absence statuses describe ABSENT terms', () => {
     const p = buildGroupPrompts(pack).keywords(snapshot, clean);
     for (const s of ABSENCE_CLAIM_STATUSES) expect(p).toContain(s);
     expect(p).toMatch(/ABSENT FROM THE COPY ABOVE/);
-    // and it still names the two model-owned statuses as never overwritten
+    // and it still names the model-owned status as never overwritten
     expect(p).toMatch(/never overwritten/);
     for (const s of MODEL_OWNED_STATUSES) expect(p).toContain(s);
   });

@@ -318,6 +318,16 @@ export function heroSpecBlock(units: UnitRules | undefined): string {
   ].join('\n');
 }
 
+/**
+ * "a, b and c" from a list of any length. The status groups below are rendered
+ * FROM PACK DATA through the partition constants, so their size is not fixed
+ * here and a hard-coded "both" would go wrong the moment a status moves side.
+ */
+const listOf = (items: readonly string[]): string =>
+  items.length <= 1
+    ? (items[0] ?? '')
+    : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+
 export function keywordVocabularyBlock(kr: KeywordRules | undefined): string {
   const visible = (kr?.visibleSurfaces ?? []).filter((s) => s.trim() !== '');
   const backend = (kr?.backendSurfaces ?? []).filter((s) => s.trim() !== '');
@@ -346,19 +356,21 @@ export function keywordVocabularyBlock(kr: KeywordRules | undefined): string {
     '- Tiers: 1 = own-the-lane head terms for the single intent cluster this listing owns; 2 = named entities (each component by its full name, the headline spec, the formula callout) because those are what an assistant quotes back; 3 = qualifier and trust terms (diet flags, origin, count, supply) that act as filters and tie-breakers; 4 = conversational buyer-language phrases. A row that is not tier 1-4 carries one of these tier labels instead: backend, demand, strategy, candidate, negative.',
     // WS3 — the STATUS SPLIT, from pack data, in the THREE parts the derivation
     // actually implements. The placement statuses are COMPUTED from the
-    // finished copy (`lib/engine/keywordPlacement.ts`); the absence-claim pair
-    // is a claim ABOUT that copy and is checked against it; only the two
-    // intent statuses are carried through untouched. The model used to be asked
-    // which surfaces its own copy had used, and on all three live ASINs it was
-    // wrong 21-22 times per run, so it is not asked.
+    // finished copy (`lib/engine/keywordPlacement.ts`); the absence-claim
+    // statuses each claim something ABOUT that copy and are checked against it;
+    // only `negative`, whose falsification by the copy IS the R50 violation, is
+    // carried through untouched. The model used to be asked which surfaces its
+    // own copy had used, and on all three live ASINs it was wrong 21-22 times
+    // per run, so it is not asked.
     `- STATUS: ${derivedStatuses.join(' / ') || '(none)'} ${derivedStatuses.length === 1 ? 'is' : 'are'} COMPUTED from the finished copy after you answer — never declare one and never list surfaces; a term the copy carries visibly is recorded with the exact surfaces carrying it, and a term only in the invisible field is recorded as invisible-only.`,
-    // E4 — the live 77-failure class: the model wrote `candidate` over the
-    // product's OWN ingredient names while the copy above was full of them.
-    // Both words describe a term that is ABSENT, so the absence is now measured
-    // and the row corrected; the choice BETWEEN the two words is still the
+    // E4/E5 — the live failure classes: the model wrote `candidate` over the
+    // product's OWN ingredient names (77 in one artifact) and `captured-via`
+    // over an ordinary descriptive term the copy legitimately used. EVERY word
+    // in this group describes a term that is ABSENT, so the absence is now
+    // measured and the row corrected; the choice BETWEEN the words is still the
     // model's, because no substring search can make it.
-    `- ${absenceStatuses.join(' and ') || '(none)'} ${absenceStatuses.length === 1 ? 'describes a term that is' : 'both describe a term that is'} ABSENT FROM THE COPY ABOVE — a term you are naming for a later cycle, or one you are deliberately leaving alone. READ THE COPY BEFORE YOU USE EITHER: a term you can see in it (every ingredient you named, every spec you wrote) is IN the listing, and a row saying otherwise is corrected against the copy and the correction recorded. Which of the two words fits an absent term is YOUR call and is never overwritten.`,
-    `- These statuses are YOURS and are never overwritten: ${modelOwnedStatuses.join(', ') || '(none)'}. A row on the negative list must appear nowhere at all, and a recaptured row names its compliant route. A row on the invisible surface must appear there and NOWHERE visible.`,
+    `- ${listOf(absenceStatuses) || '(none)'} ${absenceStatuses.length === 1 ? 'describes a term that is' : 'each describe a term that is'} ABSENT FROM THE COPY ABOVE — a term you are naming for a later cycle, one you are deliberately leaving alone, or one you may not write at all and reach through a compliant cluster named in \`via\` instead. READ THE COPY BEFORE YOU USE ANY OF THEM: a term you can see in it (every ingredient you named, every spec you wrote) is IN the listing, and a row saying otherwise is corrected against the copy and the correction recorded. Which word fits an absent term is YOUR call and is never overwritten, and a recaptured row still names its compliant route.`,
+    `- These statuses are YOURS and are never overwritten: ${listOf(modelOwnedStatuses) || '(none)'}. A term you put on the negative list must appear NOWHERE AT ALL — the run FAILS if it does, and that failure is the point of the status. A row on the invisible surface must appear there and NOWHERE visible.`,
   ].join('\n');
 }
 

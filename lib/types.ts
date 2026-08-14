@@ -1198,8 +1198,13 @@ export type KeywordTier = 1 | 2 | 3 | 4 | 'backend' | 'demand' | 'strategy' | 'c
  *
  *  placed       — must appear on every surface it declares.
  *  backend      — indexed invisibly: must be in the backend field and NOWHERE visible.
- *  captured-via — banned demand recaptured through a compliant cluster; not scanned,
- *                 but the compliant route MUST be documented in `via` (K4).
+ *  captured-via — banned demand recaptured through a compliant cluster: the term
+ *                 itself must appear NOWHERE, and the compliant route MUST be
+ *                 documented in `via` (K4). DERIVED on the first half — it
+ *                 claims the term is absent, so the derivation measures that and
+ *                 corrects the row when the copy carries the term; `via` is a
+ *                 fact about the ROW rather than about the copy, so it survives
+ *                 derivation and C28 still enforces it.
  *  not-targeted — a deliberate strategy call; not scanned by C28. DERIVED: it
  *                 claims the term is absent, so the derivation checks that and
  *                 corrects the row when the copy carries the term.
@@ -1207,6 +1212,8 @@ export type KeywordTier = 1 | 2 | 3 | 4 | 'backend' | 'demand' | 'strategy' | 'c
  *                 DERIVED for the same reason, and by the same rule.
  *  negative     — must appear NOWHERE, visible or backend. Competitor brand names
  *                 live here (R50), as do banned terms and unverifiable superlatives.
+ *                 THE ONLY MODEL-OWNED STATUS: its falsification by the copy IS
+ *                 the R50 violation, so it is never derived away.
  */
 export type KeywordStatus =
   | 'placed'
@@ -1230,23 +1237,30 @@ export interface KeywordTerm {
    * ("declared placed on 'title' but does not appear there"), which no repair
    * round could converge on because each regeneration produced a fresh set of
    * confident wrong claims. It is a fact code can compute exactly, so code
-   * computes it — worker != checker. Empty for the two INTENT-bearing statuses
-   * (`negative`, `captured-via`), which place nothing by definition, and for
-   * any `candidate` / `not-targeted` row whose absence claim derivation
-   * confirmed — see `MODEL_OWNED_STATUSES` / `ABSENCE_CLAIM_STATUSES`.
+   * computes it — worker != checker. Empty for the one INTENT-bearing status
+   * (`negative`), which places nothing by definition, and for any absence-claim
+   * row (`candidate` / `not-targeted` / `captured-via`) whose absence claim
+   * derivation confirmed — see `MODEL_OWNED_STATUSES` /
+   * `ABSENCE_CLAIM_STATUSES`.
    */
   surfaces: string[];
   /** The evidence/rationale (`evidence` or `why` in the kit's schema). */
   why: string;
-  /** `captured-via` ONLY: the compliant cluster this demand reaches us through. */
+  /**
+   * `captured-via` ONLY: the compliant cluster this demand reaches us through.
+   * Written by the model, never derived — no reading of the copy can supply or
+   * refute it — and preserved through derivation so C28's route leg still has
+   * something to enforce on a row whose absence claim held.
+   */
   via?: string;
   /** `candidate` ONLY: where the term lives until it enters copy (PPC / off-site). */
   home?: string;
   /**
    * DERIVED. Set only when derivation CHANGED the row: a term the copy carries
    * nowhere downgraded to `candidate`, a `negative` row naming the subject's
-   * OWN brand reclassified, or a `candidate` / `not-targeted` row whose term
-   * turned out to be IN the copy corrected to its real placement. It exists so
+   * OWN brand reclassified, or an absence-claim row (`candidate` /
+   * `not-targeted` / `captured-via`) whose term turned out to be IN the copy
+   * corrected to its real placement. It exists so
    * a correction is visible in the deliverable rather than a silent edit.
    */
   note?: string;
