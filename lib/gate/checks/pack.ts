@@ -466,6 +466,24 @@ export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
     },
   },
   {
+    id: 'rules.keywordRules.maxTerms',
+    disarms:
+      'the SIZE bound on the keyword artifact \u2014 with no cap the reference is a list with no stated end, which is what ran the group into the output-token ceiling on every live run (truncated JSON, a truncated retry, a lost run). The cap is stated in the prompt, enforced by the group schema and used to DERIVE the output budget, so emptying it silently uncaps all three at once',
+    present: (p) => {
+      const n = p.rules?.keywordRules?.maxTerms;
+      return typeof n === 'number' && n >= 1;
+    },
+  },
+  {
+    id: 'rules.keywordRules.whyMaxChars',
+    disarms:
+      'the per-row bound on the keyword artifact \u2014 `why` is the only free prose on a row, so with no limit one row can be arbitrarily long and the row cap alone stops bounding the artifact the output budget was computed for',
+    present: (p) => {
+      const n = p.rules?.keywordRules?.whyMaxChars;
+      return typeof n === 'number' && n >= 1;
+    },
+  },
+  {
     id: 'rules.imageArchitecture.slots',
     disarms:
       'C29 entirely \u2014 with no slot architecture nothing verifies that the main-image brief states the background, the fill share and the pixel floor, or that the regulated panel slot demands a REAL photograph, and those two briefs are the ones that may never be AI-generated',

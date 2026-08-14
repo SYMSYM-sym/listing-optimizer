@@ -126,6 +126,38 @@ function zodIssuePaths(e: unknown): string[] {
 }
 
 /**
+ * D1 — a group that could not be produced, as a TYPED failure.
+ *
+ * The caller has to be able to degrade one group without losing the run, and
+ * to say WHY in a log line, without ever touching `message`: a zod message
+ * embeds the offending model OUTPUT (see the reparse note above), so only the
+ * classification and the failing schema PATHS travel on this object.
+ */
+export type GroupFailureReason = 'truncated-or-unparseable' | 'schema' | 'transport';
+
+export class GroupGenerationError extends Error {
+  constructor(
+    readonly group: string,
+    readonly reason: GroupFailureReason,
+    readonly issuePaths: string[],
+    message: string,
+  ) {
+    super(message);
+    this.name = 'GroupGenerationError';
+  }
+}
+
+function classify(e: unknown): GroupFailureReason {
+  if (e instanceof ZodError) return 'schema';
+  // A truncated response fails at JSON.parse (SyntaxError), and a response the
+  // extractor found no object in fails with our own Error from `extractJson` —
+  // both are the max_tokens signature, and both are unusable JSON.
+  if (e instanceof SyntaxError) return 'truncated-or-unparseable';
+  if (e instanceof Error && e.message.includes('No JSON object found')) return 'truncated-or-unparseable';
+  return 'transport';
+}
+
+/**
  * Generate one group: prompt → JSON → zod parse; ONE reparse retry with the
  * validation error appended (separate from the gate's repair budget).
  */
@@ -161,7 +193,10 @@ export async function generateGroup<S extends z.ZodType>(
     try {
       return await attempt(detail);
     } catch (e2) {
-      throw new Error(
+      throw new GroupGenerationError(
+        groupName,
+        classify(e2),
+        zodIssuePaths(e2),
         `Group '${groupName}' failed schema validation twice: ${e2 instanceof Error ? e2.message.slice(0, 300) : String(e2)}`,
       );
     }

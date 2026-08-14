@@ -79,3 +79,44 @@ export function c20Structure(l: OptimizedListing, _pack: KnowledgePack): Failure
   }
   return out;
 }
+
+/**
+ * GEN — a generation GROUP that could not be produced (D1).
+ *
+ * WHY THIS CHECK EXISTS. Until D1, a group whose output was truncated or
+ * unparseable after its reparse retry threw out of the engine and the route
+ * answered 502: three live ASINs, eight attempts, eight 502s and not one
+ * report. Losing the whole run over one group is the wrong trade — the
+ * operator wants the seven groups that DID come back, plus the truth about the
+ * one that did not. So the engine degrades the group and records its name on
+ * `degradedGroups`.
+ *
+ * The moment it does that, "the run completed" stops meaning "the run is
+ * complete", and the ONLY thing standing between a crashed group and a
+ * `verified:true` is this check. It is therefore blocking, it names the group,
+ * and it holds no opinion about which groups matter: any degraded group fails
+ * the run. In particular the keyword artifact is BOTH an advisory deliverable
+ * AND the input to C28, so a keywords group that died must never be able to
+ * present itself as a listing with nothing to check — C28 reports the empty
+ * artifact, and this check reports why it is empty.
+ *
+ * It is deliberately NOT repairable by regeneration (`fieldToGroup` maps no
+ * field of the form `generation.*`): the group already had its two attempts
+ * inside the boundary, and spending repair rounds — each one a fresh set of
+ * LLM calls — on a group that has just failed twice is how a run walks into
+ * the platform's own duration ceiling and 502s anyway.
+ */
+export function genDegradedGroups(l: OptimizedListing): Failure[] {
+  const groups = Array.isArray(l.degradedGroups) ? l.degradedGroups : [];
+  return groups
+    .map((g) => normalize(typeof g === 'string' ? g : String(g ?? '')).trim())
+    .filter((g) => g !== '')
+    .map((g) =>
+      fail(
+        'GEN',
+        `generation.${g}`,
+        '(no valid output)',
+        `The '${g}' group returned nothing this run could validate, so that part of the listing is missing or stale. The run is UNVERIFIED by construction — re-run it, and if it repeats, the group's prompt and schema disagree or its output budget is too small for the artifact it asks for`,
+      ),
+    );
+}

@@ -849,7 +849,14 @@
     "PACK DATA: every surface name, status word and threshold the placement check reads",
     "lives here, so lib/gate holds no keyword vocabulary of its own.",
     "The model is QUALITATIVE — the playbook forbids search-volume tools and this system",
-    "calls none: a term earns its tier from evidence, never from a number an API returned."
+    "calls none: a term earns its tier from evidence, never from a number an API returned.",
+    "maxTerms / whyMaxChars BOUND THE ARTIFACT (D1). The reference is a list, and a list with",
+    "no stated end is what truncated every live run at the output-token ceiling: the group came",
+    "back stopReason max_tokens, the JSON was cut mid-row and JSON.parse threw on the retry too.",
+    "The cap is stated in the prompt, enforced by the group schema and used to DERIVE the output",
+    "budget, so raising one of them cannot silently move the cliff back into place. 28 rows is",
+    "above what full coverage needs (the recorded golden reference uses 19) and far below the",
+    "point where the artifact stops being reviewable by an operator."
   ],
   "keywordRules": {
     "visibleSurfaces": [
@@ -882,6 +889,8 @@
       "negative"
     ],
     "minNegatives": 3,
+    "maxTerms": 28,
+    "whyMaxChars": 120,
     "demandRecapture": {
       "headline": "K4 — DEMAND RECAPTURE: never abandon the demand behind a term you may not write. Map it to a compliant cluster and record the route.",
       "mappings": [

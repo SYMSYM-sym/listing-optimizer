@@ -456,6 +456,23 @@ export interface KeywordRules {
    */
   minNegatives: number;
   /**
+   * D1 — the MAXIMUM number of rows the reference may carry.
+   *
+   * The artifact is a LIST, and a list with no stated end is what truncated
+   * every live run: the keywords group came back `stopReason: "max_tokens"`,
+   * the JSON was cut mid-row and `JSON.parse` threw on the retry as well. The
+   * cap is stated in the prompt, enforced by the group schema AND used to
+   * derive the group's output budget (`keywordsMaxTokens`), so the three can
+   * never drift into a budget that is smaller than the artifact it allows.
+   */
+  maxTerms: number;
+  /**
+   * D1 — the character budget for one row's `why`. It is the only free-prose
+   * field on a row, so it is the only one that can make a row unboundedly
+   * large. Stated in the prompt and enforced by the group schema.
+   */
+  whyMaxChars: number;
+  /**
    * K4 — the DEMAND-RECAPTURE guidance rendered into the keyword and copy
    * prompts. Each line states one mapping pattern from banned demand to a
    * compliant capture route. Prompt-only: nothing here is enforced, which is
@@ -1256,6 +1273,23 @@ export interface OptimizedListing {
   bulletClaimBearing?: boolean[];
   /** Customer-facing product name (leads title/title75 per C8/C15). */
   productName: string;
+  /**
+   * D1 — the generation groups whose LLM output could NOT be validated, even
+   * after the boundary's own reparse retry.
+   *
+   * A truncated or unparseable group used to throw all the way out of the
+   * route, which returned 502 and lost the entire run — every live attempt
+   * ended that way. The group is now degraded instead: the run completes and
+   * says which part of it is missing. That is only safe because the marker is
+   * BLOCKING — gate check `GEN` turns every entry here into a failure, so
+   * `verified` (=== `gateResult.pass`, computed only in the audit) can never
+   * be true on a run where a group crashed, and a missing keyword artifact can
+   * never quietly disable C28.
+   *
+   * Optional and ABSENT when nothing degraded, so a healthy run is
+   * byte-for-byte the object it was before.
+   */
+  degradedGroups?: string[];
   state: ElementState;
 }
 

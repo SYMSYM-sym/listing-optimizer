@@ -40,6 +40,7 @@ import {
   c29ImagePlanContent,
   c30ImageAltText,
   c31BulletFormat,
+  genDegradedGroups,
   packFailClosed,
   type GateContext,
 } from './checks';
@@ -98,6 +99,9 @@ export function runGate(
   const failures = [
     // Fail-closed first: an empty/missing disease-noun pack is blocking.
     ...guarded('PACK', () => packFailClosed(listing, pack, ctx)),
+    // D1 — fail-closed second: a group the engine could not produce is a
+    // BLOCKING failure, so a degraded run can never come back verified.
+    ...guarded('GEN', () => genDegradedGroups(listing)),
     ...guarded('C1', () => c1TitleLength(listing, pack)),
     ...guarded('C2', () => c2Bullets(listing, pack)),
     ...guarded('C3', () => c3BackendBytes(listing, pack)),

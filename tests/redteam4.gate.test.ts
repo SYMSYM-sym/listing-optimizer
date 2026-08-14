@@ -140,6 +140,12 @@ const EMPTIERS: Record<string, (p: KnowledgePack) => void> = {
   'rules.keywordRules.minNegatives': (p) => {
     p.rules.keywordRules!.minNegatives = 0;
   },
+  'rules.keywordRules.maxTerms': (p) => {
+    p.rules.keywordRules!.maxTerms = 0;
+  },
+  'rules.keywordRules.whyMaxChars': (p) => {
+    p.rules.keywordRules!.whyMaxChars = 0;
+  },
   'compliancePack.ingredientSubsetRule': (p) => {
     delete p.compliancePack!.ingredientSubsetRule;
   },

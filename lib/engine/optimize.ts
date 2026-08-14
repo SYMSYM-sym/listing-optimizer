@@ -14,11 +14,12 @@ import { sanitizeBackendSearchTerms } from './backendSanitize';
 import { sanitizeBullets } from './bulletSanitize';
 import { buildFacts } from './facts';
 import { normalizeListingTypography } from './typography';
-import { generateGroup, type LlmClient } from './llm';
+import { generateGroup, GroupGenerationError, type LlmClient } from './llm';
 import { buildGroupPrompts, buildSystemPrompt, type OperatorPromptContext } from './prompts';
 import {
   aplusGroupSchema,
-  keywordsGroupSchema,
+  keywordsGroupSchemaFor,
+  keywordsMaxTokens,
   attributesGroupSchema,
   backendGroupSchema,
   bulletsGroupSchema,
@@ -135,9 +136,47 @@ export async function optimize(
   const groupPrompts = buildGroupPrompts(pack, env.titlePolicy(), opts.operator ?? {});
   const disclaimer = pack.compliancePack?.disclaimer ?? '';
   const groups = opts.groups ?? ALL_GROUPS;
-  const run = <T>(g: GroupName, fn: () => Promise<T>, fallback: T | undefined): Promise<T> => {
-    if (!groups.includes(g) && fallback !== undefined) return Promise.resolve(fallback);
-    return fn();
+  /**
+   * D1 — GROUP FAILURE IS NOT RUN FAILURE.
+   *
+   * A group whose output could not be validated after its own reparse retry
+   * used to throw out of here, out of the pipeline and out of the route, which
+   * answered 502 and threw the whole run away — that is what every live
+   * attempt did when the keywords group hit the output-token ceiling. The
+   * group is DEGRADED instead: the last known-good slice is kept when a repair
+   * round has one, an empty slice when it does not, and the group's name is
+   * recorded.
+   *
+   * That is only safe because the record is BLOCKING. Every name collected
+   * here rides out on `degradedGroups`, gate check GEN turns each one into a
+   * failure, and `verified` is `gateResult.pass` computed in the audit — so a
+   * degraded run cannot come back verified, and an empty keyword artifact
+   * still meets C28's own missing-artifact failure rather than quietly
+   * disabling it. Degrading is how the operator gets a partial answer AND the
+   * truth about it; it is never how a run passes.
+   */
+  const degraded = new Set<GroupName>();
+  const run = async <T>(
+    g: GroupName,
+    fn: () => Promise<T>,
+    fallback: T | undefined,
+    empty: T,
+  ): Promise<T> => {
+    if (!groups.includes(g) && fallback !== undefined) return fallback;
+    try {
+      return await fn();
+    } catch (e) {
+      // NEVER log the message: a zod message embeds the model's OUTPUT
+      // (lib/server/log.ts contract). Classification and PATHS only.
+      logServer('optimize.group_degraded', {
+        group: g,
+        reason: e instanceof GroupGenerationError ? e.reason : 'transport',
+        issuePaths: e instanceof GroupGenerationError ? e.issuePaths : [],
+        keptPreviousSlice: fallback !== undefined,
+      });
+      degraded.add(g);
+      return fallback !== undefined ? fallback : empty;
+    }
   };
   const withCtx = (g: GroupName, prompt: string): string => {
     const ctx = opts.failureContext?.[g];
@@ -210,6 +249,7 @@ export async function optimize(
       title75: base.title75,
       itemHighlights: base.itemHighlights,
     },
+    { productName: '', primaryKeyword: '', title: '', title75: '', itemHighlights: '' },
   );
 
   const titleSurfaces = {
@@ -240,15 +280,20 @@ export async function optimize(
   const [bullets, description, backend, attributes, aplus, images, qa] =
     await Promise.all([
       run('bullets', () => generateGroup(llm, 'bullets', system, withCtx('bullets', groupPrompts.bullets(snapshot, canonicalProductName)), bulletsGroupSchema, 2000),
-        base && { bullets: base.bullets.map((text, i) => ({ text, useCaseAnchor: base.bulletAnchors?.[i] ?? '', claimBearing: text.trimEnd().endsWith('*') })) }),
+        base && { bullets: base.bullets.map((text, i) => ({ text, useCaseAnchor: base.bulletAnchors?.[i] ?? '', claimBearing: text.trimEnd().endsWith('*') })) },
+        { bullets: [] }),
       run('description', () => generateGroup(llm, 'description', system, withCtx('description', groupPrompts.description(snapshot, canonicalProductName)), descriptionGroupSchema, 2000),
-        base && { description: stripDisclaimer(base.description, disclaimer) }),
+        base && { description: stripDisclaimer(base.description, disclaimer) },
+        { description: '' }),
       run('backend', () => generateGroup(llm, 'backend', system, withCtx('backend', groupPrompts.backend(snapshot, titleSurfaces)), backendGroupSchema, 600),
-        base && { backendSearchTerms: base.backendSearchTerms }),
+        base && { backendSearchTerms: base.backendSearchTerms },
+        { backendSearchTerms: '' }),
       run('attributes', () => generateGroup(llm, 'attributes', system, withCtx('attributes', groupPrompts.attributes(snapshot, schemaFields)), attributesGroupSchema, 3000),
-        base && { attributes: base.attributes }),
+        base && { attributes: base.attributes },
+        { attributes: {} }),
       run('aplus', () => generateGroup(llm, 'aplus', system, withCtx('aplus', groupPrompts.aplus(snapshot, canonicalProductName)), aplusGroupSchema, 6000),
-        base && { modules: base.aplusContent.modules.map((m) => ({ ...m, body: stripDisclaimer(m.body, disclaimer) })), comparison: base.aplusContent.comparison, faq: base.aplusContent.faq.map((f) => ({ ...f, a: stripDisclaimer(f.a, disclaimer) })) }),
+        base && { modules: base.aplusContent.modules.map((m) => ({ ...m, body: stripDisclaimer(m.body, disclaimer) })), comparison: base.aplusContent.comparison, faq: base.aplusContent.faq.map((f) => ({ ...f, a: stripDisclaimer(f.a, disclaimer) })) },
+        { modules: [], comparison: { rows: [] }, faq: [] }),
       run('images', () => generateGroup(llm, 'images', system, withCtx('images', groupPrompts.images(snapshot)), imagesGroupSchemaFor(pack.rules.imageArchitecture), 3500),
         base && {
           imagePlan: base.imagePlan.map((s) => ({ ...s, altText: s.altText ?? '' })),
@@ -256,9 +301,11 @@ export async function optimize(
           // carry the stored brief forward unchanged, not invent an empty one —
           // C29 would then report a missing brief the round never touched.
           videoBrief: base.videoBrief ?? { aspect: '', durationSeconds: 0, shots: [], onScreenText: [], notes: '' },
-        }),
+        },
+        { imagePlan: [], videoBrief: { aspect: '', durationSeconds: 0, shots: [], onScreenText: [], notes: '' } }),
       run('qa', () => generateGroup(llm, 'qa', system, withCtx('qa', groupPrompts.qa(snapshot, canonicalProductName)), qaGroupSchema, 3500),
-        base && { qa: base.qa.map((f) => ({ ...f, a: stripDisclaimer(f.a, disclaimer) })) }),
+        base && { qa: base.qa.map((f) => ({ ...f, a: stripDisclaimer(f.a, disclaimer) })) },
+        { qa: [] }),
     ]);
 
   // --- deterministic assembly ---
@@ -360,13 +407,30 @@ export async function optimize(
         'keywords',
         system,
         withCtx('keywords', groupPrompts.keywords(snapshot, copy)),
-        keywordsGroupSchema,
-        3000,
+        keywordsGroupSchemaFor(pack.rules.keywordRules),
+        keywordsMaxTokens(pack.rules.keywordRules),
       ),
     base && { keywords: base.keywords ?? [] },
+    { keywords: [] },
   );
 
-  return { ...copy, keywords: normalizeKeywords(keywords.keywords) };
+  // D1 — carry the degradation forward. A group NOT regenerated this round
+  // keeps whatever verdict the previous round reached about it (otherwise a
+  // repair round that touches one group would erase an earlier group's failure
+  // and the run could come back verified); a group that WAS regenerated is
+  // judged on this round alone, so a successful re-run clears it. Absent when
+  // nothing degraded, so a healthy run is byte-identical to what it was.
+  const degradedGroups = [
+    ...new Set([
+      ...(base?.degradedGroups ?? []).filter((g) => !groups.includes(g as GroupName)),
+      ...degraded,
+    ]),
+  ];
+  return {
+    ...copy,
+    keywords: normalizeKeywords(keywords.keywords),
+    ...(degradedGroups.length > 0 ? { degradedGroups } : {}),
+  };
 }
 
 /**

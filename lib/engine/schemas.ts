@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ImageArchitecture } from '@/lib/types';
+import type { ImageArchitecture, KeywordRules } from '@/lib/types';
 
 /**
  * Zod schemas per generation group — structural minimums enforced at the
@@ -278,33 +278,79 @@ const keywordTierField = z.preprocess((v) => {
   return v;
 }, z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.string().min(3)]));
 
-export const keywordsGroupSchema = z.object({
-  keywords: z
-    .array(
-      z.preprocess((raw) => {
-        if (!raw || typeof raw !== 'object') return raw;
-        const o = raw as Record<string, unknown>;
-        // The kit's artifact calls the term `t` and the rationale `evidence`;
-        // accept both spellings so a model shown either shape validates first try.
-        return {
-          ...o,
-          term: o.term ?? o.t ?? o.keyword ?? o.phrase,
-          why: o.why ?? o.evidence ?? o.rationale ?? o.reason,
-          surfaces: Array.isArray(o.surfaces) ? o.surfaces : o.surfaces == null ? [] : [o.surfaces],
-        };
-      }, z.object({
-        term: z.string().min(2),
-        tier: keywordTierField,
-        status: z.string().min(3),
-        surfaces: z.array(z.string()),
-        why: z.string().min(3),
-        via: z.string().optional(),
-        home: z.string().optional(),
-      })),
-    )
-    .min(8)
-    .max(60),
-});
+/**
+ * D1 — the artifact is BOUNDED, and the bound is pack data.
+ *
+ * Live evidence, on all three ASINs and on every attempt including the retry:
+ *   {"event":"llm.group","group":"keywords","ms":25901,
+ *    "stopReason":"max_tokens","outputTokens":3000}
+ *   {"event":"llm.reparse","group":"keywords","error":"SyntaxError","issuePaths":[]}
+ *
+ * The schema allowed up to 60 rows with an unbounded `why`, the prompt asked
+ * for full coverage and named no end, and the group was given 3000 output
+ * tokens — so the model wrote until the ceiling cut it off mid-row and
+ * `JSON.parse` threw. Raising the budget alone would only move the cliff:
+ * whatever the ceiling is, an unbounded list eventually reaches it. So the
+ * ARTIFACT is bounded (`maxTerms`, `whyMaxChars`), the same two numbers are
+ * stated in the prompt, and the budget below is DERIVED from them.
+ */
+export function keywordsGroupSchemaFor(kr: KeywordRules | undefined) {
+  const max = typeof kr?.maxTerms === 'number' && kr.maxTerms > 0 ? kr.maxTerms : undefined;
+  const whyMax =
+    typeof kr?.whyMaxChars === 'number' && kr.whyMaxChars > 0 ? kr.whyMaxChars : undefined;
+  const row = z.preprocess((raw) => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const o = raw as Record<string, unknown>;
+    // The kit's artifact calls the term `t` and the rationale `evidence`;
+    // accept both spellings so a model shown either shape validates first try.
+    return {
+      ...o,
+      term: o.term ?? o.t ?? o.keyword ?? o.phrase,
+      why: o.why ?? o.evidence ?? o.rationale ?? o.reason,
+      surfaces: Array.isArray(o.surfaces) ? o.surfaces : o.surfaces == null ? [] : [o.surfaces],
+    };
+  }, z.object({
+    term: z.string().min(2),
+    tier: keywordTierField,
+    status: z.string().min(3),
+    surfaces: z.array(z.string()),
+    // `why` is the row's only free prose and therefore the only field that can
+    // make a row unboundedly large. The prompt states a SHORTER limit than
+    // this one, so an ordinary overshoot never costs a reparse round while the
+    // hard bound the budget is computed from still holds.
+    why: whyMax ? z.string().min(3).max(Math.ceil(whyMax * 1.5)) : z.string().min(3),
+    via: z.string().optional(),
+    home: z.string().optional(),
+  }));
+  const list = z.array(row).min(KEYWORD_MIN_TERMS);
+  return z.object({ keywords: max ? list.max(max) : list });
+}
+
+/** The floor: below this the reference cannot cover the listing at all. */
+export const KEYWORD_MIN_TERMS = 8;
+
+/**
+ * D1 — the keywords group's OUTPUT BUDGET, derived from the same caps.
+ *
+ * Worst case for one row, measured against a pretty-printed row carrying every
+ * optional field and the longest surface list the pack vocabulary allows:
+ * ~400 characters of keys, punctuation, indentation, tier, status, surfaces,
+ * `via` and `home`, plus `whyMaxChars` of prose. JSON of this shape tokenizes
+ * at roughly 3 characters per token, and the budget is the ceiling of that —
+ * so the model can always finish the largest artifact the schema will accept.
+ * It is a CEILING, not a target: the prompt's cap is what the model actually
+ * writes to, and unused budget costs nothing.
+ */
+const KEYWORD_ROW_FIXED_CHARS = 400;
+const KEYWORD_WRAPPER_CHARS = 64;
+const CHARS_PER_TOKEN = 3;
+
+export function keywordsMaxTokens(kr: KeywordRules | undefined): number {
+  const max = typeof kr?.maxTerms === 'number' && kr.maxTerms > 0 ? kr.maxTerms : KEYWORD_MIN_TERMS;
+  const whyMax = typeof kr?.whyMaxChars === 'number' && kr.whyMaxChars > 0 ? kr.whyMaxChars : 200;
+  const chars = max * (KEYWORD_ROW_FIXED_CHARS + Math.ceil(whyMax * 1.5)) + KEYWORD_WRAPPER_CHARS;
+  return Math.ceil(chars / CHARS_PER_TOKEN / 100) * 100;
+}
 
 export type TitleGroup = z.infer<typeof titleGroupSchema>;
 export type BulletsGroup = z.infer<typeof bulletsGroupSchema>;
@@ -314,4 +360,4 @@ export type AttributesGroup = z.infer<typeof attributesGroupSchema>;
 export type AplusGroup = z.infer<typeof aplusGroupSchema>;
 export type ImagesGroup = z.infer<ReturnType<typeof imagesGroupSchemaFor>>;
 export type QaGroup = z.infer<typeof qaGroupSchema>;
-export type KeywordsGroup = z.infer<typeof keywordsGroupSchema>;
+export type KeywordsGroup = z.infer<ReturnType<typeof keywordsGroupSchemaFor>>;
