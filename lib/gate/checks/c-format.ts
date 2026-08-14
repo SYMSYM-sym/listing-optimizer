@@ -27,13 +27,23 @@ import { disclaimerVariantsOf, fail } from './shared';
  * violation is a check that fails lawful copy, and over-blocking is as severe
  * as a bypass. The playbook left them unenforced for the same reason.
  *
- * PACK-DRIVEN: the cap, the header window and the stopword list all come from
- * `rules.bulletFormat`.
+ * PACK-DRIVEN, AND FAIL-CLOSED WITH IT: the cap, the header window and the
+ * stopword list all come from `rules.bulletFormat` — and that block, its
+ * `requireColonHeader` switch and its `wordRepetitionMax` cap are
+ * `REQUIRED_PACK_PIECES` rows, so a compliance-bearing pack cannot disarm this
+ * check by deleting or zeroing the data it reads.
  */
 const CHECK_ID = 'C31';
 
 export function c31BulletFormat(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const rules: BulletFormatRules | undefined = pack.rules?.bulletFormat;
+  // Not a silent pass. `rules.bulletFormat`, `.requireColonHeader` and
+  // `.wordRepetitionMax` are all `REQUIRED_PACK_PIECES` rows (F5), because
+  // deleting the block disarms BOTH legs of this check and zeroing the cap
+  // disarms R4 — which is precisely the manifest's membership test. A
+  // compliance-bearing pack that ships none therefore already fails CLOSED at
+  // PACK before this early return is ever reached; the return only keeps a
+  // non-compliance pack from crashing.
   if (!rules) return [];
 
   const out: Failure[] = [];

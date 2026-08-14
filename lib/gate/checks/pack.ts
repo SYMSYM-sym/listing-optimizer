@@ -506,6 +506,27 @@ export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
     },
   },
   {
+    id: 'rules.bulletFormat',
+    disarms:
+      'C31 entirely \u2014 the check early-returns on a missing block, so deleting it switches off BOTH the R6 colon-header rule and the R4 in-bullet repetition cap and every bullet shape is accepted. Formatting-only is not a reason to fail open: the manifest\'s membership test asks whether emptying a piece DISARMS a check, and this one disarms all of it',
+    present: (p) => !!p.rules?.bulletFormat && typeof p.rules.bulletFormat === 'object',
+  },
+  {
+    id: 'rules.bulletFormat.requireColonHeader',
+    disarms:
+      'the R6 leg of C31 \u2014 with the switch off a bullet may be a headerless sentence in a list, which loses the scannable label a mobile reader actually reads and stops matching the canonical shape the marketplace\'s own rewrite pass looks for',
+    present: (p) => p.rules?.bulletFormat?.requireColonHeader === true,
+  },
+  {
+    id: 'rules.bulletFormat.wordRepetitionMax',
+    disarms:
+      'the R4 leg of C31 \u2014 at zero the in-bullet repetition cap is switched off and one content word may repeat any number of times in a single bullet, which is the stuffing shape the rule exists to stop',
+    present: (p) => {
+      const n = p.rules?.bulletFormat?.wordRepetitionMax;
+      return typeof n === 'number' && n >= 1;
+    },
+  },
+  {
     id: 'rules.units.dimensions',
     disarms: 'the unit-anchored potency + fact-consistency checks (C10/C12/A5)',
     present: (p) => {

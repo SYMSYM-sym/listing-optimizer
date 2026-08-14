@@ -167,14 +167,61 @@ describe('C31 — the two rules the playbook leaves unenforced STAY unenforced',
     expect(onBullet1(withBullet(text))).toEqual([]);
   });
 
-  it('emptying the pack rules disables C31 and disarms nothing else', () => {
+  /**
+   * F5 — C31 USED TO FAIL OPEN, AND NOW FAILS CLOSED.
+   *
+   * `if (!rules) return []` is still there and still returns nothing, because
+   * a pack with no compliance module legitimately ships no bullet format. What
+   * CHANGED is that `rules.bulletFormat`, `.requireColonHeader` and
+   * `.wordRepetitionMax` are `REQUIRED_PACK_PIECES` rows: a compliance-bearing
+   * pack that deletes the block, flips the header switch off or zeroes the cap
+   * now raises a BLOCKING PACK failure instead of quietly shipping an
+   * unchecked bullet. That is the manifest's own membership test applied
+   * honestly — the question is 'does emptying this DISARM a check', and
+   * deleting this block disarms all of C31.
+   */
+  it('deleting the block still returns nothing DIRECTLY — but the gate fails CLOSED at PACK', () => {
     const bare = JSON.parse(JSON.stringify(pack)) as KnowledgePack;
     delete bare.rules.bulletFormat;
     expect(c31BulletFormat(withBullet('no header here at all in this bullet'), bare)).toEqual([]);
-    // C31 is a FORMAT rule: it is correctly NOT a REQUIRED_PACK_PIECES row,
-    // because emptying it cannot let a compliance violation through.
-    const l = withBullet('CURES DIABETES: this treats diabetes*');
-    expect(runGate(l, bare, ctx).failures.some((f) => f.checkId === 'C6')).toBe(true);
+
+    const l = withBullet('no header here at all in this bullet');
+    const result = runGate(l, bare, ctx);
+    expect(result.pass).toBe(false);
+    expect(
+      result.failures.some(
+        (f) => f.checkId === 'PACK' && `${f.context} ${f.fix}`.includes('rules.bulletFormat'),
+      ),
+    ).toBe(true);
+    // and it disarms nothing else, exactly as before
+    const claim = withBullet('CURES DIABETES: this treats diabetes*');
+    expect(runGate(claim, bare, ctx).failures.some((f) => f.checkId === 'C6')).toBe(true);
+  });
+
+  it('switching OFF either leg is blocking too (R6 switch, R4 cap)', () => {
+    for (const disarm of [
+      (p: KnowledgePack) => {
+        p.rules.bulletFormat!.requireColonHeader = false;
+      },
+      (p: KnowledgePack) => {
+        p.rules.bulletFormat!.wordRepetitionMax = 0;
+      },
+    ]) {
+      const broken = JSON.parse(JSON.stringify(pack)) as KnowledgePack;
+      disarm(broken);
+      const result = runGate(clean, broken, ctx);
+      expect(result.pass).toBe(false);
+      expect(
+        result.failures.some(
+          (f) => f.checkId === 'PACK' && `${f.context} ${f.fix}`.includes('rules.bulletFormat'),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it('the SHIPPED pack satisfies all three rows — lawful copy is not blocked', () => {
+    expect(runGate(clean, pack, ctx).failures.some((f) => f.checkId === 'PACK')).toBe(false);
+    expect(c31BulletFormat(clean, pack)).toEqual([]);
   });
 });
 

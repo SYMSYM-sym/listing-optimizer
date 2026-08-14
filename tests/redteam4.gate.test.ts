@@ -225,6 +225,16 @@ const EMPTIERS: Record<string, (p: KnowledgePack) => void> = {
   'rules.units.dimensions': (p) => {
     p.rules.units.dimensions = {};
   },
+  // F5 — C31 used to fail OPEN: deleting the block early-returned the check.
+  'rules.bulletFormat': (p) => {
+    delete p.rules.bulletFormat;
+  },
+  'rules.bulletFormat.requireColonHeader': (p) => {
+    p.rules.bulletFormat!.requireColonHeader = false;
+  },
+  'rules.bulletFormat.wordRepetitionMax': (p) => {
+    p.rules.bulletFormat!.wordRepetitionMax = 0;
+  },
   attributeSchema: (p) => {
     p.attributeSchema = [];
   },
