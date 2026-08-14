@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type {
-  AttributeField,
+  AttributeSchemaFile,
   CompliancePack,
   KnowledgePack,
   Principle,
@@ -28,6 +28,23 @@ const principles: Principle[] = principlesJson as Principle[];
 const genericSuspicionLexicon: string[] = suspicionGenericJson.suspicionLexicon;
 
 /**
+ * The attribute schema files are DATED SNAPSHOTS (`{ verifiedAsOf,
+ * staleAfterDays, fields[] }`), not bare arrays: an attribute template that
+ * has not been re-checked against the category's Listing Report in a year is
+ * exactly as risky as a stale rule snapshot, and previously nothing recorded
+ * when it was last looked at. The pack keeps the list on `attributeSchema`
+ * (every existing consumer reads that) and the dates on
+ * `attributeSchemaMeta`, which feeds the ADVISORY staleness signal only.
+ */
+const supplementsSchema = attributeSchemaJson as unknown as AttributeSchemaFile;
+const cosmeticsSchema = cosmeticsAttributeSchemaJson as unknown as AttributeSchemaFile;
+
+const schemaMeta = (f: AttributeSchemaFile): { verifiedAsOf: string; staleAfterDays: number } => ({
+  verifiedAsOf: f.verifiedAsOf,
+  staleAfterDays: f.staleAfterDays,
+});
+
+/**
  * EVERY compliance module in the project, assembled HERE (pack data), so
  * `lib/gate` can union the disease/drug lexicons without naming a category.
  *
@@ -50,7 +67,8 @@ export function loadPack(id: PackId): KnowledgePack {
       crossCheckCompliancePacks: ALL_COMPLIANCE_PACKS,
       requiresCompliance: true,
       compliancePack: complianceJson as CompliancePack,
-      attributeSchema: attributeSchemaJson as AttributeField[],
+      attributeSchema: supplementsSchema.fields,
+      attributeSchemaMeta: schemaMeta(supplementsSchema),
       principles,
       suspicionLexicon: [],
     };
@@ -62,7 +80,8 @@ export function loadPack(id: PackId): KnowledgePack {
       crossCheckCompliancePacks: ALL_COMPLIANCE_PACKS,
       requiresCompliance: true,
       compliancePack: cosmeticsComplianceJson as CompliancePack,
-      attributeSchema: cosmeticsAttributeSchemaJson as AttributeField[],
+      attributeSchema: cosmeticsSchema.fields,
+      attributeSchemaMeta: schemaMeta(cosmeticsSchema),
       principles,
       suspicionLexicon: [],
     };

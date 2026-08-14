@@ -37,6 +37,7 @@ const optimized = {
 const audit = {
   verified: true,
   rulesStale: false,
+    attributeSchemaStale: false,
   scorecard: { total: 80, perPrinciple: [] },
   gaps: [],
   gateResult: { pass: true, failures: [] },

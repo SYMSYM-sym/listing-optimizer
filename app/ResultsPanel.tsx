@@ -6,6 +6,7 @@ import type { Audit, Failure, ListingSnapshot, OptimizedListing } from '@/lib/ty
 import { toMarkdown } from '@/lib/export/markdown';
 import type { GroupName } from '@/lib/engine/optimize';
 import { toSellerCentralDescription } from '@/lib/export/descriptionHtml';
+import { downloadShipSheet, openShipSheet } from './shipSheetClient';
 import { CopyButton, Field, SeverityBadge } from './ui';
 
 export type ResultsTab = 'listing' | 'aplus' | 'images' | 'qa' | 'audit';
@@ -65,6 +66,7 @@ export function ResultsPanel({
   const [tab, setTab] = useState<ResultsTab>('listing');
   const [regenerating, setRegenerating] = useState<GroupName | null>(null);
   const [regenError, setRegenError] = useState<string | null>(null);
+  const [sheetBusy, setSheetBusy] = useState(false);
 
   const verified = result.audit.verified;
   const gateFailures = result.audit.gateResult.failures;
@@ -77,6 +79,26 @@ export function ResultsPanel({
     a.download = `listing-${result.optimized.productName.replace(/\W+/g, '-').toLowerCase()}.md`;
     a.click();
     URL.revokeObjectURL(a.href);
+  }
+
+  /**
+   * The ship sheet is SERVER-generated from the STORED run, so it needs a run
+   * id. A run that was never persisted (no store configured) has none — the
+   * buttons are disabled and say why rather than silently producing a sheet
+   * built from client state that nothing re-verified.
+   */
+  async function shipSheet(mode: 'open' | 'download') {
+    if (!result.runId) return;
+    setRegenError(null);
+    setSheetBusy(true);
+    try {
+      if (mode === 'open') await openShipSheet(result.runId, headers);
+      else await downloadShipSheet(result.runId, headers, result.optimized.productName);
+    } catch (e) {
+      setRegenError(e instanceof Error ? e.message : 'Ship sheet failed');
+    } finally {
+      setSheetBusy(false);
+    }
   }
 
   async function regenerate(group: GroupName) {
@@ -159,6 +181,30 @@ export function ResultsPanel({
             className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
           >
             ↓ download Markdown
+          </button>
+          <button
+            disabled={!result.runId || sheetBusy}
+            title={
+              result.runId
+                ? 'Opens the operator paste sheet (regenerated server-side from the stored run)'
+                : 'Ship Sheet needs a stored run — the run store is not configured on the server'
+            }
+            onClick={() => void shipSheet('open')}
+            className="rounded-md border border-amber-800 bg-amber-950/50 px-2 py-1 text-xs text-amber-200 hover:bg-amber-900/50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {sheetBusy ? '◐ …' : '⧉ Ship Sheet'}
+          </button>
+          <button
+            disabled={!result.runId || sheetBusy}
+            title={
+              result.runId
+                ? 'Downloads the operator paste sheet as a standalone HTML file'
+                : 'Ship Sheet needs a stored run — the run store is not configured on the server'
+            }
+            onClick={() => void shipSheet('download')}
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            ↓ Ship Sheet
           </button>
           <button
             disabled={!verified}
@@ -465,6 +511,24 @@ export function ResultsPanel({
               <p className="text-xs text-amber-100/80">
                 {result.audit.rulesStaleNotice ??
                   'Re-verify the time-sensitive Amazon limits in the knowledge pack.'}
+              </p>
+            </div>
+          )}
+          {/*
+            The attribute template has its OWN verification date and its own
+            horizon: policy limits and category templates move for different
+            reasons and are re-verified by different work, so a fresh rule
+            snapshot must not mask a stale schema. Advisory exactly like the
+            notice above — neither ever touches `verified`.
+          */}
+          {result.audit.attributeSchemaStale && (
+            <div className="rounded-lg border border-amber-900 bg-amber-950/30 p-4">
+              <h3 className="text-sm font-semibold text-amber-200 mb-1">
+                ⚠️ Attribute schema may be stale (non-blocking)
+              </h3>
+              <p className="text-xs text-amber-100/80">
+                {result.audit.attributeSchemaStaleNotice ??
+                  'Re-verify the category attribute template (Category Listing Report) against the knowledge pack.'}
               </p>
             </div>
           )}

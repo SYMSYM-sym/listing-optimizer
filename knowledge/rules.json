@@ -636,5 +636,29 @@
     "_comment": "Substring cues gate A4 uses to locate the required A+ modules by id.",
     "brandStory": "brand",
     "hero": "hero"
+  },
+  "operatorChecklist": {
+    "_about": [
+      "OPERATOR CHECKLIST — the publish-time procedure the ship sheet renders.",
+      "It is DOCUMENTATION, not enforcement: nothing here can fail a check, so it is",
+      "deliberately NOT a REQUIRED_PACK_PIECES row (emptying it disarms nothing).",
+      "It lives here so lib/export holds no marketplace procedure of its own."
+    ],
+    "publishOrder": [
+      "Title + Item Highlights (Product Identity)",
+      "Bullets (Key Product Features)",
+      "Description — paste as ONE line; the <br> tags render the paragraphs",
+      "Backend search terms (Keywords tab, Search Terms field)",
+      "Attributes — every blank costs a customer-facing search filter",
+      "A+ content from the module copy below",
+      "Subscribe & Save enrolment — enrol the SKU in Manage Subscribe & Save once the offer is live and in stock",
+      "Recommended browse node LAST — set it only after everything above is saved"
+    ],
+    "propagationNote": "Allow up to 48 hours for saved changes to propagate to the live detail page. Do NOT re-submit the same edit while it is propagating: duplicate submissions queue behind one another and a stale one can overwrite a newer value.",
+    "browseNodeNote": "The recommended browse node is a SUGGESTION only — confirm the node is accepted in the Product Classifier before saving, and enter it LAST.",
+    "opsPlaceholders": [
+      "TIC / cGMP filing — record the manufacturing facility registration and the cGMP filing reference for this SKU in your own compliance file before publish. Operator-supplied: this app never generates it. (Extended in WS7.)",
+      "Rating floor — confirm the SKU clears your programme rating floor (minimum star rating and review count) before enrolling it in promotions or advertising. Operator-supplied: ratings are not part of a generated listing. (Extended in WS7.)"
+    ]
   }
 }

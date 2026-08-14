@@ -1,37 +1,425 @@
-[
-  { "field": "brand_name", "label": "Brand", "filterFacet": false, "required": true, "valueType": "string", "example": "[BRAND]" },
-  { "field": "manufacturer", "label": "Manufacturer", "filterFacet": false, "required": true, "valueType": "string", "example": "[BRAND]" },
-  { "field": "primary_supplement_type", "label": "Primary Supplement Type", "filterFacet": true, "required": true, "valueType": "string", "example": "Probiotic" },
-  { "field": "supplement_type", "label": "Supplement Type", "filterFacet": false, "required": false, "valueType": "list", "example": "Probiotic; Prebiotic" },
-  { "field": "recommended_browse_nodes", "label": "Recommended Browse Nodes", "filterFacet": true, "required": true, "valueType": "string", "example": "[NODE_ID] (suggestion only — confirm acceptance in Product Classifier)" },
-  { "field": "item_type_keyword", "label": "Item Type Keyword", "filterFacet": false, "required": false, "valueType": "string", "example": "probiotic-supplements" },
-  { "field": "item_form", "label": "Item Form", "filterFacet": true, "required": true, "valueType": "string", "example": "Capsule" },
-  { "field": "dosage_form", "label": "Dosage Form", "filterFacet": false, "required": false, "valueType": "string", "example": "Vegetable Capsule" },
-  { "field": "serving_size", "label": "Serving Size", "filterFacet": false, "required": true, "valueType": "string", "example": "[N] Capsules" },
-  { "field": "servings_per_container", "label": "Servings per Container", "filterFacet": false, "required": true, "valueType": "number", "example": "[N]" },
-  { "field": "unit_count", "label": "Unit Count", "filterFacet": false, "required": true, "valueType": "number", "example": "[N]" },
-  { "field": "unit_count_type", "label": "Unit Count Type", "filterFacet": false, "required": true, "valueType": "string", "example": "Count" },
-  { "field": "maximum_dosage", "label": "Maximum Dosage", "filterFacet": false, "required": false, "valueType": "string", "example": "[N] [unit] (attached to the blend, never per-serving phrasing)" },
-  { "field": "directions_for_use", "label": "Directions for Use", "filterFacet": false, "required": true, "valueType": "string", "example": "Take [N] capsule(s) daily with water." },
-  { "field": "target_gender", "label": "Target Gender", "filterFacet": true, "required": true, "valueType": "enum", "example": "Unisex" },
-  { "field": "age_range_description", "label": "Age Range (Description)", "filterFacet": true, "required": true, "valueType": "string", "example": "Adult" },
-  { "field": "diet_type", "label": "Diet Type", "filterFacet": true, "required": false, "valueType": "list", "example": "Vegan; Gluten Free" },
-  { "field": "material_features", "label": "Material Features", "filterFacet": true, "required": false, "valueType": "list", "example": "Vegan; Non-GMO; Gluten Free" },
-  { "field": "product_benefit", "label": "Product Benefits", "filterFacet": true, "required": true, "valueType": "list", "example": "[Benefit A]; [Benefit B]" },
-  { "field": "recommended_uses_for_product", "label": "Recommended Uses", "filterFacet": false, "required": false, "valueType": "string", "example": "General wellness support" },
-  { "field": "specific_uses_for_product", "label": "Specific Uses", "filterFacet": false, "required": false, "valueType": "list", "example": "Use-case phrases feeding COSMO/long-tail retrieval" },
-  { "field": "active_ingredients", "label": "Active Ingredients", "filterFacet": false, "required": true, "valueType": "list", "example": "Actives only — must be a subset of ingredients and match the Supplement Facts panel" },
-  { "field": "ingredients", "label": "Ingredients", "filterFacet": false, "required": true, "valueType": "list", "example": "Full label list incl. Other Ingredients" },
-  { "field": "allergen_information", "label": "Allergen Information", "filterFacet": true, "required": true, "valueType": "string", "example": "Contains: [ALLERGEN] — exact canonical string; never 'No Known Allergens' when a declarable allergen is present" },
-  { "field": "safety_warning", "label": "Safety Warning", "filterFacet": false, "required": true, "valueType": "string", "example": "Canonical safety text (allergen + pregnancy/nursing + physician consult + keep from children)" },
-  { "field": "legal_disclaimer_description", "label": "Legal Disclaimer", "filterFacet": false, "required": true, "valueType": "string", "example": "Verbatim FDA disclaimer" },
-  { "field": "size_name", "label": "Size", "filterFacet": false, "required": false, "valueType": "string", "example": "[N] Count (Pack of 1)" },
-  { "field": "flavor_name", "label": "Flavor", "filterFacet": false, "required": false, "valueType": "string", "example": "Unflavored" },
-  { "field": "scent_name", "label": "Scent", "filterFacet": false, "required": false, "valueType": "string", "example": "Unscented" },
-  { "field": "container_type", "label": "Container Type", "filterFacet": false, "required": false, "valueType": "string", "example": "Bottle" },
-  { "field": "item_weight", "label": "Item Weight", "filterFacet": false, "required": false, "valueType": "string", "example": "[N] Ounces" },
-  { "field": "country_of_origin", "label": "Country of Origin", "filterFacet": true, "required": true, "valueType": "string", "example": "[COUNTRY]" },
-  { "field": "standard_price", "label": "Price", "filterFacet": false, "required": false, "valueType": "string", "example": "[PRICE]" },
-  { "field": "fulfillment_channel", "label": "Fulfillment Channel", "filterFacet": true, "required": false, "valueType": "enum", "example": "FBA" },
-  { "field": "subject_keyword", "label": "Subject Keyword (legacy platinum)", "filterFacet": false, "required": false, "valueType": "string", "example": "Low weight today — fill only if template still exposes it" }
-]
+{
+  "_about": [
+    "ATTRIBUTE SCHEMA — a DATED SNAPSHOT, not a bare list.",
+    "",
+    "verifiedAsOf / staleAfterDays: attribute templates move (Amazon retires keys and",
+    "renames others), so the schema carries the same verification discipline the rule",
+    "snapshot does. Staleness is ADVISORY (lib/audit/staleness.ts -> attributeSchemaStaleness)",
+    "and never touches audit.verified.",
+    "",
+    "source: WHO OWNS THE VALUE. \"generated\" = the model produces it from the listing’s",
+    "own facts. \"operator\" = a seller-account fact the app cannot know (price, SKU,",
+    "product id, model number, condition). Operator fields are filtered out of the",
+    "attributes prompt, deleted from generated output if the model volunteers one anyway,",
+    "and exempt from C23 completeness. A field with NO source reads as \"generated\" — the",
+    "stricter reading, because that is the one the gate can enforce.",
+    "",
+    "enum: present ONLY where valueType is already \"enum\" AND the value set is genuinely",
+    "closed. The invariant valueType === \"enum\" <=> non-empty enum is asserted by",
+    "tests/attributeSchema.test.ts and by the pack-integrity manifest.",
+    "",
+    "pendingTemplateConfirm: AM-7. The key sits outside the 24-key operational census we",
+    "have actually confirmed against a shipped listing, and the full Category Listing",
+    "Report is not yet available. The field is still produced and still checked; the flag",
+    "says the exact template key must be confirmed before an operator relies on it."
+  ],
+  "_declinedEnums": {
+    "_doc": "ENUMS WE DECLINED TO ADD. An over-tight enum is not a stricter check — it is a gate that blocks a lawful value. Each of these fields LOOKS closed and is not.",
+    "item_form": "Open in practice: capsule / tablet / softgel / gummy / powder / liquid / chewable / lozenge / effervescent tablet / stick pack / oil / cream / gel / serum — and new forms ship every year. Any list we wrote today would reject a lawful form tomorrow.",
+    "unit_count_type": "Open in practice: Count / Ounce / Fluid Ounce / Gram / Millilitre / Pound / Servings and more, and the accepted token varies by category template. Enumerating it would fail listings whose template uses a synonym we did not list.",
+    "age_range_description": "Open in practice: Adult / Kid / Teen / Baby / Toddler / Senior / All Ages, plus category-specific phrasings. It is also a FILTER FACET, so a rejected-but-lawful value costs discovery surface as well as a blocked run."
+  },
+  "verifiedAsOf": "2026-08-14",
+  "staleAfterDays": 180,
+  "fields": [
+    {
+      "field": "brand_name",
+      "label": "Brand",
+      "filterFacet": false,
+      "required": true,
+      "valueType": "string",
+      "example": "[BRAND]",
+      "source": "generated"
+    },
+    {
+      "field": "manufacturer",
+      "label": "Manufacturer",
+      "filterFacet": false,
+      "required": true,
+      "valueType": "string",
+      "example": "[BRAND]",
+      "source": "generated"
+    },
+    {
+      "field": "primary_supplement_type",
+      "label": "Primary Supplement Type",
+      "filterFacet": true,
+      "required": true,
+      "valueType": "string",
+      "example": "Probiotic",
+      "source": "generated"
+    },
+    {
+      "field": "supplement_type",
+      "label": "Supplement Type",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "list",
+      "example": "Probiotic; Prebiotic",
+      "source": "generated",
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "recommended_browse_nodes",
+      "label": "Recommended Browse Nodes",
+      "filterFacet": true,
+      "required": true,
+      "valueType": "string",
+      "example": "[NODE_ID] (suggestion only — confirm acceptance in Product Classifier)",
+      "source": "generated",
+      "suggestOnly": true,
+      "note": "Suggestion only — confirm the node is accepted in the Product Classifier, and enter it LAST (after every other field is saved).",
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "item_type_keyword",
+      "label": "Item Type Keyword",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "probiotic-supplements",
+      "source": "generated",
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "item_form",
+      "label": "Item Form",
+      "filterFacet": true,
+      "required": true,
+      "valueType": "string",
+      "example": "Capsule",
+      "source": "generated"
+    },
+    {
+      "field": "dosage_form",
+      "label": "Dosage Form",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "Vegetable Capsule",
+      "source": "generated",
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "serving_size",
+      "label": "Serving Size",
+      "filterFacet": false,
+      "required": true,
+      "valueType": "string",
+      "example": "[N] Capsules",
+      "source": "generated"
+    },
+    {
+      "field": "servings_per_container",
+      "label": "Servings per Container",
+      "filterFacet": false,
+      "required": true,
+      "valueType": "number",
+      "example": "[N]",
+      "source": "generated"
+    },
+    {
+      "field": "unit_count",
+      "label": "Unit Count",
+      "filterFacet": false,
+      "required": true,
+      "valueType": "number",
+      "example": "[N]",
+      "source": "generated"
+    },
+    {
+      "field": "unit_count_type",
+      "label": "Unit Count Type",
+      "filterFacet": false,
+      "required": true,
+      "valueType": "string",
+      "example": "Count",
+      "source": "generated"
+    },
+    {
+      "field": "maximum_dosage",
+      "label": "Maximum Dosage",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "[N] [unit] (attached to the blend, never per-serving phrasing)",
+      "source": "generated",
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "directions_for_use",
+      "label": "Directions for Use",
+      "filterFacet": false,
+      "required": true,
+      "valueType": "string",
+      "example": "Take [N] capsule(s) daily with water.",
+      "source": "generated"
+    },
+    {
+      "field": "target_gender",
+      "label": "Target Gender",
+      "filterFacet": true,
+      "required": true,
+      "valueType": "enum",
+      "example": "Unisex",
+      "source": "generated",
+      "enum": [
+        "Unisex",
+        "Male",
+        "Female"
+      ]
+    },
+    {
+      "field": "age_range_description",
+      "label": "Age Range (Description)",
+      "filterFacet": true,
+      "required": true,
+      "valueType": "string",
+      "example": "Adult",
+      "source": "generated"
+    },
+    {
+      "field": "diet_type",
+      "label": "Diet Type",
+      "filterFacet": true,
+      "required": false,
+      "valueType": "list",
+      "example": "Vegan; Gluten Free",
+      "source": "generated"
+    },
+    {
+      "field": "material_features",
+      "label": "Material Features",
+      "filterFacet": true,
+      "required": false,
+      "valueType": "list",
+      "example": "Vegan; Non-GMO; Gluten Free",
+      "source": "generated"
+    },
+    {
+      "field": "product_benefit",
+      "label": "Product Benefits",
+      "filterFacet": true,
+      "required": true,
+      "valueType": "list",
+      "example": "[Benefit A]; [Benefit B]",
+      "source": "generated"
+    },
+    {
+      "field": "recommended_uses_for_product",
+      "label": "Recommended Uses",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "General wellness support",
+      "source": "generated"
+    },
+    {
+      "field": "specific_uses_for_product",
+      "label": "Specific Uses",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "list",
+      "example": "Use-case phrases feeding COSMO/long-tail retrieval",
+      "source": "generated",
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "active_ingredients",
+      "label": "Active Ingredients",
+      "filterFacet": false,
+      "required": true,
+      "valueType": "list",
+      "example": "Actives only — must be a subset of ingredients and match the Supplement Facts panel",
+      "source": "generated"
+    },
+    {
+      "field": "ingredients",
+      "label": "Ingredients",
+      "filterFacet": false,
+      "required": true,
+      "valueType": "list",
+      "example": "Full label list incl. Other Ingredients",
+      "source": "generated"
+    },
+    {
+      "field": "allergen_information",
+      "label": "Allergen Information",
+      "filterFacet": true,
+      "required": true,
+      "valueType": "string",
+      "example": "Contains: [ALLERGEN] — exact canonical string; never 'No Known Allergens' when a declarable allergen is present",
+      "source": "generated",
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "safety_warning",
+      "label": "Safety Warning",
+      "filterFacet": false,
+      "required": true,
+      "valueType": "string",
+      "example": "Canonical safety text (allergen + pregnancy/nursing + physician consult + keep from children)",
+      "source": "generated"
+    },
+    {
+      "field": "legal_disclaimer_description",
+      "label": "Legal Disclaimer",
+      "filterFacet": false,
+      "required": true,
+      "valueType": "string",
+      "example": "Verbatim FDA disclaimer",
+      "source": "generated"
+    },
+    {
+      "field": "size_name",
+      "label": "Size",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "[N] Count (Pack of 1)",
+      "source": "generated",
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "flavor_name",
+      "label": "Flavor",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "Unflavored",
+      "source": "generated"
+    },
+    {
+      "field": "scent_name",
+      "label": "Scent",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "Unscented",
+      "source": "generated",
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "container_type",
+      "label": "Container Type",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "Bottle",
+      "source": "generated"
+    },
+    {
+      "field": "item_weight",
+      "label": "Item Weight",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "[N] Ounces",
+      "source": "generated"
+    },
+    {
+      "field": "country_of_origin",
+      "label": "Country of Origin",
+      "filterFacet": true,
+      "required": true,
+      "valueType": "string",
+      "example": "[COUNTRY]",
+      "source": "generated"
+    },
+    {
+      "field": "standard_price",
+      "label": "Price",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "[PRICE]",
+      "source": "operator",
+      "note": "Operator-owned. The app never invents a price: an invented price is a wrong price on a live listing."
+    },
+    {
+      "field": "fulfillment_channel",
+      "label": "Fulfillment Channel",
+      "filterFacet": true,
+      "required": false,
+      "valueType": "enum",
+      "example": "FBA",
+      "source": "generated",
+      "enum": [
+        "FBA",
+        "FBM"
+      ],
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "subject_keyword",
+      "label": "Subject Keyword (legacy platinum)",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "Low weight today — fill only if template still exposes it",
+      "source": "generated",
+      "note": "Legacy platinum-keyword field. Weight today is negligible and it consumes NONE of the backend search-term byte budget, so filling it costs nothing and omitting it loses nothing — fill it only if the category template still exposes the key.",
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "external_product_id",
+      "label": "External Product ID (GTIN/UPC/EAN)",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "[GTIN] (or the recorded GTIN exemption)",
+      "source": "operator",
+      "note": "Operator-owned (GTIN/UPC/EAN or a GTIN exemption). Only the seller account knows it.",
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "item_sku",
+      "label": "Seller SKU",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "[SKU]",
+      "source": "operator",
+      "note": "Operator-owned. The seller’s own SKU, unknowable from a detail page.",
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "model_number",
+      "label": "Model Number",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "[MODEL]",
+      "source": "operator",
+      "note": "Operator-owned. Manufacturer model designation held in the seller’s records.",
+      "pendingTemplateConfirm": true
+    },
+    {
+      "field": "condition_type",
+      "label": "Condition",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "enum",
+      "example": "New",
+      "source": "operator",
+      "enum": [
+        "New",
+        "Used",
+        "Refurbished",
+        "Collectible"
+      ],
+      "note": "Operator-owned. An offer fact, not a product-copy fact.",
+      "pendingTemplateConfirm": true
+    }
+  ]
+}

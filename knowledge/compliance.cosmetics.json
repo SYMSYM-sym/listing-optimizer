@@ -394,6 +394,18 @@
     "declarationVerb": "contains",
     "aplusModuleIdCue": "ingredient"
   },
+  "_noAllergenCanonical_doc": [
+    "AM-4a — the CANONICAL none-style allergen declaration.",
+    "When the label carries NO declarable allergen the declaration attribute must still",
+    "say something, and it must say the SAME thing every time: an empty field reads as",
+    "'not answered', and free-text variants ('none', 'N/A', 'no allergens') are",
+    "unverifiable — one of them is outright banned. C23 requires the declaration",
+    "attribute to equal this string EXACTLY whenever no declarable allergen is present.",
+    "INDEPENDENT of C9, which bans `noAllergenPhrases` when an allergen IS present:",
+    "'No Known Allergens' stays banned by C9 whatever this value says."
+  ],
+  "noAllergenCanonical": "Free from declared allergens per label",
+
   "noAllergenPhrases": [
     "no known allergens"
   ],

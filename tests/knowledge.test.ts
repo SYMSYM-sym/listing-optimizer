@@ -39,7 +39,7 @@ describe('supplements pack population', () => {
   const pack = loadPack('supplements');
   it('wires all compiled JSON artifacts', () => {
     expect(pack.compliancePack).not.toBeNull();
-    expect(pack.attributeSchema.length).toBe(35);
+    expect(pack.attributeSchema.length).toBe(39); // 35 generated + 4 operator-owned (WS2)
     expect(pack.principles.length).toBe(16);
   });
   it('diseaseNounsBySubcategory keys match subcategoryKeywords keys', () => {

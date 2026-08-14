@@ -9,7 +9,7 @@ import type {
 import type { GateContext } from '@/lib/gate/checks';
 import { runGate } from '@/lib/gate/runGate';
 import { diff } from './diff';
-import { rulesStaleness } from './staleness';
+import { attributeSchemaStaleness, rulesStaleness } from './staleness';
 import { scoreAgainstPrinciples } from './scoreAgainstPrinciples';
 
 /**
@@ -32,6 +32,9 @@ export function buildAudit(
   const gaps = diff(current, proposed, pack);
   // Advisory only: staleness never enters `verified` and never becomes a failure.
   const staleness = rulesStaleness(pack.rules);
+  // Second, INDEPENDENT advisory snapshot: the attribute template has its own
+  // verification date and its own horizon (see `attributeSchemaStaleness`).
+  const schemaStaleness = attributeSchemaStaleness(pack.attributeSchemaMeta);
   // PACK-INTEGRITY is derived from the gate result, so it can never disagree
   // with `verified`: a missing/empty required pack piece raises a blocking
   // PACK failure, which makes `gateResult.pass` (and therefore `verified`)
@@ -47,5 +50,7 @@ export function buildAudit(
     packIntegrity: { ok: packProblems.length === 0, problems: packProblems },
     rulesStale: staleness.stale,
     ...(staleness.notice ? { rulesStaleNotice: staleness.notice } : {}),
+    attributeSchemaStale: schemaStaleness.stale,
+    ...(schemaStaleness.notice ? { attributeSchemaStaleNotice: schemaStaleness.notice } : {}),
   };
 }

@@ -79,6 +79,7 @@ describe('output contract field parity (brain/05)', () => {
       packIntegrity: { ok: true, problems: [] },
       verified: false,
       rulesStale: false,
+      attributeSchemaStale: false,
     };
     expect(auditShape.verified).toBe(auditShape.gateResult.pass);
   });
@@ -92,6 +93,8 @@ describe('output contract field parity (brain/05)', () => {
       verified: true,
       rulesStale: true,
       rulesStaleNotice: 'snapshot is old',
+      attributeSchemaStale: true,
+      attributeSchemaStaleNotice: 'attribute template is old',
     };
     expect(stale.verified).toBe(stale.gateResult.pass);
     expect(stale.gateResult.failures).toEqual([]);

@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import type { IngestError, ListingSnapshot } from '@/lib/types';
 import { Steps, type StepState } from './ui';
 import { ResultsPanel, type ResultsModel } from './ResultsPanel';
+import { openShipSheet } from './shipSheetClient';
 
 type Provider = 'rainforest' | 'firecrawl' | 'paste';
 type View = 'optimize' | 'history';
@@ -405,7 +406,8 @@ export default function Home() {
                         <th className="py-2 pr-3">Product</th>
                         <th className="py-2 pr-3">ASIN</th>
                         <th className="py-2 pr-3">Status</th>
-                        <th className="py-2">Score</th>
+                        <th className="py-2 pr-3">Score</th>
+                        <th className="py-2">Sheet</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -429,7 +431,29 @@ export default function Home() {
                             )}
                             {item.gaps > 0 && <span className="ml-1 text-zinc-600">· {item.gaps} gaps</span>}
                           </td>
-                          <td className="py-2.5 tabular-nums text-zinc-300">{item.score}</td>
+                          <td className="py-2.5 pr-3 tabular-nums text-zinc-300">{item.score}</td>
+                          <td className="py-2.5">
+                            {/*
+                              Per-row ship sheet. `stopPropagation` keeps the row's
+                              open-run handler from firing as well, and the fetch
+                              carries the same `x-app-token` header every other
+                              history call uses — the route is behind requireAccess,
+                              so a plain link would render a 401 in a new tab.
+                            */}
+                            <button
+                              type="button"
+                              title="Open the operator paste sheet for this run"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void openShipSheet(item.id, headers).catch((err: unknown) =>
+                                  setHistoryError(err instanceof Error ? err.message : 'Ship sheet failed'),
+                                );
+                              }}
+                              className="rounded-md border border-amber-800 bg-amber-950/50 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-900/50"
+                            >
+                              ⧉ Ship Sheet
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

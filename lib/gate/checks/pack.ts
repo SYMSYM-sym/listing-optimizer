@@ -367,6 +367,25 @@ export const REQUIRED_PACK_PIECES: readonly PackPiece[] = [
       p.attributeSchema.some((f) => typeof f?.field === 'string' && f.field.trim() !== ''),
   },
   {
+    id: 'attributeSchema.enums',
+    disarms:
+      'the ENUM half of C23 (R3) — a field the schema types as a closed set with no set left to compare against accepts any value, and the marketplace rejects it at feed time instead',
+    // The invariant, enforced as a manifest rule: EVERY enum-typed field must
+    // carry a non-empty value set. A pack that declares no enum field at all
+    // passes vacuously — it has no enum rule to disarm.
+    present: (p) =>
+      Array.isArray(p.attributeSchema) &&
+      p.attributeSchema
+        .filter((f) => f?.valueType === 'enum')
+        .every((f) => nonEmptyList(f.enum)),
+  },
+  {
+    id: 'compliancePack.noAllergenCanonical',
+    disarms:
+      'the none-style allergen declaration rule (C23 R4) — without the canonical string a listing with no declarable allergen can leave the declaration attribute blank or fill it with unverifiable free text',
+    present: (_p, cp) => nonEmptyString(cp.noAllergenCanonical),
+  },
+  {
     id: 'rules.units.dimensions',
     disarms: 'the unit-anchored potency + fact-consistency checks (C10/C12/A5)',
     present: (p) => {

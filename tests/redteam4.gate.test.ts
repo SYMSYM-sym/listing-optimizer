@@ -174,6 +174,16 @@ const EMPTIERS: Record<string, (p: KnowledgePack) => void> = {
   attributeSchema: (p) => {
     p.attributeSchema = [];
   },
+  // Leaves every field in place and empties only the CLOSED VALUE SETS, so
+  // the row is proven independently of the schema-presence row above.
+  'attributeSchema.enums': (p) => {
+    for (const f of p.attributeSchema) {
+      if (f.valueType === 'enum') f.enum = [];
+    }
+  },
+  'compliancePack.noAllergenCanonical': (p) => {
+    p.compliancePack!.noAllergenCanonical = '';
+  },
 };
 
 describe('FIX 1 — emptying ANY required pack piece is BLOCKING, never a silent pass', () => {

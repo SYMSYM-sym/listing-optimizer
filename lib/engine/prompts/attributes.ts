@@ -13,6 +13,7 @@ ${schemaFields}
 - Fill EVERY schema field listed above — all of them, never a subset. A missing field is lost discovery surface and is deterministically checked.
 - When a field genuinely does not apply to this product, still return it with the explicit none-style value its schema example shows (the example column above states it) — never omit the field and never leave it blank.
 - Prioritize accuracy on filter-facet fields; they power customer-facing filters.
+- The schema above is DELIBERATELY INCOMPLETE. Fields whose value is owned by the seller account (identifiers, offer terms) are withheld because you cannot know them; their absence is intentional, not an oversight. Return ONLY the keys listed above — never add a key you were not shown, and never guess a value for one.
 ${complianceFields}
 - "recommended_browse_nodes": suggest the tightest plausible node id from the category path (it is a suggestion for operator confirmation).
 Return JSON: { "attributes": { field: value, ... } }`;

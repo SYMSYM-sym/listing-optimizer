@@ -123,7 +123,21 @@ export async function optimize(
       : prompt;
   };
 
-  const schemaFields = pack.attributeSchema
+  /**
+   * OPERATOR-OWNED fields are withheld from the prompt entirely.
+   *
+   * The model cannot know a price, a SKU, a GTIN, a model number or an offer
+   * condition — they are seller-account facts. Showing the key and asking for
+   * a value guarantees an invented one, and an invented price is a WRONG price
+   * on a live listing. They are filtered out here, the prompt says a withheld
+   * class exists (so an omission is not read as an oversight), any that the
+   * model volunteers anyway are deleted from the assembled output below, and
+   * C23 exempts them from completeness. Four independent places, because a
+   * single one of them is a single point of failure.
+   */
+  const generatedSchemaFields = pack.attributeSchema.filter((f) => f.source !== 'operator');
+  const operatorOwnedFields = pack.attributeSchema.filter((f) => f.source === 'operator');
+  const schemaFields = generatedSchemaFields
     .map((f) => `${f.field} | ${f.required ? 'required' : 'optional'} | ${f.example}`)
     .join('\n');
 
@@ -224,6 +238,12 @@ export async function optimize(
     : description.description;
 
   const finalAttributes = { ...attributes.attributes };
+  // Belt and braces for the operator-owned class: the prompt never showed
+  // these keys, but a model that volunteers one anyway must not have it
+  // survive into a stored run — a hallucinated price is worse than a blank.
+  for (const f of operatorOwnedFields) {
+    delete finalAttributes[f.field];
+  }
   if (disclaimer) {
     finalAttributes.legal_disclaimer_description = disclaimer; // replaces [SYSTEM_DISCLAIMER]
   } else {

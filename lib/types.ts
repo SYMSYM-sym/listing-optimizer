@@ -185,6 +185,27 @@ export interface ProhibitedMarketingRules {
   surfaces: string[];
 }
 
+/**
+ * OPERATOR CHECKLIST (pack data) — the publish-time procedure the ship sheet
+ * renders. It is DOCUMENTATION, not enforcement: nothing here can fail a
+ * check, which is why it is not a `REQUIRED_PACK_PIECES` row. It lives in the
+ * pack (not in `lib/export`) so the sheet holds no marketplace procedure of
+ * its own and a change of procedure is a data edit.
+ */
+export interface OperatorChecklist {
+  /** The publish ORDER, step by step. The browse node is deliberately LAST. */
+  publishOrder: string[];
+  /** Propagation window + the do-not-re-submit warning. */
+  propagationNote: string;
+  /** Why the recommended browse node is a suggestion, not an answer. */
+  browseNodeNote: string;
+  /**
+   * OPS items the app cannot generate — the operator supplies them from their
+   * own records. Rendered verbatim as placeholders (WS7 extends this list).
+   */
+  opsPlaceholders: string[];
+}
+
 export interface RuleSet {
   titleMaxLegacy: number; // 200
   title75Max: number; // 75
@@ -220,6 +241,8 @@ export interface RuleSet {
   prohibitedContent?: ProhibitedContentRules;
   /** Amazon-prohibited marketing claims (urgency/guarantee/rank/review). Pack data. */
   prohibitedMarketing?: ProhibitedMarketingRules;
+  /** Publish-time operator procedure rendered by the ship sheet (pack data). */
+  operatorChecklist?: OperatorChecklist;
   /** ISO date the rule snapshot was last re-verified against live policy. */
   verifiedAsOf: string;
   /** Non-blocking staleness horizon in days for `verifiedAsOf`. */
@@ -501,6 +524,18 @@ export interface CompliancePack {
   /** Phrases that must never appear when a declarable allergen is present (C9). */
   noAllergenPhrases: string[];
   /**
+   * AM-4a — the CANONICAL none-style allergen declaration.
+   *
+   * When the label carries NO declarable allergen the declaration attribute
+   * must still say something, and it must say the SAME thing every time: an
+   * empty field reads as "not answered" and free-text variants ("none",
+   * "N/A", "no allergens") are both unverifiable and, in one phrasing, banned.
+   * C23 requires the declaration attribute to equal this string EXACTLY
+   * whenever `presentAllergens` is empty. Independent of C9, which bans
+   * `noAllergenPhrases` when an allergen IS present.
+   */
+  noAllergenCanonical?: string;
+  /**
    * Compounds whose NAME contains an allergen source word but which are not that
    * allergen ("milk thistle", "wheatgrass", "eggshell"). Blanked out of the
    * label text before the allergen-source scan, so the gate never tells an
@@ -518,6 +553,22 @@ export interface CompliancePack {
   subcategoryKeywords: Record<string, string[]>;
 }
 
+/**
+ * WHO OWNS a schema field's value.
+ *
+ * `generated` — the model produces it from the listing's own facts.
+ * `operator`  — it is a SELLER-ACCOUNT fact the app cannot know (price, SKU,
+ *               product id, model number, condition). The app must never
+ *               invent one: an invented price is a wrong price on a live
+ *               listing. Operator fields are filtered out of the attributes
+ *               prompt, deleted from generated output if the model volunteers
+ *               them anyway, and exempt from the C23 completeness rule.
+ *
+ * A field with NO `source` reads as `generated` — the stricter reading, since
+ * that is the one the gate can enforce.
+ */
+export type AttributeSource = 'generated' | 'operator';
+
 export interface AttributeField {
   field: string; // underscore_case
   label: string;
@@ -525,6 +576,40 @@ export interface AttributeField {
   required: boolean;
   valueType: 'string' | 'number' | 'enum' | 'list';
   example: string;
+  /** Value owner. Missing ⇒ 'generated'. See `AttributeSource`. */
+  source?: AttributeSource;
+  /**
+   * CLOSED value set. Present ONLY where `valueType === 'enum'` and the set is
+   * genuinely closed; the invariant `valueType === 'enum'` ⟺ non-empty `enum`
+   * is asserted by `tests/attributeSchema.test.ts` and by the pack manifest.
+   * An over-tight enum on an open-ended field would block lawful values, which
+   * is why several enum-LOOKING fields deliberately carry none.
+   */
+  enum?: string[];
+  /** Operator-facing note rendered beside the field in the ship sheet. */
+  note?: string;
+  /** The produced value is a SUGGESTION for operator confirmation, not an answer. */
+  suggestOnly?: boolean;
+  /**
+   * AM-7: this key is outside the operational census we have actually
+   * confirmed against a shipped listing. It is still produced and still
+   * checked; the flag says the exact template key must be confirmed against
+   * the category's Listing Report before the operator relies on it.
+   */
+  pendingTemplateConfirm?: boolean;
+}
+
+/**
+ * The on-disk attribute schema file: a dated snapshot, not a bare list.
+ *
+ * Attribute templates move (Amazon retires keys and renames others), so the
+ * schema carries the same `verifiedAsOf` / `staleAfterDays` discipline the
+ * rule snapshot does. Staleness is ADVISORY — see `attributeSchemaStaleness`.
+ */
+export interface AttributeSchemaFile {
+  verifiedAsOf: string;
+  staleAfterDays: number;
+  fields: AttributeField[];
 }
 
 export interface Principle {
@@ -562,6 +647,12 @@ export interface KnowledgePack {
   /** null for packs without a compliance module (e.g. 'generic'). */
   compliancePack: CompliancePack | null;
   attributeSchema: AttributeField[];
+  /**
+   * The attribute schema's own verification snapshot (from the schema file).
+   * Absent for packs that ship no schema. Feeds the ADVISORY
+   * `audit.attributeSchemaStale` signal only — it never touches `verified`.
+   */
+  attributeSchemaMeta?: { verifiedAsOf: string; staleAfterDays: number };
   principles: Principle[];
   /**
    * Category-smell terms shipped as PACK DATA (never hard-coded in the gate).
@@ -729,6 +820,14 @@ export interface Audit {
   rulesStale: boolean;
   /** Human-readable staleness notice, present only when `rulesStale` is true. */
   rulesStaleNotice?: string;
+  /**
+   * NON-BLOCKING signal: the pack's ATTRIBUTE SCHEMA snapshot is older than
+   * its own `staleAfterDays`. Advisory exactly like `rulesStale` — never a
+   * gate failure, never part of `verified`.
+   */
+  attributeSchemaStale: boolean;
+  /** Human-readable notice, present only when `attributeSchemaStale` is true. */
+  attributeSchemaStaleNotice?: string;
 }
 
 // ---------------------------------------------------------------------------
