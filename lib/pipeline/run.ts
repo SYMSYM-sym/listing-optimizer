@@ -8,6 +8,7 @@ import { detectCategory, type CategoryDetection } from '@/lib/knowledge/detectCa
 import { loadPack } from '@/lib/knowledge/loadPack';
 import { withOperatorFictionPhrases } from '@/lib/knowledge/operatorInputs';
 import { mineReviewLanguage } from '@/lib/knowledge/reviewLanguage';
+import { rivalBrandNames } from '@/lib/audit/rivalBrands';
 import { logServer } from '@/lib/server/log';
 
 /**
@@ -79,11 +80,24 @@ export async function runPipeline(
   // compliant phrasing reaches the prompts and the P11 judge.
   const mined = mineReviewLanguage(pack, opts.reviewsText);
   const usedReviews = typeof opts.reviewsText === 'string' && opts.reviewsText.trim() !== '';
+  // WS9 → R50 — the automatic rival-brand negatives are given to the REPAIR
+  // LOOP as well as to the audit. The audit resolves its own set and owns
+  // `verified` (see `buildAudit`); this copy exists so the loop's gate sees the
+  // same failure the final audit will, and therefore gets rounds in which to
+  // clear it. Without it a run that mentioned a supplied competitor's brand
+  // would repair against a gate that could not see the problem and then be
+  // failed by one that could — an unwinnable loop, which is the shape of defect
+  // the own-brand reclassification was written to end.
+  //
+  // It is derived here from the SNAPSHOT and the operator's competitors, both
+  // of which are fixed for the run; the per-round listing only ever changes the
+  // `productName` corroboration, which is pinned after round one.
+  const rivalBrands = rivalBrandNames(opts.competitors, undefined, enriched);
   const { listing, iterations } = await runRepairLoop(
     enriched,
     pack,
     llm,
-    ctx,
+    rivalBrands.length > 0 ? { ...ctx, rivalBrands } : ctx,
     maxRepairIterations,
     undefined,
     usedReviews ? { buyerPhrases: mined.phrases } : undefined,

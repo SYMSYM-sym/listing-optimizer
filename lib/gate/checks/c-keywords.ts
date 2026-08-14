@@ -7,6 +7,7 @@ import type {
   OptimizedListing,
 } from '@/lib/types';
 import { arr, normalize, subtractDisclaimers, termRegex } from '../util';
+import type { GateContext } from './types';
 import { disclaimerVariantsOf, fail } from './shared';
 import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
 
@@ -39,9 +40,16 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  *   `candidate`    — a term held back for PPC / off-site / the next copy cycle.
  *                    It must NOT be in the current published copy, or the
  *                    "not yet" is a fiction.
- *   `captured-via` — NOT scanned (the term is deliberately absent), but the
- *                    compliant route MUST be documented in `via` (K4). An
- *                    undocumented captured-via is a banned term with a label on it.
+ *   `captured-via` — the term is deliberately ABSENT and the demand is reached
+ *                    through a compliant cluster instead, so BOTH halves are
+ *                    checked: the route MUST be documented in `via` (K4), and
+ *                    the term itself must appear NOWHERE — the same
+ *                    everywhere-scan `candidate` gets, because the two statuses
+ *                    make the same claim about the copy. While only `via` was
+ *                    checked the status was a documented way to ship a banned
+ *                    term: an undocumented captured-via is a banned term with a
+ *                    label on it, and a documented one whose term is in the copy
+ *                    is the same thing with better paperwork.
  *   `not-targeted` — NOT scanned; a deliberate strategy call.
  *
  * WHERE THE ROWS COME FROM NOW, and why this check did not shrink. The
@@ -206,7 +214,16 @@ function bannedLexicon(pack: KnowledgePack): string[] {
   return [...out];
 }
 
-export function c28KeywordPlacement(l: OptimizedListing, pack: KnowledgePack): Failure[] {
+export function c28KeywordPlacement(
+  l: OptimizedListing,
+  pack: KnowledgePack,
+  /**
+   * Optional so a caller holding only a listing and a pack still works exactly
+   * as before. `ctx.rivalBrands` is the AUTOMATIC negative set (see below);
+   * absent or empty => not one byte of this check's behaviour changes.
+   */
+  ctx?: GateContext,
+): Failure[] {
   const kr: KeywordRules | undefined = pack.rules?.keywordRules;
   // No pack rules => nothing to enforce. That is not a silent pass:
   // `rules.keywordRules.*` are REQUIRED_PACK_PIECES rows, so a
@@ -420,7 +437,7 @@ export function c28KeywordPlacement(l: OptimizedListing, pack: KnowledgePack): F
         break;
       }
       case 'captured-via': {
-        // K4: the demand is recaptured through a DOCUMENTED compliant route.
+        // K4, LEG ONE — the recapture ROUTE must be documented.
         if (!str(t.via).trim()) {
           out.push(
             fail(
@@ -431,6 +448,31 @@ export function c28KeywordPlacement(l: OptimizedListing, pack: KnowledgePack): F
             ),
           );
         }
+        // K4, LEG TWO — the term itself must be ABSENT EVERYWHERE. This is not
+        // an extra rule bolted on: it is what `captured-via` MEANS. The status
+        // says the demand reaches the listing through a DIFFERENT cluster
+        // BECAUSE the term itself cannot be written, so a `captured-via` row
+        // whose term is sitting in the copy is a contradiction in its own
+        // terms. While only `via` was checked, the label was a way to say "this
+        // term is banned" and ship it anyway: a rival brand row flipped from
+        // `negative` to `captured-via` with any route string, plus the brand in
+        // an image ALT, produced ZERO failures and a verified run — the exact
+        // R50 bypass item 1 of CONFORMANCE-DEVIATIONS.md closed for a reader
+        // hole, reopened through a status word. The scan is the SAME one
+        // `candidate` gets above, over the SAME `everywhere()` corpus, because
+        // the two statuses make the same claim about the copy.
+        for (const { name, hay } of everywhere()) {
+          if (present(hay, term)) {
+            out.push(
+              fail(
+                CHECK_ID,
+                field,
+                `captured-via term '${term}' appears on '${name}'`,
+                `A captured-via row states the term is deliberately ABSENT and the demand is reached through '${str(t.via).trim() || '(no route recorded)'}' instead — remove '${term}' from ${name}, or record the row for what it is`,
+              ),
+            );
+          }
+        }
         break;
       }
       default:
@@ -438,6 +480,61 @@ export function c28KeywordPlacement(l: OptimizedListing, pack: KnowledgePack): F
         break;
     }
   });
+
+  // =========================================================================
+  // THE AUTOMATIC RIVAL-BRAND NEGATIVES — a signal that does NOT read a label.
+  // =========================================================================
+  //
+  // Everything above this line is conditioned on what the MODEL wrote in
+  // `status`. That is the right split for an INTENT (only judgement can say a
+  // term is being held back), and it is a hole for a FACT: a rival brand the
+  // model happens to label `placed` is in no lexicon the four-test screen
+  // reads — that screen covers the compliance pack's disease nouns,
+  // action-paired nouns and superlative bans, and a brand name is none of
+  // those — so C28 guaranteed LABELLED-NEGATIVE absence rather than RIVAL
+  // absence.
+  //
+  // The operator hands the run its own answer: the competitor ASINs they typed
+  // are INGESTED (WS9), and each ingested snapshot carries the rival's brand in
+  // its own marketplace brand fields. `lib/audit/rivalBrands.ts` resolves that
+  // into this list and the AUDIT supplies it, so no route can forget it and the
+  // gate itself stays free of ingestion. Each name is then treated EXACTLY as a
+  // model-declared `negative` row would be: the same `everywhere()` corpus, the
+  // same `termRegex`, the same "appears nowhere" rule.
+  //
+  // CONSERVATIVE BY CONSTRUCTION — the bounds live in the resolver, not here:
+  // the set is empty unless competitors were actually supplied, the subject's
+  // OWN identity is subtracted from it, and a single-word brand is never
+  // admitted. See that module's header for why each bound exists.
+  //
+  // IT CANNOT INFLATE THE FLOOR. These names are not rows in the artifact and
+  // `negatives` is not incremented here: `minNegatives` still counts only what
+  // the reference itself records, so supplying competitors can never be a way
+  // to satisfy the floor without writing the rows.
+  const declaredNegatives = new Set(
+    terms
+      .filter((raw) => str((raw as Partial<KeywordTerm> | null)?.status).trim() === 'negative')
+      .map((raw) => normalize(str((raw as Partial<KeywordTerm> | null)?.term)).trim().toLowerCase()),
+  );
+  for (const brand of ctx?.rivalBrands ?? []) {
+    const name = str(brand).trim();
+    if (!name) continue;
+    // Already recorded as a negative by the reference itself — the leg above
+    // scans it and reports it; saying the same thing twice helps nobody.
+    if (declaredNegatives.has(normalize(name).toLowerCase())) continue;
+    for (const { name: surface, hay } of everywhere()) {
+      if (present(hay, name)) {
+        out.push(
+          fail(
+            CHECK_ID,
+            'keywords',
+            `ingested competitor brand '${name}' appears on '${surface}'`,
+            `'${name}' is the brand of a competitor ASIN the operator supplied for this run, so it is a rival brand by construction — remove it from ${surface}. A rival's name in our copy is trademark exposure (R50) whatever status the keyword reference gives it, and it belongs on the negative list rather than in the listing`,
+          ),
+        );
+      }
+    }
+  }
 
   // THE FLOOR COUNTS ONLY SURVIVING NEGATIVES. `negatives` was incremented in
   // the loop above, over the FINAL artifact — so a row the derivation

@@ -12,6 +12,7 @@ import { runGate } from '@/lib/gate/runGate';
 import { buildFacts } from '@/lib/engine/facts';
 import { candidateTerms } from './candidateTerms';
 import { buildBenchmark } from './benchmark';
+import { rivalBrandNames } from './rivalBrands';
 import { diff } from './diff';
 import { keywordCoverage } from './keywordCoverage';
 import { buildSubstantiationRegister } from './substantiation';
@@ -74,7 +75,25 @@ export function buildAudit(
   const listing: OptimizedListing = inputs.panelFacts
     ? { ...proposed, facts: buildFacts(current, pack, inputs.panelFacts) }
     : proposed;
-  const gateResult = runGate(listing, pack, ctx);
+  // WS9 → R50 — THE COMPETITORS THE OPERATOR SUPPLIED BECOME AN AUTOMATIC
+  // RIVAL-BRAND NEGATIVE SET, resolved HERE rather than by the caller.
+  //
+  // `verified` is `gateResult.pass` and it is computed in this module, so this
+  // is the one place where "the operator supplied competitors" and "the gate
+  // knows their brand names" cannot come apart. A route that forgets to thread
+  // it does not exist: there is nothing for a route to thread. When no
+  // competitors were supplied the resolver returns `[]` and the key is not even
+  // added, so the gate context is byte-identical to what it was.
+  //
+  // The listing measured is the one the gate is about to measure (panel applied),
+  // and the snapshot is the CURRENT scraped page — the same two inputs the
+  // own-brand identity is resolved from, so "our own brand" means one thing.
+  const rivalBrands = rivalBrandNames(inputs.competitors, listing, current);
+  const gateResult = runGate(
+    listing,
+    pack,
+    rivalBrands.length > 0 ? { ...ctx, rivalBrands } : ctx,
+  );
   // WS9 — review tokens are a fact about the PRODUCT, not about one version of
   // the copy, so they are supplied to BOTH sides. That keeps P11 comparable:
   // the question "does this copy mirror how buyers talk" is asked identically

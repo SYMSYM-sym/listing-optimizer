@@ -127,7 +127,7 @@ export function runGate(
     ...guarded('C25', () => c25BulletClaimMarker(listing, pack)),
     ...guarded('C26', () => c26ActiveIngredientSubset(listing, pack)),
     ...guarded('C27', () => c27OutputHygiene(listing, pack)),
-    ...guarded('C28', () => c28KeywordPlacement(listing, pack)),
+    ...guarded('C28', () => c28KeywordPlacement(listing, pack, ctx)),
     ...guarded('C29', () => c29ImagePlanContent(listing, pack)),
     ...guarded('C30', () => c30ImageAltText(listing, pack)),
     ...guarded('C31', () => c31BulletFormat(listing, pack)),
