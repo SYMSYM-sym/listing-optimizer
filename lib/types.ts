@@ -272,9 +272,31 @@ export interface TimingAdvisory {
   notes: string[];
 }
 
+/**
+ * The seeded-Q&A POLICY note the ship sheet prints beside the pairs.
+ *
+ * The playbook states this rule three times and says, in as many words, to
+ * "encode this rule on the ship sheet itself so no operator can miss it" — and
+ * it has TWO halves, not one. The answers-only half is an account-level policy
+ * violation (creating content about your own products). The CADENCE half —
+ * answers spread over the first two weeks — is what stops a day-one burst of
+ * seller answers from reading as manufactured Q&A. The sheet used to carry a
+ * hand-written copy of the first half only; both now live here, as PACK DATA,
+ * so the exporter holds no domain literal and the wording is edited in one
+ * place.
+ */
+export interface QaPolicyNote {
+  /** Short bolded lead ("Answers only."). */
+  headline: string;
+  /** Sentences printed after the lead, in order, joined by a space. */
+  notes: string[];
+}
+
 export interface PostPublishRules {
   /** P15 — the reindex/patience windows. */
   timingAdvisory?: TimingAdvisory;
+  /** The ANSWERS-ONLY + two-week-cadence note printed beside the seeded Q&A. */
+  qaPolicy?: QaPolicyNote;
   /** WS7 — the marketplace/ops checklist (see `MarketplaceChecklistItem`). */
   marketplaceChecklist?: MarketplaceChecklistItem[];
   /** Operator-facing preamble for the marketplace checklist. */

@@ -209,6 +209,26 @@ function entryOrderBanner(cl: OperatorChecklist): string {
 // Builder
 // ---------------------------------------------------------------------------
 
+/**
+ * The seeded-Q&A policy note, rendered from `rules.postPublish.qaPolicy`.
+ *
+ * Empty when the pack ships none — an exporter states what the pack says and
+ * never invents a policy sentence of its own. `tests/knowledge.test.ts` asserts
+ * the shipped pack carries both halves, so the sheet an operator actually gets
+ * always prints them.
+ */
+function qaPolicyNote(rules: RuleSet): string {
+  const policy = rules.postPublish?.qaPolicy;
+  const notes = arr<string>(policy?.notes).filter((s) => typeof s === 'string' && s.trim() !== '');
+  if (!policy?.headline?.trim() && notes.length === 0) return '';
+  return (
+    '<div class=note>' +
+    (policy?.headline?.trim() ? `<b>⚠ ${esc(policy.headline)}</b> ` : '') +
+    notes.map((s) => esc(s)).join(' ') +
+    '</div>'
+  );
+}
+
 export function buildShipSheet(run: ShipSheetRun): string {
   const l = run.optimized;
   const audit = run.audit;
@@ -512,8 +532,12 @@ ul.ops{margin:8px 0 0;padding-left:20px}
     esc(qaBlob) +
     '</div>' +
     (copyable ? `<button class=cp data-t="v_qa">⧉ Copy all ${qaCount}</button>` : '') +
-    '<div class=note><b>⚠ Answers only.</b> Answering customer questions from the seller account is fine;' +
-    ' creating questions about your own product is not. Use these as prepared ANSWERS when a real customer asks.</div></div>';
+    // PACK DATA, not a literal: the answers-only policy AND the two-week
+    // answering cadence both come off `rules.postPublish.qaPolicy`. The
+    // playbook says to encode the rule on the sheet itself; encoding half of it
+    // from memory is how the cadence went missing in the first place.
+    qaPolicyNote(rules) +
+    '</div>';
 
   // -------------------------------------------------------------------------
   // 8 · Verified counts — EVERY number measured HERE, from the same values the

@@ -900,6 +900,14 @@
     "It lives in the pack so lib/export holds no marketplace procedure and a rule change is a data edit."
   ],
   "postPublish": {
+    "qaPolicy": {
+      "headline": "Answers only.",
+      "notes": [
+        "Answering customer questions from the seller account is fine; creating questions about your own product is not. Use these as prepared ANSWERS when a real customer asks.",
+        "The pack ships prepared ANSWERS to be used when real customers ask, spread over the first two weeks - never self-posted questions.",
+        "Posting the questions from your own account violates Amazon Community Guidelines and puts the ASIN's entire review history at risk."
+      ]
+    },
     "timingAdvisory": {
       "id": "P15",
       "headline": "Timing: do not judge this change for two to four weeks, and time events six to eight weeks out.",

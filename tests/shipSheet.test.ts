@@ -165,6 +165,36 @@ describe('ship sheet — verified run', () => {
     expect(html).toContain(`${first.q}\nA: ${first.a}`);
   });
 
+  /**
+   * F3 — the CADENCE half of the Q&A rule.
+   *
+   * The playbook states the rule three times and says to encode it on the ship
+   * sheet itself; the sheet carried the answers-only half and dropped the
+   * two-week spread, which is the half that stops a day-one burst of seller
+   * answers from reading as manufactured Q&A. It is PACK DATA now, so this
+   * asserts the rendered document — not the constant.
+   */
+  it('prints the two-week answering cadence verbatim, from pack data', () => {
+    const policy = pack.rules.postPublish?.qaPolicy;
+    expect(policy, 'the shipped pack must carry rules.postPublish.qaPolicy').toBeTruthy();
+    expect(html).toContain('spread over the first two weeks');
+    for (const note of policy!.notes) expect(html).toContain(note.replace(/&/g, '&amp;'));
+    expect(html).toContain(`<b>⚠ ${policy!.headline}</b>`);
+  });
+
+  /**
+   * BOTH DIRECTIONS for a pack-sourced string: a pack that ships no policy
+   * renders no policy note, and the exporter never substitutes a sentence of
+   * its own. The note is the pack's statement or it is nothing.
+   */
+  it('renders NO policy note when the pack ships none (no invented literal)', () => {
+    const bare = JSON.parse(JSON.stringify(pack)) as typeof pack;
+    delete bare.rules.postPublish?.qaPolicy;
+    const doc = buildShipSheet({ optimized: listing, audit, asin: 'B0TESTASIN', pack: bare });
+    expect(doc).not.toContain('spread over the first two weeks');
+    expect(doc).not.toContain('⚠ Answers only.');
+  });
+
   it('the entry-order banner names Subscribe & Save and puts the browse node LAST', () => {
     const banner = html.slice(html.indexOf('<div class=ord>'), html.indexOf('<h2>1 · '));
     expect(banner).toContain('Entry order.');
