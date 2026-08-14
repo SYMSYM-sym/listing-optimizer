@@ -31,6 +31,17 @@ npm run dev
 ```
 
 Env vars: see `.env.example`. `INGEST_PROVIDER=rainforest|firecrawl|paste`.
+### Run store schema
+
+The optional Supabase `runs` table gains one nullable column for the publish
+state (WS6). Existing deployments keep working without it — only
+`POST /api/runs/[id]/publish` needs it, and it fails loudly rather than
+silently reporting success:
+
+```sql
+alter table runs add column if not exists published_at timestamptz;
+```
+
 `APP_ACCESS_TOKEN` protects the deployed API routes (recommended — runs spend
 real LLM/provider credits).
 

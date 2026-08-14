@@ -18,6 +18,8 @@ interface RunListItem {
   score: number;
   gaps: number;
   failure_ids: string[];
+  /** WS6 — set once the operator records the run as published. */
+  published_at?: string | null;
 }
 
 export default function Home() {
@@ -45,6 +47,7 @@ export default function Home() {
   const [asinFilter, setAsinFilter] = useState('');
   const [historyResult, setHistoryResult] = useState<ResultsModel | null>(null);
   const [loadingRunId, setLoadingRunId] = useState<string | null>(null);
+  const [publishingRunId, setPublishingRunId] = useState<string | null>(null);
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -78,6 +81,31 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [token],
   );
+
+  /**
+   * WS6 — record a run as PUBLISHED.
+   *
+   * The button is only rendered for a VERIFIED, not-yet-published run, and the
+   * route enforces the same rule server-side from the stored `audit.verified`
+   * — the UI condition is a courtesy, never the guard.
+   */
+  async function publishRun(id: string) {
+    setPublishingRunId(id);
+    setHistoryError(null);
+    try {
+      const res = await fetch(`/api/runs/${id}/publish`, { method: 'POST', headers });
+      if (!res.ok) {
+        const e = (await res.json().catch(() => ({}))) as { code?: string; message?: string };
+        setHistoryError(`${e.code ?? 'ERROR'}: ${e.message ?? 'Publish failed'}`);
+        return;
+      }
+      await loadHistory(asinFilter);
+    } catch (e) {
+      setHistoryError(e instanceof Error ? e.message : 'Publish failed');
+    } finally {
+      setPublishingRunId(null);
+    }
+  }
 
   async function openHistory() {
     setView('history');
@@ -408,6 +436,7 @@ export default function Home() {
                         <th className="py-2 pr-3">Status</th>
                         <th className="py-2 pr-3">Score</th>
                         <th className="py-2">Sheet</th>
+                        <th className="py-2 pl-3">Publish</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -424,7 +453,14 @@ export default function Home() {
                           <td className="py-2.5 pr-3 text-zinc-200 max-w-xs truncate">{item.product_name || '—'}</td>
                           <td className="py-2.5 pr-3 font-mono text-zinc-400">{item.asin}</td>
                           <td className="py-2.5 pr-3">
-                            {item.verified ? (
+                            {item.published_at ? (
+                              <span
+                                className="text-sky-300"
+                                title={`Published ${new Date(item.published_at).toLocaleString()}`}
+                              >
+                                Published
+                              </span>
+                            ) : item.verified ? (
                               <span className="text-emerald-400">Verified</span>
                             ) : (
                               <span className="text-red-400">Blocked</span>
@@ -453,6 +489,33 @@ export default function Home() {
                             >
                               ⧉ Ship Sheet
                             </button>
+                          </td>
+                          <td className="py-2.5 pl-3">
+                            {item.published_at ? (
+                              <span className="text-[11px] text-zinc-500 whitespace-nowrap">
+                                {new Date(item.published_at).toLocaleDateString()}
+                              </span>
+                            ) : item.verified ? (
+                              <button
+                                type="button"
+                                title="Record this run as published — only a verified run can be published"
+                                disabled={publishingRunId === item.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void publishRun(item.id);
+                                }}
+                                className="rounded-md border border-sky-800 bg-sky-950/50 px-2 py-1 text-[11px] text-sky-200 hover:bg-sky-900/50 disabled:opacity-40"
+                              >
+                                {publishingRunId === item.id ? '…' : 'Mark published'}
+                              </button>
+                            ) : (
+                              <span
+                                className="text-[11px] text-zinc-600"
+                                title="A run that failed the gate cannot be recorded as published"
+                              >
+                                —
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}

@@ -119,10 +119,31 @@ export function toMarkdown(listing: OptimizedListing, audit: Audit): string {
   }
   lines.push('');
   lines.push('## Audit');
-  lines.push(`Current-listing scorecard: **${audit.scorecard.total}/100**`);
+  // WS6 — BOTH sides, scored by the same scorer. The old export printed only
+  // the current listing's total, which beside a VERIFIED banner reads as a
+  // grade for the new copy.
+  const after = audit.scorecardProposed;
+  lines.push(
+    after
+      ? `Principle score: current **${audit.scorecard.total}/100** → proposed **${after.total}/100**`
+      : `Current-listing scorecard: **${audit.scorecard.total}/100**`,
+  );
   lines.push('');
-  for (const p of audit.scorecard.perPrinciple) {
-    lines.push(`- ${p.id}: ${p.score} — ${p.rationale}`);
+  lines.push(
+    'Each side is renormalized over the principles that are knowable for it; an `unknown` deflates neither total. This is a content score, not the verify verdict.',
+  );
+  lines.push('');
+  if (after) {
+    lines.push('| Principle | Current | Proposed | Why (proposed) |');
+    lines.push('|---|---|---|---|');
+    for (const p of audit.scorecard.perPrinciple) {
+      const a = after.perPrinciple.find((x) => x.id === p.id);
+      lines.push(`| ${p.id} | ${p.score} | ${a?.score ?? '—'} | ${(a?.rationale ?? '').replace(/\|/g, '\\|')} |`);
+    }
+  } else {
+    for (const p of audit.scorecard.perPrinciple) {
+      lines.push(`- ${p.id}: ${p.score} — ${p.rationale}`);
+    }
   }
   lines.push('');
   lines.push('### Gaps (current → proposed)');

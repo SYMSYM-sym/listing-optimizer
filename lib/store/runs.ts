@@ -8,6 +8,16 @@ import type { Audit, ListingSnapshot, OptimizedListing } from '@/lib/types';
 export interface RunRecord {
   id: string;
   created_at: string;
+  /**
+   * WS6 — when the operator recorded this run as PUBLISHED. Null until then.
+   *
+   * REQUIRES the column: `alter table runs add column published_at timestamptz;`
+   * (see README). It is nullable and unused by every other code path, so a
+   * deployment that has not run the migration keeps working — only the publish
+   * route fails, and it fails loudly with the store's own message rather than
+   * silently pretending the run was published.
+   */
+  published_at?: string | null;
   asin: string;
   url: string;
   product_name: string;
@@ -23,7 +33,15 @@ export interface RunRecord {
 
 export type RunListItem = Pick<
   RunRecord,
-  'id' | 'created_at' | 'asin' | 'product_name' | 'verified' | 'score' | 'gaps' | 'failure_ids'
+  | 'id'
+  | 'created_at'
+  | 'asin'
+  | 'product_name'
+  | 'verified'
+  | 'score'
+  | 'gaps'
+  | 'failure_ids'
+  | 'published_at'
 >;
 
 export interface SaveRunInput {
@@ -125,6 +143,42 @@ export async function updateRun(id: string, patch: UpdateRunPatch): Promise<void
   }
 }
 
+/**
+ * WS6 — record a run as PUBLISHED.
+ *
+ * The `'published'` element state has been in the contract since the output
+ * contract was written and nothing ever set it, so a run that had actually
+ * gone live was indistinguishable from one sitting in a tab. This is the only
+ * writer of that state.
+ *
+ * WHAT IT DOES NOT DO: it does not re-run the gate, and it does not decide
+ * whether publishing is allowed — the ROUTE does, from the stored
+ * `audit.verified` (which is itself exactly `gateResult.pass`, derived
+ * server-side). Keeping the decision in the route and the write here means
+ * this function can never be the thing that lets an unverified run through.
+ *
+ * Returns the recorded timestamp, or null when the store is not configured.
+ */
+export async function publishRun(
+  id: string,
+  optimized: OptimizedListing,
+  publishedAt: string,
+): Promise<string | null> {
+  const sb = client();
+  if (!sb) {
+    logServer('store.disabled', { op: 'publishRun', reason: 'missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' });
+    return null;
+  }
+  const { error } = await sb
+    .from('runs')
+    .update({ optimized, published_at: publishedAt })
+    .eq('id', id);
+  if (error) {
+    throw new Error(`publishRun failed: ${error.message}`);
+  }
+  return publishedAt;
+}
+
 export async function listRuns(opts: {
   limit?: number;
   offset?: number;
@@ -139,7 +193,7 @@ export async function listRuns(opts: {
   const offset = Math.max(opts.offset ?? 0, 0);
   let q = sb
     .from('runs')
-    .select('id, created_at, asin, product_name, verified, score, gaps, failure_ids')
+    .select('id, created_at, asin, product_name, verified, score, gaps, failure_ids, published_at')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
   if (opts.asin?.trim()) {

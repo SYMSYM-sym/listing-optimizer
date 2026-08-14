@@ -605,6 +605,70 @@ ul.ops{margin:8px 0 0;padding-left:20px}
     }
   }
 
+  // -------------------------------------------------------------------------
+  // 13 · Score, BEFORE and AFTER — WS6.
+  //
+  //      Until this section existed the sheet (and the results panel) showed
+  //      ONE number, and that number graded the listing the operator was about
+  //      to REPLACE. Beside a green verify banner it reads as a grade for the
+  //      new copy, which it never was. Both sides are scored by the SAME
+  //      scorer over the same principles.
+  //
+  //      A principle the CURRENT listing cannot be graded on stays `unknown`
+  //      and is excluded from that side's denominator — so the two totals are
+  //      each renormalized over what is knowable about that side. The
+  //      per-principle table below is the honest view; the header note says so
+  //      rather than leaving the operator to infer it.
+  // -------------------------------------------------------------------------
+  const before = audit?.scorecard;
+  const after = audit?.scorecardProposed;
+  if (before || after) {
+    h += '<h2>13 · Score — before &rarr; after</h2>';
+    h +=
+      '<div class=f><div class=fh><div><b>Principle score</b></div>' +
+      `<div class=meta>current <b>${before ? before.total : '—'}</b> &rarr; proposed <b>${after ? after.total : '—'}</b> / 100</div></div>` +
+      '<div class=note>Each side is scored over the principles that are KNOWABLE for it and renormalized, so a principle marked unknown deflates neither number. ' +
+      'This is a content score, not the verify verdict: the gate decides whether this listing may publish.</div></div>';
+    if (before && after) {
+      const rows = before.perPrinciple.map((b) => ({
+        id: b.id,
+        before: b,
+        after: after.perPrinciple.find((x) => x.id === b.id),
+      }));
+      h += '<table><tr><th>Principle</th><th>Current</th><th>Proposed</th><th>Why (proposed)</th></tr>';
+      for (const r of rows) {
+        const a = r.after;
+        const moved = a && a.score !== r.before.score;
+        h +=
+          `<tr><td><code>${esc(r.id)}</code></td>` +
+          `<td>${esc(r.before.score)}</td>` +
+          `<td class="${moved ? 'ok' : ''}">${esc(a?.score ?? '—')}</td>` +
+          `<td>${esc(a?.rationale ?? '')}</td></tr>`;
+      }
+      h += '</table>';
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 14 · Post-publish — WS6 (P15 timing) and WS7 (marketplace/ops).
+  //
+  //      GUIDANCE TIER, stated plainly at the top of the section: every item
+  //      here is an account-side action this app can surface and cannot
+  //      perform. Rendered from pack data so a rule change is a data edit.
+  // -------------------------------------------------------------------------
+  const postPublish = rules.postPublish;
+  const timing = postPublish?.timingAdvisory;
+  if (timing?.headline || (postPublish?.marketplaceChecklist ?? []).length > 0) {
+    h += '<h2>14 · After you publish</h2>';
+    h +=
+      '<p class=sub>Everything in this section happens in your Seller Central account and in your own records. ' +
+      'This app surfaces it; it cannot do it, and nothing here was checked.</p>';
+  }
+  if (timing?.headline) {
+    h += `<div class=f><div class=fh><div><b>${esc(timing.headline)}</b> <code>${esc(timing.id)}</code></div></div>`;
+    h += `<ul class=ops>${(timing.notes ?? []).map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>`;
+  }
+
   h += '</div>';
 
   // -------------------------------------------------------------------------

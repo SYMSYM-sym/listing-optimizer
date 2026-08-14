@@ -213,6 +213,50 @@ export interface OperatorChecklist {
 }
 
 /**
+ * WS6/WS7 — the POST-PUBLISH phase (pack data, GUIDANCE tier).
+ *
+ * Everything here is rendered by the ship sheet and enforced by nothing: these
+ * are account-side actions the app can only ever surface. That is why this is
+ * not a `REQUIRED_PACK_PIECES` row — emptying it disarms no check, it just
+ * removes a note. It lives in the pack so `lib/export` holds no marketplace
+ * procedure of its own.
+ */
+/**
+ * WS7 — one row of the MARKETPLACE / OPS checklist (pack data, guidance tier).
+ *
+ * Each row names an account-side action the app cannot perform, states WHY it
+ * matters, and — where the rule carries an effective date or a list that moves
+ * — says so, because a cached copy of a moving rule is a liability.
+ */
+export interface MarketplaceChecklistItem {
+  id: string;
+  title: string;
+  detail: string;
+  /** 'survival' | 'discovery' | 'growth' | 'hygiene' — rendered as a lane label. */
+  lane: string;
+  /** Present when the rule carries a date the operator must re-verify. */
+  dated?: string;
+  /** True when the underlying list/rule is refreshed on a cadence — never trust a cache. */
+  volatile?: boolean;
+}
+
+export interface TimingAdvisory {
+  /** The principle this advisory implements (P15). */
+  id: string;
+  headline: string;
+  notes: string[];
+}
+
+export interface PostPublishRules {
+  /** P15 — the reindex/patience windows. */
+  timingAdvisory?: TimingAdvisory;
+  /** WS7 — the marketplace/ops checklist (see `MarketplaceChecklistItem`). */
+  marketplaceChecklist?: MarketplaceChecklistItem[];
+  /** Operator-facing preamble for the marketplace checklist. */
+  marketplaceChecklistNote?: string;
+}
+
+/**
  * WS4 — one BULLET SLOT JOB (pack data).
  *
  * The playbook's copy phase assigns each of the five bullets a JOB; a bullet
@@ -399,6 +443,8 @@ export interface RuleSet {
   bulletArchitecture?: BulletArchitecture;
   /** WS3 keyword-system rules (gate C28 + the keyword/copy prompts). */
   keywordRules?: KeywordRules;
+  /** WS6/WS7 post-publish guidance rendered by the ship sheet. */
+  postPublish?: PostPublishRules;
   /** R48 positioning anchor (prompt + ship-sheet strategy note). */
   positioningAnchor?: PositioningAnchor;
   /** AM-1 / C24 dosage-attribute guard. */
@@ -1139,7 +1185,16 @@ export interface KeywordCoverage {
 }
 
 export interface Audit {
+  /** The CURRENT (scraped) listing, scored against the pack principles. */
   scorecard: Scorecard;
+  /**
+   * WS6 — the PROPOSED listing, scored by the SAME scorer.
+   *
+   * Optional so a run stored before the before/after view existed still
+   * parses. It is never a verdict: `verified` is still exactly
+   * `gateResult.pass`, and a listing can score well and still be blocked.
+   */
+  scorecardProposed?: Scorecard;
   gaps: AuditGap[];
   gateResult: GateResult;
   verified: boolean; // === gateResult.pass

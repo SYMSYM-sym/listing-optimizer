@@ -893,5 +893,23 @@
       ]
     },
     "sheetNote": "Every PLACED term below was machine-verified to appear on each surface it declares; every BACKEND-only term was verified to sit in the search-terms field and nowhere a customer can read; every NEGATIVE term was verified to appear nowhere at all. Rival brand names belong in the negative list — they are a trademark exposure, not an opportunity."
+  },
+  "_postPublishComment": [
+    "WS6/WS7 — the POST-PUBLISH phase the ship sheet renders.",
+    "GUIDANCE TIER, exactly like operatorChecklist: the app SURFACES these, it does not DO them,",
+    "and nothing here can fail a check — so it is deliberately not a REQUIRED_PACK_PIECES row.",
+    "It lives in the pack so lib/export holds no marketplace procedure and a rule change is a data edit."
+  ],
+  "postPublish": {
+    "timingAdvisory": {
+      "id": "P15",
+      "headline": "Timing: do not judge this change for two to four weeks, and time events six to eight weeks out.",
+      "notes": [
+        "Reindex and semantic-layer propagation are slow. Allow 2-4 weeks of steady data before judging whether a change worked, and never revert after three days: an early dip is the index re-settling, not a verdict.",
+        "Time any event, promotion or traffic push 6-8 weeks AHEAD of when you need it to land, so the reindex and the assistant-model incorporation have both happened by then.",
+        "Field edits themselves propagate to the live detail page within about 48 hours. Do not re-submit the same edit while it is propagating.",
+        "Re-run the assistant interrogation monthly: ask it what the product is for, whether it is third-party tested, how it compares, and whether it is good value. Every wrong or missing answer is the next fix."
+      ]
+    }
   }
 }

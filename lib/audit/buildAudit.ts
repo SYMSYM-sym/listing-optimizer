@@ -13,6 +13,7 @@ import { diff } from './diff';
 import { keywordCoverage } from './keywordCoverage';
 import { buildSubstantiationRegister } from './substantiation';
 import { attributeSchemaStaleness, rulesStaleness } from './staleness';
+import { proposedAsSnapshot } from './proposedSnapshot';
 import { scoreAgainstPrinciples } from './scoreAgainstPrinciples';
 
 /**
@@ -35,6 +36,15 @@ export function buildAudit(
 ): Audit {
   const gateResult = runGate(proposed, pack, ctx);
   const scorecard = scoreAgainstPrinciples(current, pack);
+  // WS6 — the SAME scorer, run over the proposed listing. Two principles that
+  // are unknowable from a scraped page ARE known here (the backend field and
+  // the seeded Q&A layer), so they are supplied; every other judge is
+  // bit-for-bit the one that graded the current listing.
+  const scorecardProposed = scoreAgainstPrinciples(
+    proposedAsSnapshot(current, proposed),
+    pack,
+    { backendSearchTerms: proposed.backendSearchTerms ?? '', qa: proposed.qa ?? [] },
+  );
   // R33/R38 — the substantiation register is built BEFORE the diff, because
   // the diff turns its unevidenced HEADER claims into a P1 gap.
   const substantiationRegister = buildSubstantiationRegister(proposed, current, pack.compliancePack);
@@ -53,6 +63,7 @@ export function buildAudit(
     .map((f) => f.context);
   return {
     scorecard,
+    scorecardProposed,
     gaps,
     gateResult,
     verified: gateResult.pass,

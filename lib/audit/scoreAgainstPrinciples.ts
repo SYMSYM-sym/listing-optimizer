@@ -17,11 +17,33 @@ import { buildFacts } from '@/lib/engine/facts';
 type Verdict = PrincipleScore['score'];
 const value: Record<Verdict, number> = { full: 1, partial: 0.5, none: 0, unknown: 0 };
 
+/**
+ * WS6 — facts about a listing that are NOT visible in a public snapshot.
+ *
+ * Three principles score `unknown` for a scraped listing because the data is
+ * simply not public: the backend search terms are seller-private (P3), the
+ * seeded Q&A layer is not in the PDP payload (P12), and review language is not
+ * in the snapshot at all (P11). For the PROPOSED listing we DO hold two of
+ * them, and WS9 supplies the third when the operator pastes review text.
+ *
+ * ABSENT means UNCHANGED: with no inputs every judge below behaves exactly as
+ * it did before, so the current-listing scorecard is bit-for-bit what it was.
+ * A known input can only move a principle OFF `unknown` — it can never change
+ * how a principle that was already scorable is judged.
+ */
+export interface ScoreInputs {
+  /** Backend search terms, when known (the proposed listing's are). */
+  backendSearchTerms?: string;
+  /** The seeded Q&A layer, when known. */
+  qa?: { q: string; a: string }[];
+}
+
 interface SnapshotView {
   s: ListingSnapshot;
   pack: KnowledgePack;
   allText: string;
   aplusText: string;
+  inputs: ScoreInputs;
 }
 
 function judge(id: string, v: SnapshotView): { score: Verdict; rationale: string } {
@@ -45,8 +67,26 @@ function judge(id: string, v: SnapshotView): { score: Verdict; rationale: string
         ? { score: 'partial', rationale: 'Several title words repeated twice — wasted indexed space.' }
         : { score: 'full', rationale: 'No wasteful word repetition in the title.' };
     }
-    case 'P3':
-      return { score: 'unknown', rationale: 'Backend search terms are seller-private — not publicly visible.' };
+    case 'P3': {
+      // UNKNOWN unless the caller supplies the field (see `ScoreInputs`).
+      const backend = v.inputs.backendSearchTerms;
+      if (backend === undefined) {
+        return { score: 'unknown', rationale: 'Backend search terms are seller-private — not publicly visible.' };
+      }
+      const terms = tokenSet(backend);
+      if (terms.size === 0) {
+        return { score: 'none', rationale: 'Backend search terms are empty — the sparse-retrieval leg is unused.' };
+      }
+      // The field's whole job is to carry what visible copy does NOT say, so a
+      // term already indexed in the title surfaces is a wasted byte.
+      const visible = tokenSet(`${s.title} ${s.bullets.join(' ')}`);
+      const wasted = [...terms].filter((t) => visible.has(t));
+      const rationale = `${terms.size} distinct backend token(s); ${wasted.length} already indexed in visible copy.`;
+      if (wasted.length === 0) return { score: 'full', rationale };
+      return wasted.length * 2 <= terms.size
+        ? { score: 'partial', rationale }
+        : { score: 'none', rationale };
+    }
     case 'P4': {
       const fields = pack.attributeSchema;
       if (fields.length === 0) return { score: 'unknown', rationale: 'No attribute schema for this pack.' };
@@ -102,8 +142,17 @@ function judge(id: string, v: SnapshotView): { score: Verdict; rationale: string
     }
     case 'P11':
       return { score: 'unknown', rationale: 'Review-language mirroring requires review data — not assessed.' };
-    case 'P12':
-      return { score: 'unknown', rationale: 'Q&A layer not visible from the public snapshot.' };
+    case 'P12': {
+      const qa = v.inputs.qa;
+      if (qa === undefined) {
+        return { score: 'unknown', rationale: 'Q&A layer not visible from the public snapshot.' };
+      }
+      const answered = qa.filter((f) => (f?.q ?? '').trim() !== '' && (f?.a ?? '').trim() !== '');
+      const rationale = `${answered.length} prepared Q&A pair(s).`;
+      if (answered.length >= 15) return { score: 'full', rationale };
+      if (answered.length >= 5) return { score: 'partial', rationale };
+      return { score: 'none', rationale };
+    }
     case 'P13': {
       const bans = pack.compliancePack?.superlativeBans ?? [];
       const t = v.allText.toLowerCase();
@@ -148,6 +197,7 @@ function judge(id: string, v: SnapshotView): { score: Verdict; rationale: string
 export function scoreAgainstPrinciples(
   snapshot: ListingSnapshot,
   pack: KnowledgePack,
+  inputs: ScoreInputs = {},
 ): Scorecard {
   const raw = snapshot.raw as { aplusText?: string } | null;
   const view: SnapshotView = {
@@ -155,6 +205,7 @@ export function scoreAgainstPrinciples(
     pack,
     allText: `${snapshot.title} ${snapshot.bullets.join(' ')} ${snapshot.description}`,
     aplusText: raw?.aplusText ?? '',
+    inputs,
   };
   const perPrinciple: PrincipleScore[] = pack.principles.map((p) => {
     if (!p.scorable) {
