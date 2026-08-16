@@ -1,5 +1,6 @@
 import type { KnowledgePack, ListingSnapshot, OptimizedListing } from '@/lib/types';
 import type { TitlePolicy } from '@/lib/env';
+import { descriptionBudget } from '@/lib/gate/checks/c-length';
 import type { TitleSurfaces } from '../backendSanitize';
 import { aplusPrompt } from './aplus';
 import { attributesPrompt } from './attributes';
@@ -46,7 +47,6 @@ export function buildGroupPrompts(
   titlePolicy: TitlePolicy = 'dual',
   operator: OperatorPromptContext = {},
 ) {
-  const hasCompliance = pack.compliancePack !== null;
   // Category-specific prompt lines come off the pack — never from this module.
   const packRules = pack.compliancePack?.promptRules ?? {};
   // Style rules are rendered from PACK DATA and injected into every copy group
@@ -64,7 +64,7 @@ export function buildGroupPrompts(
     bullets: (s: ListingSnapshot, canonicalProductName?: string) =>
       bulletsPrompt(s, styleBlock, packRules.bullets ?? [], canonicalProductName ?? '', pack.rules, buyerBlock),
     description: (s: ListingSnapshot, canonicalProductName?: string) =>
-      descriptionPrompt(s, hasCompliance, styleBlock, packRules.description ?? [], canonicalProductName ?? '', pack.rules, buyerBlock),
+      descriptionPrompt(s, descriptionBudget(pack), styleBlock, packRules.description ?? [], canonicalProductName ?? '', pack.rules, buyerBlock),
     // Title surfaces (when known) feed C16 forbidden stems into the backend prompt.
     backend: (s: ListingSnapshot, surfaces?: TitleSurfaces) => backendPrompt(s, surfaces),
     attributes: (s: ListingSnapshot, schemaFields: string) =>

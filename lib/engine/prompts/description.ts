@@ -1,18 +1,27 @@
+import type { DescriptionBudget } from '@/lib/gate/checks/c-length';
 import type { ListingSnapshot, RuleSet } from '@/lib/types';
 import { canonicalNameBlock, demandRecaptureBlock, positioningBlock, snapshotBlock } from './shared';
 
+/**
+ * `budget` replaced a `hasCompliance: boolean` that selected between two
+ * HAND-COMPUTED constants ("≤1700 chars …" / "≤2000 chars"). Neither named
+ * `rules.descriptionMax` and neither knew the length of the pack's own
+ * disclaimer, so the instruction the model works to and the limit C4 enforces
+ * were only ever equal by coincidence — see `descriptionBudget` in
+ * `lib/gate/checks/c-length.ts` for the live run that cost.
+ */
 export function descriptionPrompt(
   snapshot: ListingSnapshot,
-  hasCompliance: boolean,
+  budget: DescriptionBudget,
   styleBlock = '',
   packRules: string[] = [],
   canonicalProductName = '',
   rules?: RuleSet,
   buyerBlock = '',
 ): string {
-  const headroom = hasCompliance
-    ? '≤1700 chars (the system appends the verbatim compliance disclaimer and needs the headroom)'
-    : `≤${2000} chars`;
+  const headroom = budget.reserve > 0
+    ? `≤${budget.budget} chars of your own text (the system then appends the verbatim compliance disclaimer, ${budget.reserve} chars, and the finished field must be ≤${budget.max})`
+    : `≤${budget.max} chars`;
   const packLines = packRules.map((line) => `- ${line}\n`).join('');
   // C8 requires the canonical product name INSIDE the description. It is chosen
   // by the title group, so it is stated here rather than left to chance.

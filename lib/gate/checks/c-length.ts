@@ -134,14 +134,89 @@ export function c3BackendBytes(l: OptimizedListing, pack: KnowledgePack): Failur
   return out;
 }
 
+/**
+ * The separator `lib/engine/optimize.ts` puts between the written description
+ * and the code-inserted disclaimer.
+ *
+ * It lives HERE, next to the check that measures the assembled string, and the
+ * engine imports it — the same direction `lib/engine/repair.ts` already imports
+ * `runGate`. Two homes for this fact is precisely the drift that produced the
+ * defect below: the engine knew what it appended and the gate knew what it
+ * measured, and nothing made the two arithmetics agree.
+ */
+export const DISCLAIMER_APPEND_SEPARATOR = '\n\n';
+
+export interface DescriptionBudget {
+  /** `rules.descriptionMax` — the cap C4 enforces on the ASSEMBLED field. */
+  max: number;
+  /** Characters the engine appends afterwards (0 when the pack has no disclaimer). */
+  reserve: number;
+  /** What the MODEL may write: `max - reserve`. Never below zero. */
+  budget: number;
+}
+
+/**
+ * THE ONE ARITHMETIC — the budget the generator actually controls.
+ *
+ * WHY THIS EXISTS (a live convergence failure, ASIN B00EEEITVA, one of six runs
+ * in a batch; the other five and the same ASIN's other run verified clean).
+ * That run ended `verified:false` on a SINGLE C4 failure, and the loop could not
+ * have converged on it however many rounds it was given, because the three
+ * places that stated the constraint stated three different things and the most
+ * actionable of them was the wrong one:
+ *
+ *   - the SYSTEM prompt said "Description <=2000 chars (leave ~250 chars
+ *     headroom)"  => 1750;
+ *   - the DESCRIPTION group prompt said "<=1700 chars", a hand-computed
+ *     constant that named neither `rules.descriptionMax` nor the disclaimer;
+ *   - the repair round then fed the C4 failure back verbatim, and C4's own fix
+ *     line said "Shorten description to <=2000 chars" while its context reported
+ *     the length of the ASSEMBLED field — description PLUS the appended
+ *     disclaimer. A model that does exactly what that line says targets 2000
+ *     characters of its own text, the engine appends ~158 more, and the next
+ *     gate run reports the same failure with a slightly different number. The
+ *     instruction was self-defeating: obeying it reproduced the defect.
+ *
+ * C4 IS NOT WEAKENED BY ANY OF THIS. The verdict is unchanged in both
+ * directions — the check still fails exactly when the ASSEMBLED description is
+ * empty or longer than `rules.descriptionMax`, and `budget` is used only to say
+ * something the model can act on. What changed is that the prompts and the fix
+ * line now compute their number from `rules.descriptionMax` and the pack's own
+ * disclaimer instead of carrying hand-copied constants.
+ */
+export function descriptionBudget(pack: KnowledgePack): DescriptionBudget {
+  const max = pack.rules.descriptionMax;
+  const disclaimer = pack.compliancePack?.disclaimer ?? '';
+  const reserve = disclaimer ? DISCLAIMER_APPEND_SEPARATOR.length + disclaimer.length : 0;
+  return { max, reserve, budget: Math.max(0, max - reserve) };
+}
+
 export function c4DescriptionLength(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const description = l.description ?? '';
   const out: Failure[] = [];
   if (!normalize(description)) {
     out.push(fail('C4', 'description', '(empty)', 'Description is empty — a blank surface can never be verified'));
   }
-  if (description.length > pack.rules.descriptionMax) {
-    out.push(fail('C4', 'description', `${description.length} chars`, `Shorten description to ≤${pack.rules.descriptionMax} chars`));
+  const { max, reserve, budget } = descriptionBudget(pack);
+  if (description.length > max) {
+    // The context names BOTH halves when the disclaimer is really on the end,
+    // so the number the model is shown is one it can reconcile with the text it
+    // wrote. The trigger above is untouched.
+    const disclaimer = pack.compliancePack?.disclaimer ?? '';
+    const appended = reserve > 0 && description.includes(disclaimer);
+    const context = appended
+      ? `${description.length} chars (${description.length - reserve} written + ${reserve} appended)`
+      : `${description.length} chars`;
+    out.push(
+      fail(
+        'C4',
+        'description',
+        context,
+        appended
+          ? `Shorten the description you WRITE to ≤${budget} chars — the ${reserve}-char compliance disclaimer is appended afterwards by the system and counts toward the ≤${max} limit, so a rewrite aimed at ${max} fails again`
+          : `Shorten description to ≤${max} chars`,
+      ),
+    );
   }
   return out;
 }

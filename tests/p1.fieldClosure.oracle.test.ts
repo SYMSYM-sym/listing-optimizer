@@ -1,3 +1,6 @@
+/// <reference types="vite/client" />
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { optimize } from '@/lib/engine/optimize';
@@ -17,8 +20,11 @@ import { styleSurfaces } from '@/lib/gate/checks/c-style';
 import { keywordSurfaceText } from '@/lib/gate/checks/c-keywords';
 import {
   allGeneratedSurfaces,
+  aplusFactSurfaces,
   aplusSurfaces,
+  attributeComplianceSurfaces,
   customerSurfaces,
+  factsComplianceSurfaces,
 } from '@/lib/gate/checks/shared';
 import { mapProduct } from '@/lib/ingest/providers/rainforest';
 import { toSnapshot } from '@/lib/ingest/toSnapshot';
@@ -95,6 +101,58 @@ import { rainforestSample } from './fixtures/rainforest.sample';
  *     The pre-P1 readers are reconstructed here and the oracle is asserted to
  *     name exactly the field each of them dropped; and a synthetic new field is
  *     added to the listing and asserted to be reported by name.
+ *
+ * ---------------------------------------------------------------------------
+ * Q1 — THE HOLE THIS FILE ITSELF LEFT OPEN, AND HOW IT IS CLOSED
+ * ---------------------------------------------------------------------------
+ *
+ * Every one of the four bypasses this project has found was the SAME shape: a
+ * surface reader existed and was not enrolled in the guard that was supposed to
+ * cover it. C28's private `keywordSurfaceText` omitted `bannerAltText` and had
+ * no `video` case; `collectSurfaces` omitted `bannerAltText`; `customerSurfaces`
+ * omitted `videoBrief.aspect`; `outputHygiene.surfaces` omitted `facts`.
+ *
+ * The version of this file that shipped with P1 caught a reader that missed a
+ * FIELD — and it held its READERS list BY HAND, and said so in this header: it
+ * could not see a NEW reader added to the codebase. That is the same entry
+ * point one level up. A reader nobody enrolled is exactly a reader nobody
+ * checks, and the oracle would have stayed green while it shipped.
+ *
+ * ENROLLMENT IS NOW DERIVED FROM THE CODEBASE (§B.0), by two independent
+ * detectors whose union must be enrolled:
+ *
+ *   STATIC.  Every `.ts` under `lib/gate/` is read from disk (recursively, so a
+ *            NEW FILE counts) and its EXPORTED function signatures are parsed.
+ *            A function is a candidate when it takes the generated listing or
+ *            one of its subtrees (`OptimizedListing` / `AplusContent`) and
+ *            returns TEXT — `string`, `string | null`, `string[]`,
+ *            `[string, string][]`, or `T[]` for a `T` the gate itself declares
+ *            with a `text: string` member. `Failure[]` is not text, so the ~40
+ *            CHECKS drop out on their return type rather than on a name.
+ *            A function with NO declared return type is undecidable and is
+ *            therefore a candidate too — fail-closed.
+ *
+ *   DYNAMIC. Every module under `lib/gate/` is imported (via `import.meta.glob`,
+ *            which vite expands from the filesystem — again, a new file counts)
+ *            and every exported function is CALLED with a listing carrying a
+ *            unique sentinel. Anything that hands back text-shaped output
+ *            containing that sentinel is reading the listing, whatever its
+ *            signature says.
+ *
+ * WHY IT CANNOT BE FAKED. Neither detector reads a name, a comment or a
+ * marker: one reads the TYPES the compiler already enforces, the other reads
+ * BEHAVIOUR. And enrollment is not a claim either — a `Reader` row does not
+ * carry a closure over the function it names; it carries an ADAPTER, and the
+ * oracle passes it the function object it resolved from that module's own
+ * exports (§B.0 `resolve`). A row cannot enroll a stub, a wrapper or a
+ * lookalike: it is handed the real export or the run fails. A stub row would
+ * fail anyway, on every field in §C.
+ *
+ * BOTH DIRECTIONS. A candidate with no row fails, naming `file::function`; a
+ * row naming something that is no longer an export, or no longer a candidate,
+ * fails too. The one escape hatch is `NOT_A_SURFACE_READER`, whose rows must
+ * name a function that still exists AND that the dynamic probe does not observe
+ * echoing listing text.
  */
 
 const SENTINEL = 'ZQXJVSENTINELP1';
@@ -298,11 +356,228 @@ function canonSlots(root: unknown, canon: string): ((v: string) => void)[] {
 }
 
 // ===========================================================================
+// §B.0 — WHICH FUNCTIONS ARE SURFACE READERS, DERIVED FROM THE CODEBASE
+// ===========================================================================
+
+const GATE_ROOT = join(process.cwd(), 'lib', 'gate');
+
+/** Every `.ts` under `lib/gate/`, relative and slash-normalised. */
+function gateSources(dir = GATE_ROOT, prefix = ''): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) out.push(...gateSources(join(dir, entry.name), rel));
+    else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')) out.push(rel);
+  }
+  return out.sort();
+}
+
+/**
+ * The MODULES, expanded from the filesystem by vite. A file added to
+ * `lib/gate/` appears here on the next run without anyone editing a list — the
+ * same property `gateSources` gives the static half.
+ */
+const GATE_MODULES = import.meta.glob('../lib/gate/**/*.ts') as Record<
+  string,
+  () => Promise<Record<string, unknown>>
+>;
+
+const moduleKeyFor = (relative: string): string => `../lib/gate/${relative}`;
+
+/**
+ * TYPE NAMES the gate declares with a `text: string` member (`ScanSurface`,
+ * `StyleSurface`). Derived by reading the sources, so a new surface record type
+ * is recognised without being named here.
+ */
+function textBearingTypeNames(sources: Map<string, string>): Set<string> {
+  const out = new Set<string>();
+  for (const src of sources.values()) {
+    const re = /(?:export\s+)?(?:interface|type)\s+(\w+)\s*(?:=\s*)?\{([^}]*)\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src)) !== null) {
+      if (/\btext\s*\??\s*:\s*string\b/.test(m[2] ?? '')) out.add(m[1]!);
+    }
+  }
+  return out;
+}
+
+/** Is a DECLARED return type a text shape rather than a verdict shape? */
+function isTextReturn(returnType: string, textTypes: Set<string>): boolean {
+  const t = returnType.replace(/\s+/g, ' ').trim().replace(/^\((.*)\)$/, '$1');
+  if (/^string(\s*\|\s*(null|undefined))*$/.test(t)) return true;
+  if (/^string\[\]$/.test(t)) return true;
+  if (/^\[\s*string\s*,\s*string\s*\]\[\]$/.test(t)) return true;
+  const named = /^(\w+)\[\]$/.exec(t);
+  return named !== null && textTypes.has(named[1]!);
+}
+
+interface Candidate {
+  file: string;
+  name: string;
+  /** How it was found — both detectors may claim the same function. */
+  by: ('signature' | 'behaviour')[];
+  why: string;
+}
+
+/**
+ * STATIC DETECTOR. Parse every exported function signature in `lib/gate/**`.
+ *
+ * The parse is deliberately crude and deliberately FAIL-CLOSED: anything it
+ * cannot decide (a missing return type) becomes a candidate that has to be
+ * enrolled or explicitly excused. It cannot be satisfied by a name or a
+ * comment, because what it reads is the type annotation the compiler enforces.
+ */
+function signatureCandidates(sources: Map<string, string>): Candidate[] {
+  const textTypes = textBearingTypeNames(sources);
+  const out: Candidate[] = [];
+  for (const [file, src] of sources) {
+    const re = /export\s+function\s+(\w+)\s*(<[^>]*>)?\s*\(/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src)) !== null) {
+      // Balance the parameter list, then take everything up to the body `{`.
+      let i = re.lastIndex;
+      let depth = 1;
+      while (i < src.length && depth > 0) {
+        const c = src[i]!;
+        if (c === '(') depth++;
+        else if (c === ')') depth--;
+        i++;
+      }
+      const params = src.slice(re.lastIndex, i - 1);
+      const bodyAt = src.indexOf('{', i);
+      const returnType = src.slice(i, bodyAt < 0 ? i : bodyAt).replace(/^\s*:\s*/, '').trim();
+      const takesListing = /\b(OptimizedListing|AplusContent)\b/.test(params);
+      if (!takesListing) continue;
+      if (returnType === '') {
+        out.push({
+          file,
+          name: m[1]!,
+          by: ['signature'],
+          why: 'takes the listing and declares NO return type — undecidable, so treated as a reader',
+        });
+        continue;
+      }
+      if (isTextReturn(returnType, textTypes)) {
+        out.push({
+          file,
+          name: m[1]!,
+          by: ['signature'],
+          why: `takes the listing and returns \`${returnType}\``,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+const PROBE = 'ZQXJVENROLLMENTPROBE';
+
+/** Is a RUNTIME value text-shaped (strings, pairs of strings, `{text}` rows)? */
+function isTextValue(v: unknown): boolean {
+  if (typeof v === 'string') return true;
+  if (!Array.isArray(v) || v.length === 0) return false;
+  return v.every(
+    (el) =>
+      typeof el === 'string' ||
+      (Array.isArray(el) && el.every((x) => typeof x === 'string')) ||
+      (!!el && typeof el === 'object' && typeof (el as { text?: unknown }).text === 'string'),
+  );
+}
+
+const containsProbe = (v: unknown): boolean => JSON.stringify(v ?? null)?.includes(PROBE) ?? false;
+
+/**
+ * BEHAVIOURAL DETECTOR. Call every exported function of every gate module with
+ * a listing whose fields carry `PROBE`, and see which ones hand the probe back
+ * as text.
+ *
+ * The argument VECTORS are best-effort — a function whose listing parameter is
+ * not first, or that needs a companion argument this list does not guess, is
+ * simply not detected HERE, and the static detector is what must hold. Adding a
+ * vector can only ever find more readers, never fewer, which is why guessing is
+ * safe in this direction.
+ */
+/**
+ * `functionName -> the file that DEFINES it`, from the sources.
+ *
+ * `lib/gate/checks/index.ts` is a barrel: it re-exports `styleSurfaces`,
+ * `keywordSurfaceText` and the rest, so the behavioural detector meets the same
+ * function object twice and would otherwise demand a second row for the same
+ * reader. Identity is the DEFINITION SITE. A re-export under a DIFFERENT name
+ * does not resolve and stays a separate candidate — fail-closed.
+ */
+function definitionSites(sources: Map<string, string>): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [file, src] of sources) {
+    for (const m of src.matchAll(/export\s+function\s+(\w+)/g)) out.set(m[1]!, file);
+  }
+  return out;
+}
+
+async function behaviourCandidates(
+  probeListing: OptimizedListing,
+  sites: Map<string, string>,
+): Promise<Candidate[]> {
+  const vectors: unknown[][] = [
+    [probeListing],
+    [probeListing.aplusContent],
+    [probeListing, new Set(COLLECTED_SURFACE_GROUPS)],
+    ...keywordSurfaceNames.map((n) => [probeListing, n]),
+  ];
+  const out: Candidate[] = [];
+  for (const [key, load] of Object.entries(GATE_MODULES)) {
+    const mod = await load();
+    for (const [name, value] of Object.entries(mod)) {
+      if (typeof value !== 'function') continue;
+      for (const args of vectors) {
+        let result: unknown;
+        try {
+          result = (value as (...a: unknown[]) => unknown)(...args);
+        } catch {
+          continue;
+        }
+        if (result instanceof Promise) continue;
+        if (isTextValue(result) && containsProbe(result)) {
+          const here = key.replace('../lib/gate/', '');
+          out.push({
+            file: sites.get(name) ?? here,
+            name,
+            by: ['behaviour'],
+            why: 'returned text-shaped output containing a sentinel planted in the listing',
+          });
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Exported functions of `lib/gate/**` that a detector calls a surface reader
+ * and that this oracle deliberately does NOT enrol.
+ *
+ * Every row is machine-checked below: the function must still be exported from
+ * that file, and the behavioural probe must NOT observe it echoing listing text
+ * (a row for something that really does read copy is stale and fails).
+ */
+const NOT_A_SURFACE_READER: Record<string, string> = {
+  'checks/c-quality.ts::presentAllergens':
+    'Returns the pack\'s own `allergenRules` rows that are PRESENT on the label — pack data filtered by the listing, never listing copy. It is a candidate only because it declares no return type, which is the fail-closed side of the static rule doing its job.',
+};
+
+// ===========================================================================
 // §B — THE READERS, AND WHAT EACH ONE IS ALLOWED NOT TO READ
 // ===========================================================================
 
+/** Any surface reader, whatever its exact signature. */
+type SurfaceFn = (...args: never[]) => unknown;
+
 interface Reader {
+  /** The EXPORTED NAME, checked against the module's own exports. */
   name: string;
+  /** The file it is exported from, relative to `lib/gate/`. */
+  file: string;
   /** The checks that read the listing through it. */
   checks: string;
   /**
@@ -310,7 +585,15 @@ interface Reader {
    * the function's own signature, not from a judgement about scope.
    */
   subtree?: string;
-  texts: (l: OptimizedListing) => (string | null)[];
+  /**
+   * The ADAPTER: supplies the non-listing arguments and flattens the result.
+   *
+   * It receives `fn` rather than closing over the import, so the oracle decides
+   * WHICH function this row measures — the one it resolved from `${file}`'s own
+   * exports under `${name}`. A row therefore cannot quietly measure a copy, a
+   * wrapper or a stub.
+   */
+  read: (fn: SurfaceFn, l: OptimizedListing) => (string | null)[];
   /** canonical path -> why THIS reader does not read it (a sibling must). */
   exempt: Record<string, string>;
 }
@@ -323,11 +606,14 @@ const keywordSurfaceNames = [
 const READERS: Reader[] = [
   {
     name: 'collectSurfaces',
+    file: 'checks/c-prohibited.ts',
     checks: 'C18 prohibited content / C19 prohibited marketing / C27 output hygiene',
-    texts: (l) =>
-      collectSurfaces(l, new Set(COLLECTED_SURFACE_GROUPS), pack.rules.factFields?.price).map(
-        (s) => s.text,
-      ),
+    read: (fn, l) =>
+      (fn as typeof collectSurfaces)(
+        l,
+        new Set(COLLECTED_SURFACE_GROUPS),
+        pack.rules.factFields?.price,
+      ).map((s) => s.text),
     exempt: {
       'facts.price':
         'Exempt BY KEY, not by omission: this is the field whose JOB is to hold the standard price, so C18 would report the canonical record for being what it is. Read by styleSurfaces (C17) and by factsComplianceSurfaces inside allGeneratedSurfaces, and it is never customer copy.',
@@ -335,14 +621,16 @@ const READERS: Reader[] = [
   },
   {
     name: 'styleSurfaces',
+    file: 'checks/c-style.ts',
     checks: 'C17 style/formatting',
-    texts: (l) => styleSurfaces(l).map((r) => r.text),
+    read: (fn, l) => (fn as typeof styleSurfaces)(l).map((r) => r.text),
     exempt: {},
   },
   {
     name: 'customerSurfaces',
+    file: 'checks/shared.ts',
     checks: 'C6 banned terms / C10 potency phrasing / C11 fiction / C12 fact consistency',
-    texts: (l) => customerSurfaces(l).map(([, text]) => text),
+    read: (fn, l) => (fn as typeof customerSurfaces)(l).map(([, text]) => text),
     exempt: {
       'attributes.*':
         'attributeComplianceSurfaces reads every attribute value; they are kept out of this list because size/count attributes would false-trip the C12 figure comparison. C6 unions the two lists at its call site.',
@@ -366,21 +654,52 @@ const READERS: Reader[] = [
   },
   {
     name: 'aplusSurfaces',
+    file: 'checks/shared.ts',
     checks: 'A2/A5/A6/A8, the A+ half of C17, and (minus the typical column) C12',
     subtree: 'aplusContent',
-    texts: (l) => aplusSurfaces(l.aplusContent).map(([, text]) => text),
+    read: (fn, l) => (fn as typeof aplusSurfaces)(l.aplusContent).map(([, text]) => text),
+    exempt: {},
+  },
+  {
+    name: 'aplusFactSurfaces',
+    file: 'checks/shared.ts',
+    checks: 'the C12 fact-consistency scan over the A+ block',
+    subtree: 'aplusContent',
+    read: (fn, l) => (fn as typeof aplusFactSurfaces)(l.aplusContent).map(([, text]) => text),
+    exempt: {
+      'aplusContent.comparison.rows[].typical':
+        'The `typical` cell describes a TYPICAL ALTERNATIVE product, so its figures are deliberately not ours and must never be measured against `facts`. Dropping exactly this cell is the entire reason this reader exists next to `aplusSurfaces`, which reads it.',
+    },
+  },
+  {
+    name: 'factsComplianceSurfaces',
+    file: 'checks/shared.ts',
+    checks: 'the canonical-facts half of C6 (unioned in at the call site)',
+    subtree: 'facts',
+    read: (fn, l) => (fn as typeof factsComplianceSurfaces)(l).map(([, text]) => text),
+    exempt: {},
+  },
+  {
+    name: 'attributeComplianceSurfaces',
+    file: 'checks/shared.ts',
+    checks: 'the attribute half of C6 (unioned in at the call site)',
+    subtree: 'attributes',
+    read: (fn, l) => (fn as typeof attributeComplianceSurfaces)(l).map(([, text]) => text),
     exempt: {},
   },
   {
     name: 'allGeneratedSurfaces',
+    file: 'checks/shared.ts',
     checks: 'C21/C22 and the fail-closed cross-pack backstop in packFailClosed',
-    texts: (l) => allGeneratedSurfaces(l).map(([, text]) => text),
+    read: (fn, l) => (fn as typeof allGeneratedSurfaces)(l).map(([, text]) => text),
     exempt: {},
   },
   {
     name: 'keywordSurfaceText',
+    file: 'checks/c-keywords.ts',
     checks: 'C28 keyword placement (every name in the pack vocabulary)',
-    texts: (l) => keywordSurfaceNames.map((name) => keywordSurfaceText(l, name)),
+    read: (fn, l) =>
+      keywordSurfaceNames.map((name) => (fn as typeof keywordSurfaceText)(l, name)),
     exempt: {
       'facts.potency':
         'The canonical facts are not a keyword SURFACE and are deliberately outside the pack vocabulary: they are deterministic source truth rebuilt identically from the snapshot every round, so no generation group authors them, a "placed on facts" claim is not expressible, and a term found in one could never be repaired away (the unwinnable-run shape). Read as CONTENT by collectSurfaces, styleSurfaces and allGeneratedSurfaces.',
@@ -429,11 +748,22 @@ const GLOBAL_EXEMPT: Record<string, string> = {
 let populated: OptimizedListing;
 let leaves: Leaf[];
 let unreadBy: Map<string, Leaf[]>;
+let sources: Map<string, string>;
+let candidates: Map<string, Candidate>;
+/** reader name -> the function resolved from that reader's OWN module export. */
+let resolved: Map<string, SurfaceFn>;
 
 const clone = (l: OptimizedListing): OptimizedListing =>
   JSON.parse(JSON.stringify(l)) as OptimizedListing;
 
-/** Fields `texts` did NOT return the sentinel for, for each reader. */
+const key = (file: string, name: string): string => `${file}::${name}`;
+
+/**
+ * Fields a reader did NOT return the sentinel for.
+ *
+ * The function is taken from `resolved` — i.e. from the module's own exports —
+ * and handed to the row's adapter. A row cannot substitute anything for it.
+ */
 function measure(readers: Reader[], base: OptimizedListing, all: Leaf[]): Map<string, Leaf[]> {
   const out = new Map<string, Leaf[]>(readers.map((r) => [r.name, []]));
   for (const leaf of all) {
@@ -441,7 +771,11 @@ function measure(readers: Reader[], base: OptimizedListing, all: Leaf[]): Map<st
     setConcrete(probe, leaf.concrete, SENTINEL);
     for (const reader of readers) {
       if (reader.subtree && !leaf.canon.startsWith(`${reader.subtree}.`)) continue;
-      const seen = reader.texts(probe).some((t) => typeof t === 'string' && t.includes(SENTINEL));
+      const fn = resolved.get(reader.name);
+      if (!fn) throw new Error(`no export resolved for reader ${reader.name}`);
+      const seen = reader
+        .read(fn, probe)
+        .some((t) => typeof t === 'string' && t.includes(SENTINEL));
       if (!seen) out.get(reader.name)!.push(leaf);
     }
   }
@@ -465,7 +799,119 @@ beforeAll(async () => {
   }
 
   leaves = listingLeaves(populated);
+
+  // --- §B.0: derive the reader set from the codebase, then bind the rows ---
+  sources = new Map(
+    gateSources().map((rel) => [rel, readFileSync(join(GATE_ROOT, rel), 'utf8')]),
+  );
+  const probeListing = clone(populated);
+  for (const leaf of listingLeaves(probeListing)) setConcrete(probeListing, leaf.concrete, PROBE);
+  candidates = new Map();
+  const sites = definitionSites(sources);
+  for (const c of [
+    ...signatureCandidates(sources),
+    ...(await behaviourCandidates(probeListing, sites)),
+  ]) {
+    const existing = candidates.get(key(c.file, c.name));
+    if (existing) existing.by.push(...c.by);
+    else candidates.set(key(c.file, c.name), c);
+  }
+
+  resolved = new Map();
+  for (const reader of READERS) {
+    const load = GATE_MODULES[moduleKeyFor(reader.file)];
+    if (!load) throw new Error(`reader ${reader.name} names a file that does not exist: ${reader.file}`);
+    const mod = await load();
+    const fn = mod[reader.name];
+    if (typeof fn !== 'function') {
+      throw new Error(`${reader.file} exports no function named '${reader.name}'`);
+    }
+    resolved.set(reader.name, fn as SurfaceFn);
+  }
+
   unreadBy = measure(READERS, populated, leaves);
+});
+
+// ===========================================================================
+// §B.0 — ENROLLMENT IS DERIVED, IN BOTH DIRECTIONS
+// ===========================================================================
+
+describe('§B.0 every surface reader in the codebase is enrolled in this oracle', () => {
+  it('the detectors ran over the real tree and found something to detect', () => {
+    expect(sources.size, 'no gate sources were read').toBeGreaterThanOrEqual(15);
+    expect(Object.keys(GATE_MODULES).length).toBe(sources.size);
+    // Both detectors must be alive: a silent zero from either would make the
+    // enrollment check pass by finding nothing.
+    const bySignature = [...candidates.values()].filter((c) => c.by.includes('signature'));
+    const byBehaviour = [...candidates.values()].filter((c) => c.by.includes('behaviour'));
+    expect(bySignature.length, 'the SIGNATURE detector found nothing').toBeGreaterThanOrEqual(6);
+    expect(byBehaviour.length, 'the BEHAVIOUR detector found nothing').toBeGreaterThanOrEqual(4);
+  });
+
+  it('the checks are NOT swept in: a `Failure[]` return is not a surface read', () => {
+    // ~40 exported checks take the listing and return verdicts. If the return
+    // type stopped discriminating, this list would swallow them and the
+    // enrollment assertion below would be unmeetable rather than meaningful.
+    const names = [...candidates.values()].map((c) => c.name);
+    for (const check of ['c17Style', 'c18ProhibitedContent', 'c27OutputHygiene', 'c6BannedTerms']) {
+      expect(names, `${check} is a CHECK, not a reader`).not.toContain(check);
+    }
+  });
+
+  it('every detected surface reader has a READERS row (or a reasoned exclusion)', () => {
+    const enrolled = new Set(READERS.map((r) => key(r.file, r.name)));
+    const unenrolled = [...candidates.entries()]
+      .filter(([id]) => !enrolled.has(id) && !(id in NOT_A_SURFACE_READER))
+      .map(([id, c]) => `${id} — ${c.why} [found by: ${[...new Set(c.by)].join(', ')}]`)
+      .sort();
+    expect(
+      unenrolled,
+      'these functions read the generated listing and return its text, and NOTHING in this oracle measures what they cover. ' +
+        'That is the shape of all four bypasses this project has found. Add a READERS row, or a NOT_A_SURFACE_READER row saying why it is not one: ' +
+        unenrolled.join(' | '),
+    ).toEqual([]);
+  });
+
+  it('every READERS row names a function the detectors still recognise', () => {
+    const stale = READERS.filter((r) => !candidates.has(key(r.file, r.name))).map(
+      (r) => key(r.file, r.name),
+    );
+    expect(
+      stale,
+      `these rows name something the codebase no longer exports as a surface reader: ${stale.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('the resolved function IS the module export, not a closure the row supplied', () => {
+    // The row hands over an ADAPTER; the oracle supplies the function. This
+    // pins that: what §C measured is the export named in the row.
+    expect(resolved.size).toBe(READERS.length);
+    for (const reader of READERS) {
+      expect(resolved.get(reader.name), reader.name).toBeTypeOf('function');
+      expect((resolved.get(reader.name) as { name: string }).name, reader.name).toBe(reader.name);
+    }
+  });
+
+  it('every NOT_A_SURFACE_READER row still exists and still does not read copy', async () => {
+    const bad: string[] = [];
+    for (const [id, why] of Object.entries(NOT_A_SURFACE_READER)) {
+      const [file, name] = id.split('::') as [string, string];
+      const load = GATE_MODULES[moduleKeyFor(file)];
+      if (!load) {
+        bad.push(`${id}: no such file`);
+        continue;
+      }
+      const mod = await load();
+      if (typeof mod[name] !== 'function') bad.push(`${id}: not an export`);
+      // A row for a function the BEHAVIOURAL probe caught echoing listing text
+      // is stale by definition — that is a reader, whatever the row says.
+      if (candidates.get(id)?.by.includes('behaviour')) {
+        bad.push(`${id}: the probe observed it returning listing text — it IS a reader`);
+      }
+      if (why.length < 40) bad.push(`${id}: no real reason recorded`);
+    }
+    expect(bad).toEqual([]);
+  });
 });
 
 // ===========================================================================
@@ -617,8 +1063,9 @@ describe('§E the oracle catches exactly the field a reader drops', () => {
    */
   const preP1Collect: Reader = {
     name: 'preP1Collect',
+    file: 'checks/c-prohibited.ts',
     checks: 'reconstruction of the reader that shipped the bypass',
-    texts: (l) => {
+    read: (_fn, l) => {
       const blind = clone(l);
       for (const m of blind.aplusContent?.modules ?? []) delete m.bannerAltText;
       return collectSurfaces(
@@ -633,8 +1080,9 @@ describe('§E the oracle catches exactly the field a reader drops', () => {
   /** `customerSurfaces` EXACTLY as it stood before P1: every video string but `aspect`. */
   const preP1Customer: Reader = {
     name: 'preP1Customer',
+    file: 'checks/shared.ts',
     checks: 'reconstruction of the sibling three-of-four reader',
-    texts: (l) =>
+    read: (_fn, l) =>
       customerSurfaces(l)
         .filter(([field]) => field !== 'videoBrief.aspect')
         .map(([, text]) => text),
@@ -644,8 +1092,9 @@ describe('§E the oracle catches exactly the field a reader drops', () => {
   /** A reader that drops one image string, to show the oracle is not A+-specific. */
   const noAltText: Reader = {
     name: 'noAltText',
+    file: 'checks/c-style.ts',
     checks: 'synthetic mutant: styleSurfaces minus imagePlan altText',
-    texts: (l) =>
+    read: (_fn, l) =>
       styleSurfaces(l)
         .filter((r) => !/^imagePlan\[\d+\]\.altText$/.test(r.field))
         .map((r) => r.text),
@@ -653,6 +1102,9 @@ describe('§E the oracle catches exactly the field a reader drops', () => {
   };
 
   const newly = (mutant: Reader, baseline: string): string[] => {
+    // The mutants are RECONSTRUCTIONS, not exports, so they are bound by hand;
+    // every production row is bound from its module (see §B.0 `resolve`).
+    resolved.set(mutant.name, (() => []) as SurfaceFn);
     const measured = measure([mutant], populated, leaves);
     const before = new Set(unreadBy.get(baseline)!.map((l) => l.canon));
     return [...new Set(measured.get(mutant.name)!.map((l) => l.canon))]
@@ -683,7 +1135,11 @@ describe('§E the oracle catches exactly the field a reader drops', () => {
     expect(all.some((l) => l.canon === 'aplusContent.modules[].sponsoredBadgeCaption')).toBe(true);
 
     const measured = measure(READERS, withNew, all);
-    for (const reader of READERS) {
+    const applicable = READERS.filter(
+      (r) => !r.subtree || 'aplusContent.modules[].sponsoredBadgeCaption'.startsWith(`${r.subtree}.`),
+    );
+    expect(applicable.length, 'no reader would have been measured at all').toBeGreaterThan(2);
+    for (const reader of applicable) {
       const violations = measured
         .get(reader.name)!
         .filter((l) => !(l.canon in GLOBAL_EXEMPT) && !(l.canon in reader.exempt))

@@ -97,10 +97,32 @@ export function toAsciiTypography(text: string): string {
  * C27 finding that could fire on these fields before still fires. What stops
  * firing is the smart quote — which is what the fold is for.
  *
- * OPTIONALITY IS PRESERVED. `altText`, `bannerAltText` and `videoBrief` are all
- * optional, and C29/C30 report a MISSING one as its own failure. Folding must
- * not turn `undefined` into `''` and convert "missing" into "empty", so each is
- * rebuilt only when it is actually there.
+ * THE FOLD NEVER INVENTS A KEY. Four things are OPTIONAL in the output
+ * contract — `aplusContent.modules[].subcopy`, `aplusContent.modules[].bannerAltText`,
+ * `imagePlan[].altText` and `videoBrief` itself — and each is rebuilt only when
+ * the object actually carries it, so a text-only module does not come back with
+ * a fabricated `subcopy: ''` and a run with no brief does not come back with an
+ * empty one. (C29 reports an absent `videoBrief` as its own failure, which is
+ * why that whole branch is guarded rather than spread.)
+ *
+ * WHAT THIS PARAGRAPH USED TO CLAIM, AND WHY IT WAS WRONG. It said
+ * "OPTIONALITY IS PRESERVED … folding must not turn `undefined` into `''` and
+ * convert 'missing' into 'empty', so each is rebuilt only when it is actually
+ * there" — stated as a property of the whole function. It is not one: inside a
+ * PRESENT `videoBrief`, `t(video.aspect)` and `t(video.notes)` coerce
+ * `undefined` to `''` and the two array fields coerce a non-array to `[]`. That
+ * is correct rather than an oversight, and the reason is the contract, not the
+ * fold: `VideoBrief` declares all five fields REQUIRED, so there is no
+ * "missing notes" state to preserve — only malformed output, which the coercion
+ * hands to the checks in the shape the type promises instead of propagating a
+ * hole. The rule the code actually follows is the one stated above: a field is
+ * guarded exactly when the CONTRACT makes it optional.
+ *
+ * The old sentence also over-claimed about the checks. C30 reports an absent
+ * `imagePlan[].altText` and an empty one identically ("(empty)"), and an absent
+ * `bannerAltText` not at all — so no guard here is load-bearing for a gate
+ * verdict. What they are load-bearing for is the emitted JSON, which is
+ * persisted and exported.
  */
 export function normalizeListingTypography(l: OptimizedListing): OptimizedListing {
   const t = toAsciiTypography;

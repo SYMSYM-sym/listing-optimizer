@@ -1,4 +1,5 @@
 import type { Facts, KnowledgePack } from '@/lib/types';
+import { descriptionBudget } from '@/lib/gate/checks/c-length';
 import { promptDiseaseNouns } from '@/lib/gate/checks/pack';
 import {
   approvedClaimBlock,
@@ -124,9 +125,20 @@ ${allergenLines}`
     : `
 No category compliance module is active. Write factual, everyday copy about what the product is and does. No superlatives, no price, no review claims. Do not write any disclaimer text.`;
 
-  const disclaimerHeadroom = cp
-    ? `- Description ≤${r.descriptionMax} chars (leave ~250 chars headroom — the system appends the verbatim compliance disclaimer).`
-    : `- Description ≤${r.descriptionMax} chars.`;
+  /**
+   * ONE number, derived, and it is the number the model can act on.
+   *
+   * This line used to say "≤2000 chars (leave ~250 chars headroom)" while the
+   * description group prompt said "≤1700" and C4's repair line said "≤2000" —
+   * three different budgets for one field, of which the repair line was both
+   * the most actionable and the wrong one, because C4 measures the string AFTER
+   * the disclaimer has been appended. See `descriptionBudget` in
+   * `lib/gate/checks/c-length.ts`.
+   */
+  const db = descriptionBudget(pack);
+  const disclaimerHeadroom = db.reserve > 0
+    ? `- Description: write ≤${db.budget} chars. The system then appends the verbatim compliance disclaimer (${db.reserve} chars) and the finished field must be ≤${db.max} chars, so ${db.budget} is your whole budget.`
+    : `- Description ≤${db.max} chars.`;
 
   const dosePhrasing = (r.units?.perServingPhrases ?? []).length > 0
     ? `\n- Potency figures attach to the blend/formula, NEVER phrased ${(r.units.perServingPhrases).map((x) => `"${x}"`).join(' / ')}.`

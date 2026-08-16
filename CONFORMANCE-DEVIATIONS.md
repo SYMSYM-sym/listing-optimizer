@@ -398,10 +398,12 @@ field-level one, and derives both ends so it cannot rot the way the prose did:
   like a required one. A field added to a schema enters the suite automatically.
 * **Coverage is measured by PROBE, not by reading code.** Each field gets a
   unique sentinel written into it; a reader "reads" that field iff the sentinel
-  comes back in the text it returns. Six readers are probed —
-  `collectSurfaces`, `styleSurfaces`, `customerSurfaces`, `aplusSurfaces`,
-  `allGeneratedSurfaces`, and `keywordSurfaceText` over the whole pack
-  vocabulary.
+  comes back in the text it returns. Nine readers are probed (six when this
+  entry was written — see §12.1, which derived the set from the codebase and
+  found three more): `collectSurfaces`, `styleSurfaces`, `customerSurfaces`,
+  `aplusSurfaces`, `aplusFactSurfaces`, `factsComplianceSurfaces`,
+  `attributeComplianceSurfaces`, `allGeneratedSurfaces`, and
+  `keywordSurfaceText` over the whole pack vocabulary.
 * **Closure with a reasoned exemption table.** Every field must be read by every
   applicable reader, or carry a row in `GLOBAL_EXEMPT` (no content reader reads
   it — the two verbatim disclaimer constants, `productName`, `primaryKeyword`,
@@ -419,17 +421,23 @@ reconstructed and the oracle reports **exactly**
 `aplusContent.modules[].bannerAltText`; the pre-P1 `customerSurfaces` reports
 **exactly** `videoBrief.aspect`; a mutant that drops `imagePlan[].altText`
 reports **exactly** that; and a synthetic new string field added to every module
-is reported by name by all six readers. And by hand on the real tree: reverting
-the one-token fix in `collectSurfaces` fails three cases —
+is reported by name by every applicable reader. And by hand on the real tree:
+reverting the one-token fix in `collectSurfaces` fails three cases —
 §C `collectSurfaces` naming `aplusContent.modules[].bannerAltText`, §E, and §F —
 and restoring it returns 20/20.
 
 **A future change to this must also change:** the A+ branch of `collectSurfaces`
 and the video branch of `customerSurfaces`, and the reader list / exemption
-tables of `tests/p1.fieldClosure.oracle.test.ts`. Adding a reader that walks the
-listing without adding it to `READERS` there is the one move this suite cannot
-see, which is why the six it does hold are named in the header with the checks
-they arm.
+tables of `tests/p1.fieldClosure.oracle.test.ts`.
+
+> **This paragraph used to end with a stated limit, and that limit is now
+> closed.** It read: *"Adding a reader that walks the listing without adding it
+> to `READERS` there is the one move this suite cannot see, which is why the six
+> it does hold are named in the header with the checks they arm."* Naming six
+> readers in a header is a prose claim about a hand-maintained list — the same
+> shape as every other defect in this record. §12.1 derives the enrolment from
+> the codebase instead, and the derivation immediately found three readers the
+> hand list had missed.
 
 ---
 
@@ -1215,3 +1223,213 @@ to state the brand.
 `brandParity` key on `Audit` and `BrandParityAdvisory` /
 `BrandFieldDisagreement` in `lib/types.ts`, the gap in `lib/audit/diff.ts`, the
 block in `lib/export/shipSheet.ts`, and `tests/brandParity.audit.test.ts`.
+
+---
+
+## 12. ROUND Q — three guards that were derived at one end and hand-listed at the other, and one live convergence failure.
+
+### 12.1 CORRECTED RECORD — the field-closure oracle held its READER LIST by hand.
+
+`tests/p1.fieldClosure.oracle.test.ts` (§1 above) derives the FIELD universe from
+the zod group schemas and measures coverage by probe. It then compared that
+derived universe against a `READERS` array written out by hand, and its own
+header said so. Every one of the four bypasses this repository has found was the
+same shape — **a surface reader existed and was not enrolled in the guard that
+was supposed to cover it**: C28's `keywordSurfaceText` omitted `bannerAltText`
+and had no `video` case, `collectSurfaces` omitted `bannerAltText`,
+`customerSurfaces` omitted `videoBrief.aspect`, `outputHygiene.surfaces` omitted
+`facts`. A hand-written enrolment list is that shape one level up.
+
+**Enrolment is now derived, by two independent detectors whose union must be
+enrolled** (§B.0 of that file):
+
+* **STATIC.** Every `.ts` under `lib/gate/` is read from disk *recursively*, so a
+  new FILE counts, and its exported function SIGNATURES are parsed. A function
+  is a candidate when it takes `OptimizedListing` or `AplusContent` and returns
+  text — `string`, `string | null`, `string[]`, `[string, string][]`, or `T[]`
+  for a `T` the gate itself declares with a `text: string` member (that type set
+  is read out of the sources too, so `ScanSurface` and `StyleSurface` are not
+  named in the test). `Failure[]` is not text, so the ~40 CHECKS drop out on
+  their **return type**, not on a name. A function with no declared return type
+  is undecidable and is therefore a candidate as well — fail-closed.
+* **DYNAMIC.** Every gate module is imported through `import.meta.glob` (vite
+  expands it from the filesystem, so again a new file counts) and every exported
+  function is CALLED with a listing whose fields carry a sentinel. Anything that
+  returns text-shaped output containing that sentinel is reading the listing,
+  whatever its signature claims.
+
+**Why it cannot be faked.** Neither detector reads a name, a comment or a
+marker: one reads the type annotations the compiler already enforces, the other
+reads behaviour. And a `READERS` row no longer carries a closure over the
+function it names — it carries an ADAPTER, and the oracle passes it the function
+object it resolved from that module's own exports. A row cannot enrol a stub, a
+wrapper or a lookalike; it is handed the real export or the run fails. Both
+directions are asserted: a candidate with no row fails naming `file::function`,
+and a row naming something no longer recognised fails too. The single escape
+hatch, `NOT_A_SURFACE_READER`, holds one row (`presentAllergens`, which returns
+filtered PACK rows and is a candidate only because it declares no return type),
+and that row is machine-checked — the function must still exist and must not be
+observed echoing listing text.
+
+**It found real omissions immediately.** The hand list held six readers; the
+derivation found nine. `aplusFactSurfaces` (the C12 A+ corpus),
+`factsComplianceSurfaces` and `attributeComplianceSurfaces` — three readers
+whose field coverage nothing measured — are now probed field by field like the
+rest.
+
+**Proved non-vacuous on the real tree, twice.** A throwaway
+`export function throwawayHygieneSurfaces(l: OptimizedListing): [string, string][]`
+added to `lib/gate/checks/c-hygiene.ts` fails §B.0 *"every detected surface
+reader has a READERS row"* with `checks/c-hygiene.ts::throwawayHygieneSurfaces —
+takes the listing and returns [string, string][] [found by: signature,
+behaviour]`. Re-typed to dodge the static detector entirely —
+`export function throwawayHygieneSurfaces(l: { title?: unknown; description?: unknown }): string[]`
+— it still fails, `[found by: behaviour]`. Removing it returns 29/29.
+
+**A future change to this must also change:** §B.0 of
+`tests/p1.fieldClosure.oracle.test.ts` — `signatureCandidates`,
+`behaviourCandidates`, `isTextReturn`, `NOT_A_SURFACE_READER` — and the
+`file` / `read` fields of every `READERS` row.
+
+### 12.2 CORRECTED RECORD — prompt hygiene classified pack guidance by WORD COUNT.
+
+`tests/promptHygiene.test.ts` corpus B scanned pack strings of **eight words or
+more**. A prohibition of seven words or fewer — `Avoid any disease or symptom
+wording` — was therefore never shown to the scan at all. The tree was clean; the
+threshold was the only thing keeping it that way, and a threshold is not a
+reason.
+
+The logic is **inverted**: every pack string rendered verbatim into a prompt is
+scanned, and an exemption must be PROVED from the pack's own data —
+(1) the string IS one of the terms the gate scans for; (2) it is a sibling in an
+array proved to be a gate-scanned lexicon, because one of that array's own
+elements satisfies (1) (this is what makes `naturalStates[9] = "post-menopause"`
+legal without a hand-written row); or (3) it is a `prohibited{Content,Marketing}`
+pattern LABEL that its OWN regex matches, i.e. an example of the thing it names.
+A guidance array can never qualify: no sentence of guidance equals a lexicon
+entry, so `promptRules.compliance` stays fully scanned at any length.
+
+Exemption (3) paid for itself on the first run: the label `"discount claim"` sat
+on the `\d{1,3}% off` pattern, which does not match it — the word `discount` is
+matched by the NEXT pattern — so the prompt was handing the model a C18
+promotional-claim term in order to forbid a different thing. Both `discount
+claim` labels were rewritten to describe their own regexes (`percentage-off
+claim`, `half-price claim`).
+
+Two assertions keep the change honest: **§B.1 proves it is a pure widening** —
+no string the old eight-word rule scanned may be exempt now — and a canary
+proves the new rule catches what the old one could not, asserted both ways (the
+six-word sentence is invisible to `isGuidanceShaped` and caught by the current
+corpus).
+
+**Canary, on the real tree:** adding `"Avoid any disease or symptom wording"` to
+`knowledge/compliance.supplements.json` → `promptRules.compliance` fails corpus B
+with `crossCheckCompliancePacks[0].promptRules.compliance[4]: C6 disease noun
+'disease'`. Six words: the previous rule could not see it.
+
+### 12.3 CORRECTED RECORD — prompt hygiene corpus C was a DIRECTORY, not a property.
+
+Corpus C extracted string literals from `lib/engine/prompts/*.ts` and nothing
+else, so a prohibition constant defined anywhere else and rendered into a prompt
+escaped all three corpora.
+
+Membership is now **measured** (§C.2). The suite runs the real generator three
+ways — a plain round, a REPAIR round and a REPARSE — captures every prompt at
+the LLM boundary, then enrols every module under `lib/` and `app/` one of whose
+own string literals is rendered verbatim into one of them. It immediately found
+two modules the directory could not: `lib/engine/optimize.ts` (the repair-round
+header) and `lib/engine/llm.ts` (the reparse instruction).
+
+Two supporting changes were required. `stringLiteralsOf` now skips REGEX
+literals: outside the prompts directory a character class like `/[^a-z0-9']+/`
+carries an apostrophe that would otherwise open a string frame and swallow the
+rest of the file as "authored text". And a segment only enrols a module if it is
+NOT also present in the pack — `lib/ingest/labelMap.ts` holds `country of
+origin`, which reaches the prompt from the attribute schema, not from it; text
+whose origin is the pack is corpus B's job.
+
+**Stated boundary.** The failure-context PAYLOAD (`[C6] bullets[2]: … → FIX:
+Remove banned disease term 'x'`) is deliberately outside this corpus, and the
+capture uses a marker in its place. That text is a REACTION to copy the model
+already wrote and was already failed for; it names the offending term because a
+repair instruction cannot be expressed otherwise, it exists only in a round that
+has already failed, and the gate re-runs afterwards, so an echo is caught
+deterministically rather than shipped. What A/B/C are about is the STANDING text
+every prompt carries whatever the model wrote — which is what a model
+paraphrases into house style, and where both live defects were found.
+
+**Canary, on the real tree:** adding `Never mention any disease anywhere in the
+rewritten copy.` to the repair header in `lib/engine/optimize.ts` fails §C.2 with
+`lib/engine/optimize.ts: C6 disease noun 'disease'`. The previous corpus C could
+not have read that file.
+
+### 12.4 CORRECTED RECORD — C4's own repair instruction could not converge.
+
+A live run of ASIN **B00EEEITVA** ended `verified:false` on a single **C4**
+failure (one of six runs in the batch; the other five verified clean, and the
+same ASIN verified on its other run). C4 routes correctly and always has —
+`description` has owned a row in `FIELD_TO_GROUP` since the table existed — so
+the loop regenerated the right group every round and still could not converge.
+
+The cause was arithmetic. C4 measures the **assembled** description: the model's
+text plus the verbatim disclaimer `optimize()` appends afterwards (`\n\n` plus
+156 characters on supplements). Three places stated the budget and all three
+disagreed:
+
+| where | what it said | derived from |
+| --- | --- | --- |
+| system prompt | `Description ≤2000 chars (leave ~250 chars headroom)` | nothing |
+| description prompt | `≤1700 chars` | nothing |
+| C4's own `fix` | `Shorten description to ≤2000 chars` | `rules.descriptionMax` |
+
+The `fix` line is the one `lib/engine/repair.ts` pastes into the regeneration
+prompt verbatim, so it is the most specific and most recent instruction the model
+sees — and **obeying it reproduces the defect**: 2000 characters of the model's
+own text plus 158 appended is 2158, and the next gate run reports the same
+failure with a slightly different number.
+
+`descriptionBudget(pack)` in `lib/gate/checks/c-length.ts` is now the single
+arithmetic — `max = rules.descriptionMax`, `reserve = separator + the pack's own
+disclaimer`, `budget = max - reserve` — and all three sites render from it.
+`DISCLAIMER_APPEND_SEPARATOR` lives beside the check that measures the assembled
+string and `lib/engine/optimize.ts` imports it, in the direction
+`lib/engine/repair.ts` already imports `runGate`; two homes for that one fact is
+exactly the drift that produced this.
+
+**C4 is not weakened.** Its trigger is byte-identical — empty, or assembled
+length over `rules.descriptionMax` — and `tests/c4.descriptionBudget.test.ts`
+pins both directions on both packs: a description written TO the budget lands
+exactly on the cap and passes; one character over still fails. The convergence
+property is asserted as a property, not as a string: the number is parsed back
+out of the repair line the loop would send, and a model writing exactly that many
+characters must pass, while the same test shows a model aiming at
+`descriptionMax` — the pre-fix instruction — still failing.
+
+**A future change to this must also change:** `descriptionBudget` and
+`c4DescriptionLength` in `lib/gate/checks/c-length.ts`, `appendDisclaimer` in
+`lib/engine/optimize.ts`, the `disclaimerHeadroom` line in
+`lib/engine/prompts/system.ts`, `descriptionPrompt` in
+`lib/engine/prompts/description.ts`, and `tests/c4.descriptionBudget.test.ts`.
+
+### 12.5 CORRECTED RECORD — the typography fold's "OPTIONALITY IS PRESERVED" note.
+
+`lib/engine/typography.ts` claimed *"`altText`, `bannerAltText` and `videoBrief`
+are all optional, and C29/C30 report a MISSING one as its own failure. Folding
+must not turn `undefined` into `''` … so each is rebuilt only when it is actually
+there."* Two things in that were wrong. Inside a PRESENT `videoBrief`,
+`t(video.aspect)` and `t(video.notes)` do coerce `undefined` to `''` and the two
+array fields coerce a non-array to `[]`, so it was never a property of the
+function. And C30 reports an absent `imagePlan[].altText` and an empty one
+identically (`"(empty)"`), and an absent `bannerAltText` not at all, so no guard
+here is load-bearing for a gate verdict.
+
+**The comment was corrected rather than the code**, because the rule the code
+actually follows is a good one and the comment stated it too broadly: a field is
+guarded exactly where the output CONTRACT makes it optional (`subcopy`,
+`bannerAltText`, `altText`, and `videoBrief` itself), so the fold never invents a
+key the model did not write — which matters for the persisted and exported JSON.
+`VideoBrief` declares all five of its fields required, so there is no "missing
+notes" state to preserve; the coercion hands malformed output to the checks in
+the shape the type promises instead of propagating a hole. Adding guards to match
+the over-broad reading would have made the emitted shape depend on model
+malformation and bought no signal.

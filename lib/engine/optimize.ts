@@ -10,6 +10,9 @@ import type {
   OptimizedListing,
 } from '@/lib/types';
 import { logServer } from '@/lib/server/log';
+// The separator lives with C4, which is the check that measures the assembled
+// field — see `DISCLAIMER_APPEND_SEPARATOR` there for why it has ONE home.
+import { DISCLAIMER_APPEND_SEPARATOR } from '@/lib/gate/checks/c-length';
 import { sanitizeBackendSearchTerms } from './backendSanitize';
 import { sanitizeBullets } from './bulletSanitize';
 import { buildFacts } from './facts';
@@ -62,7 +65,9 @@ export const ALL_GROUPS: GroupName[] = [
  * the LLM never writes it. The gate independently verifies afterwards.
  */
 function appendDisclaimer(text: string, disclaimer: string): string {
-  return text.includes(disclaimer) ? text : `${text.trimEnd()}\n\n${disclaimer}`;
+  return text.includes(disclaimer)
+    ? text
+    : `${text.trimEnd()}${DISCLAIMER_APPEND_SEPARATOR}${disclaimer}`;
 }
 
 /**

@@ -297,7 +297,7 @@
       ],
       [
         "\\b\\d{1,3}\\s*%\\s*off\\b",
-        "discount claim"
+        "percentage-off claim"
       ],
       [
         "\\b(?:discount|coupon|promo code|percent off)\\b",
@@ -341,7 +341,7 @@
       ],
       [
         "\\bhalf price\\b",
-        "discount claim"
+        "half-price claim"
       ],
       [
         "\\btwo for one\\b",
