@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { optimize } from '@/lib/engine/optimize';
-import { fieldToGroup, runRepairLoop } from '@/lib/engine/repair';
+import { runRepairLoop } from '@/lib/engine/repair';
 import type { GateContext } from '@/lib/gate/checks';
 import { runGate } from '@/lib/gate/runGate';
 import { hasNegationContext, normalize, tokenSet, utf8Bytes } from '@/lib/gate/util';

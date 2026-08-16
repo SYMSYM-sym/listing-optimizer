@@ -64,11 +64,15 @@ export function candidateTerms(current: ListingSnapshot, pack: KnowledgePack): s
   for (const term of [...crossPackDiseaseNouns(pack), ...crossPackActionPairedNouns(pack)]) {
     known.add(term.toLowerCase());
   }
-  for (const module of reachableCompliancePacks(pack)) {
+  // NOTE the loop variable is `compliance`, not `module`: `module` is a reserved
+  // CommonJS binding and shadowing it is a real hazard in a Next.js bundle
+  // (`@next/next/no-assign-module-variable`). Rename only — same iteration, same
+  // terms, same order.
+  for (const compliance of reachableCompliancePacks(pack)) {
     for (const term of [
-      ...(module.naturalStates ?? []),
-      ...(module.normalSymptomologyNouns ?? []),
-      ...(module.abnormalOnlySymptomNouns ?? []),
+      ...(compliance.naturalStates ?? []),
+      ...(compliance.normalSymptomologyNouns ?? []),
+      ...(compliance.abnormalOnlySymptomNouns ?? []),
     ]) {
       known.add(term.toLowerCase());
     }

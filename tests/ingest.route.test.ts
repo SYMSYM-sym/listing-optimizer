@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST } from '@/app/api/ingest/route';
 import { ProviderError } from '@/lib/ingest/providers/types';
-import { PasteError } from '@/lib/ingest/paste';
 import { mapProduct } from '@/lib/ingest/providers/rainforest';
 import { toSnapshot } from '@/lib/ingest/toSnapshot';
 import type { IngestError } from '@/lib/types';
