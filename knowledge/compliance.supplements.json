@@ -1506,12 +1506,12 @@
   ],
   "promptRules": {
     "_comment": "Category-specific generation guidance injected into the prompts. PACK DATA — lib/engine/prompts holds no category lexicon.",
-    "_complianceComment": "The COMPLIANCE headline rules. These used to be hard-coded English sentences inside lib/engine/prompts/system.ts; they are pack data now so the engine carries no category rule text.",
+    "_complianceComment": "The COMPLIANCE headline rules. These used to be hard-coded English sentences inside lib/engine/prompts/system.ts; they are pack data now so the engine carries no category rule text. THEY ARE WRITTEN AS POSITIVE CONSTRAINTS. The first two used to read 'NEVER claim to diagnose, treat, cure, prevent, or mitigate any disease or symptom' and 'NEVER claim the product replaces, matches, or acts like a prescription drug' — sentences that named the exact vocabulary the gate punishes, inside the system preamble every group is given. A live run on B00WNDG7V8 came back with imagePlan[1].notes and videoBrief.notes both carrying 'avoid any disease or symptom wording', which C6 then failed on 'disease': the instruction had been paraphrased into a customer-adjacent surface. The enforced vocabulary is still injected in full, immediately above these lines, as DATA (the noun union, the banned verbs, the superlative bans, the C21 shapes) — see tests/redteam3/redteam4. What changed is that no SENTENCE here names one. tests/promptHygiene.test.ts scans every guidance string in this file that is rendered into a prompt.",
     "compliance": [
-      "NEVER claim to diagnose, treat, cure, prevent, or mitigate any disease or symptom.",
-      "NEVER claim the product replaces, matches, or acts like a prescription drug.",
-      "No star-rating or review-count claims.",
-      "No price, discount, shipping or availability statement in copy."
+      "Every benefit sentence stays inside the structure/function safe harbour: say what an ingredient SUPPORTS in a normal, healthy body, in one of the approved shapes given in this brief. The enforced vocabulary is listed above as data — keep it out of your sentences entirely rather than restating any of it.",
+      "Describe only what the product itself is and does. Anything a licensed professional supplies stays outside the comparison completely: never write the product and such a thing into the same sentence.",
+      "Trust signals are what the label and the panel can verify. Ratings and review counts belong to the marketplace, not to your sentences.",
+      "Every sentence is about the product itself: what it is, what it contains, how it is used and who it is for. Commercial terms and availability live in the seller account and stay out of copy entirely."
     ],
     "_titleComment": "R33/R38 \u2014 the header fields (title, title75, itemHighlights) carry no UNEVIDENCED trust claim. The substantiation register reports one that slips through; this is the prevention half.",
     "title": [
@@ -1520,7 +1520,7 @@
     ],
     "system": [
       "Do NOT write the disclaimer anywhere — the system inserts the verbatim constant itself. Claim-bearing bullets end with a trailing \"*\" marker only.",
-      "If an allergen is present, declare it exactly as \"Contains: [Allergen]\" consistently; never write \"No Known Allergens\" when one is present."
+      "If an allergen is present, declare it exactly as \"Contains: [Allergen]\" consistently, on every surface that carries a declaration."
     ],
     "attributes": [
       "\"active_ingredients\" must be a subset of \"ingredients\" (actives only; full label list in ingredients) \u2014 every active is checked against the full list.",
@@ -1721,7 +1721,7 @@
     "supports the body's natural [process]",
     "helps support [structure] as part of a balanced diet",
     "supports comfort during [natural state]",
-    "helps prevent mild [symptom] associated with [natural state]",
+    "supports comfort through mild [symptom] associated with [natural state]",
     "supports normal [function] after [everyday activity]"
   ],
   "_allergenCompoundExclusionsComment": "Compounds whose NAME contains an allergen source word but which are not that allergen. Blanked out of the label text BEFORE the allergen-source scan, so 'Milk Thistle Extract' no longer produces a demand to write 'Contains: Milk' on the label and 'Gluten Free Oat Fibre' no longer produces 'Contains: Wheat'. Pack data — the gate holds no ingredient literals.",
@@ -2183,7 +2183,7 @@
       ],
       [
         "\\bICD[- ]?(?:9|10|11)?\\s*[:#]?\\s*[A-TV-Z]\\d{2}(?:\\.\\d+)?\\b",
-        "ICD diagnosis code (a diagnosis reference is a disease claim)"
+        "ICD code reference (a coded condition identifier is a regulated claim)"
       ]
     ]
   }

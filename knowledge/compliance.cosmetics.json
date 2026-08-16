@@ -445,12 +445,12 @@
   ],
   "promptRules": {
     "_comment": "Category-specific generation guidance injected into the prompts.",
-    "_complianceComment": "The COMPLIANCE headline rules. These used to be hard-coded English sentences inside lib/engine/prompts/system.ts; they are pack data now so the engine carries no category rule text.",
+    "_complianceComment": "The COMPLIANCE headline rules. These used to be hard-coded English sentences inside lib/engine/prompts/system.ts; they are pack data now so the engine carries no category rule text. THEY ARE WRITTEN AS POSITIVE CONSTRAINTS — see the matching note in compliance.supplements.json: a prohibition that names the vocabulary it forbids gets paraphrased into a customer-adjacent surface, and the gate then fails the echo. The enforced vocabulary is still injected in full, immediately above these lines, as DATA.",
     "compliance": [
-      "NEVER claim to diagnose, treat, cure, prevent, or mitigate any disease, skin condition or symptom — a cosmetic may only describe appearance and feel.",
-      "NEVER claim the product replaces, matches, or acts like a prescription drug or an in-office medical procedure.",
-      "No star-rating or review-count claims.",
-      "No price, discount, shipping or availability statement in copy."
+      "A cosmetic describes APPEARANCE AND FEEL and nothing else: every benefit sentence says how the product changes how something looks or feels, in one of the approved shapes given in this brief. The enforced vocabulary is listed above as data — keep it out of your sentences entirely rather than restating any of it.",
+      "Describe only what the product itself is and does. Anything a licensed professional supplies, or performs in an office, stays outside the comparison completely: never write the product and such a thing into the same sentence.",
+      "Trust signals are what the label and the INCI list can verify. Ratings and review counts belong to the marketplace, not to your sentences.",
+      "Every sentence is about the product itself: what it is, what it contains, how it is used and who it is for. Commercial terms and availability live in the seller account and stay out of copy entirely."
     ],
     "_titleComment": "R33/R38 \u2014 the header fields (title, title75, itemHighlights) carry no UNEVIDENCED trust claim. The substantiation register reports one that slips through; this is the prevention half.",
     "title": [
@@ -459,7 +459,7 @@
     ],
     "system": [
       "Do NOT write the disclaimer anywhere — the system inserts the verbatim constant itself. Claim-bearing bullets end with a trailing \"*\" marker only.",
-      "If an allergen is present, declare it exactly as \"Contains: [Allergen]\" consistently; never write \"No Known Allergens\" when one is present."
+      "If an allergen is present, declare it exactly as \"Contains: [Allergen]\" consistently, on every surface that carries a declaration."
     ],
     "attributes": [
       "\"ingredients\": the full INCI label list, in label order.",
@@ -1046,7 +1046,7 @@
       ],
       [
         "\\bICD[- ]?(?:9|10|11)?\\s*[:#]?\\s*[A-TV-Z]\\d{2}(?:\\.\\d+)?\\b",
-        "ICD diagnosis code (a diagnosis reference is a disease claim)"
+        "ICD code reference (a coded condition identifier is a regulated claim)"
       ]
     ]
   }

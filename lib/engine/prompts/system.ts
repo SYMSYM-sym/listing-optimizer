@@ -115,14 +115,14 @@ ${(cp.allergenRules ?? [])
 COMPLIANCE (structure/function claims ONLY — this is load-bearing):
 ${complianceLines}
 - Banned verbs as product claims: ${cp.diseaseVerbs.join(', ')}.
-- NEVER use disease/condition nouns anywhere. The deterministic gate scans for ALL of these on EVERY surface: ${activeNouns.join(', ')} — plus any other condition name. Reframe as a structure/function state ("supports healthy [system] function", "[parameter] balance").
+- Write every benefit as a structure/function state ("supports healthy [system] function", "[parameter] balance"). The deterministic gate scans EVERY surface against this full enforced list, and against any other condition name — keep all of it out of your copy: ${activeNouns.join(', ')}.
 - Banned marketing phrases: ${cp.superlativeBans.join(', ')}.
 ${packLines}
 ${approvedBlock}
 ${semanticBlock}
 ${allergenLines}`
     : `
-No category compliance module is active. Write factual, non-medical copy. No superlatives, no price, no review claims. Do not write any disclaimer text.`;
+No category compliance module is active. Write factual, everyday copy about what the product is and does. No superlatives, no price, no review claims. Do not write any disclaimer text.`;
 
   const disclaimerHeadroom = cp
     ? `- Description ≤${r.descriptionMax} chars (leave ~250 chars headroom — the system appends the verbatim compliance disclaimer).`

@@ -504,9 +504,10 @@
       ],
       [
         "\\bclinically\\s+studied\\b",
-        "clinical-endorsement claim (borderline: legitimate when substantiated, banned here because Amazon treats unsubstantiated clinical framing as a prohibited claim)"
+        "study-endorsement claim"
       ]
     ],
+    "_studyEndorsementNote": "The label above used to carry its own rationale inline: 'borderline: legitimate when substantiated, banned here because Amazon treats unsubstantiated clinical framing as a prohibited claim'. Every prohibited-marketing LABEL is rendered verbatim into the generation prompt, so that sentence put an abnormality marker AND a therapeutic verb inside an instruction the model paraphrases (tests/promptHygiene.test.ts). The rationale is unchanged and lives here; the label is the short name.",
     "surfaces": [
       "title",
       "title75",
@@ -944,7 +945,7 @@
       "mappings": [
         "Named-condition demand maps onto the compliant structure/function cluster the category already uses (balance, flora, pH, everyday comfort language). Write the cluster; record the banned term as captured-via with the cluster named in via.",
         "Condition-intent demand maps onto the INGREDIENT NAMES themselves — for that intent the ingredient is the search term. Name every entity in full and let the ingredient carry the intent.",
-        "Symptom-word demand stays in customer review language, which is where buyers are allowed to write it. Your copy mirrors only the compliant half of the pair (the everyday, qualified phrasing) and never the symptom word itself.",
+        "Demand carried by a word only a buyer may write stays in customer review language, which is where buyers are allowed to write it. Your copy mirrors the compliant half of the pair — the everyday, qualified phrasing — and that half alone.",
         "Every candidate term passes a four-test screen before it may be placed: legality, marketplace policy, substantiation, and conversion economics. A term can be lawful and still be strategically negative when the intent it brings converts badly."
       ]
     },

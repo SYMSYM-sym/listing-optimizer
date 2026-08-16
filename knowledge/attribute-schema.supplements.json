@@ -258,7 +258,7 @@
       "filterFacet": true,
       "required": true,
       "valueType": "string",
-      "example": "Contains: [ALLERGEN] — exact canonical string; never 'No Known Allergens' when a declarable allergen is present",
+      "example": "Contains: [ALLERGEN] — the exact canonical string, used whenever a declarable allergen is present",
       "source": "generated",
       "pendingTemplateConfirm": true
     },

@@ -16,6 +16,7 @@ export function backendPrompt(snapshot: ListingSnapshot, surfaces?: TitleSurface
 
 TASK: Backend search terms, ≤230 UTF-8 bytes (hard cap 249).
 - ONLY synonyms, common misspellings, and other-language (e.g. Spanish) variants NOT present in title, title75, or itemHighlights.
-- Lowercase, space-separated single words or short phrases, no punctuation, no brand names, no ASINs, and no medical or condition vocabulary — keep every term factual and non-medical.${forbidBlock}
+- Lowercase, space-separated single words or short phrases, no punctuation, no brand names, no ASINs.
+- Every term names what the product IS or how a shopper types it: identity, form, count, diet flags, audience, and the synonyms, misspellings and other-language variants of those. That list is exhaustive — this field is scanned exactly like a bullet, so anything outside it does not belong here.${forbidBlock}
 Return JSON: { "backendSearchTerms" }`;
 }

@@ -39,12 +39,12 @@ export function semanticClaimBlock(sdc: SemanticDrugClaims | undefined): string 
   const lines: string[] = [];
   if ((sdc.pathologicalActionVerbs ?? []).length > 0 && (sdc.anatomicalTargets ?? []).length > 0) {
     lines.push(
-      `- NEVER write an action verb (${sdc.pathologicalActionVerbs.join(', ')}) acting on a body structure (${[...targetTerms(sdc.anatomicalTargets), ...targetTerms(sdc.determinerScopedTargets)].join(', ')}). "Shrinks the lump", "clears the plaque", "melts the growth" are drug claims even though they name no disease.`,
+      `- Keep every verb on what an ingredient SUPPORTS, never on a body part it acts upon: one of these action verbs (${sdc.pathologicalActionVerbs.join(', ')}) beside one of these body structures (${[...targetTerms(sdc.anatomicalTargets), ...targetTerms(sdc.determinerScopedTargets)].join(', ')}) is a regulated claim even when the sentence names no condition at all.`,
     );
   }
   if ((sdc.replacementCues ?? []).length > 0 && (sdc.medicalDeviceOrTherapyNouns ?? []).length > 0) {
     lines.push(
-      `- NEVER say the product replaces, ends the need for, or lets the reader stop a medical therapy or device (${sdc.medicalDeviceOrTherapyNouns.join(', ')}). Banned phrasings include: ${sdc.replacementCues.join(', ')}.`,
+      `- Present the product only as itself, alongside whatever a licensed professional already provides. One of these therapies or devices (${sdc.medicalDeviceOrTherapyNouns.join(', ')}) written beside any of these phrasings (${sdc.replacementCues.join(', ')}) is a regulated claim.`,
     );
   }
   if ((sdc.functionRestorationVerbs ?? []).length > 0 && (sdc.lostFunctionNouns ?? []).length > 0) {
@@ -59,7 +59,7 @@ export function semanticClaimBlock(sdc: SemanticDrugClaims | undefined): string 
     }
   }
   if (lines.length === 0) return '';
-  return `SEMANTIC DRUG CLAIMS (deterministically checked by C21 — a claim needs no disease word to be illegal):\n${lines.join('\n')}`;
+  return `SEMANTIC CLAIM SHAPES (deterministically checked by C21 — a claim needs no condition name to be illegal):\n${lines.join('\n')}`;
 }
 
 /**
@@ -102,7 +102,7 @@ export function approvedClaimBlock(cp: CompliancePack | null | undefined): strin
   }
   if (markers.length > 0) {
     lines.push(
-      `- These words turn the same sentence into a medical claim — never pair one with a benefit: ${markers.join(', ')}.`,
+      `- These words turn the same sentence into a regulated claim — never pair one with a benefit: ${markers.join(', ')}.`,
     );
   }
   return lines.join('\n');
@@ -203,7 +203,7 @@ Attributes: ${JSON.stringify(snapshot.attributes)}`;
  */
 export function styleRulesBlock(style: StyleRules): string {
   const lines: string[] = [
-    `- Sentence case only. Do NOT use all-capital words of ${style.allCapsMinWordLen}+ characters for emphasis anywhere (no all-caps bullet hooks). These acronyms and registered ingredient/strain marks are the only exceptions: ${style.allCapsAllowlist.join(', ')}.`,
+    `- Sentence case only. Do NOT use all-capital words of ${style.allCapsMinWordLen}+ characters for emphasis anywhere (no all-caps bullet hooks). These acronyms and registered ingredient/strain marks are the exceptions: ${style.allCapsAllowlist.join(', ')}.`,
     '- Registered ingredient/strain trademarks keep their registered casing EXACTLY as printed on the label (write each such mark character for character; never convert one to sentence case or lowercase).',
   ];
   if (style.bulletMustStartCapital) {
@@ -224,7 +224,7 @@ export function styleRulesBlock(style: StyleRules): string {
     `- Never use promotional or ranking terms in ${style.titleTermBanSurfaces.join(', ')}: ${style.titleTermBans.join(', ')}.`,
   );
   lines.push(
-    `- Write the description as PLAIN TEXT paragraphs separated by a blank line. Do not emit HTML: the only tag Amazon still honours there is ${style.descriptionAllowedHtml
+    `- Write the description as PLAIN TEXT paragraphs separated by a blank line. Do not emit HTML: the single tag Amazon still honours there is ${style.descriptionAllowedHtml
       .map((t) => `<${t}>`)
       .join('/')}, and the export adds it for you. Keep the description under ${style.descriptionMaxBytes} UTF-8 bytes.`,
   );
@@ -242,7 +242,7 @@ export function prohibitedContentBlock(rules: ProhibitedContentRules | undefined
   return [
     'AMAZON PROHIBITED CONTENT — never include any of the following anywhere in the listing:',
     `- ${labels.join('\n- ')}`,
-    '- This includes prices written as symbols ($19.95) AND spelled out ("thirty nine dollars and ninety five cents"). Never state, imply or reference the product price, discounts, shipping offers, stock/availability, item condition, or any email, URL or phone number.',
+    '- This covers a price written with a currency symbol and figures AND the same amount spelled out in words. Never state, imply or reference the product price, discounts, shipping offers, stock/availability, item condition, or any email, URL or phone number.',
   ].join('\n');
 }
 
@@ -271,10 +271,13 @@ export function prohibitedMarketingBlock(rules: ProhibitedMarketingRules | undef
  * DELIBERATELY RENDERED AHEAD OF `TASK:`, for the same documented reason the
  * style block is: it is an ENUMERATION OF DATA the gate enforces (the surface
  * names and the six status words), not a sentence of the form "avoid <banned
- * word>". `tests/promptHygiene.test.ts` scans everything AFTER `TASK:`, which
- * is the part a model paraphrases into customer-adjacent output; a status word
- * echoed out of this table lands in a JSON field the customer never sees and
- * that no copy surface is built from.
+ * word>". A status word echoed out of this table lands in a JSON field the
+ * customer never sees and that no copy surface is built from.
+ *
+ * Position is no longer what exempts it. `tests/promptHygiene.test.ts` scans
+ * the AUTHORED text of this module wherever it sits — the prose below is
+ * corpus C, the interpolated pack lists are not — so a prohibition written
+ * here would fail CI even though it renders before `TASK:`.
  */
 /**
  * THE HERO-SPEC RULE, rendered FROM PACK DATA (`rules.units`) — the prevention
@@ -297,8 +300,9 @@ export function prohibitedMarketingBlock(rules: ProhibitedMarketingRules | undef
  *
  * RENDERED AHEAD OF `TASK:`, for the documented reason `styleRulesBlock` is:
  * it is an ENUMERATION OF DATA the gate enforces, not a sentence of the form
- * "avoid <banned word>" inside the instruction a brief gets paraphrased from
- * (see `tests/promptHygiene.test.ts`).
+ * "avoid <banned word>" inside the instruction a brief gets paraphrased from.
+ * Its PROSE is scanned by `tests/promptHygiene.test.ts` all the same (corpus
+ * C), which is what stopped the pre-`TASK:` blocks being an unguarded region.
  */
 export function heroSpecBlock(units: UnitRules | undefined): string {
   const phrases = (units?.perServingPhrases ?? []).map((p) => p.trim()).filter(Boolean);
