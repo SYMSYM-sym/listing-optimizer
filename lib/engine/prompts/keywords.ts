@@ -34,6 +34,15 @@ import { demandRecaptureBlock, keywordVocabularyBlock, snapshotBlock } from './s
  * claim about the copy, so code now measures it and corrects the row — and the
  * instruction below states the meaning plainly, because a status the model
  * understands is one code has to correct less often.
+ *
+ * E6 — WHAT `negative` IS FOR, said here for the same reason and from the same
+ * kind of pack line. Two live runs used it as a bin for "terms I chose not to
+ * target" and put the product's OWN ingredient and its OWN diet attribute on it;
+ * the copy carries both legitimately, C28 reported them correctly, and the run
+ * could not converge, because `negative` is the ONE status derivation must never
+ * overwrite — for a genuine rival, presence in the copy IS the violation. The
+ * incoherent classification is rejected in code at the derivation boundary; the
+ * `negativeScopeNote` line rendered below is what stops it being proposed.
  */
 export interface KeywordSurfacesView {
   title: string;
@@ -109,6 +118,19 @@ export function keywordsPrompt(
     typeof kr?.ownBrandNote === 'string' && kr.ownBrandNote.trim() !== ''
       ? `- ${kr.ownBrandNote.trim()}`
       : '';
+  // E6 — the SCOPE of `negative`, from PACK DATA (this module holds no lexicon).
+  // The own-brand line above covers ONE instance of a class; this covers the
+  // class. A live run used the negative list as a bin for "terms I chose not to
+  // target" and put the product's own ingredient and its own diet attribute on
+  // it; the copy legitimately carried both, C28 correctly reported them, and the
+  // run could not converge — `negative` is the one status the derivation must
+  // never overwrite, because for a genuine rival its presence in the copy IS the
+  // violation. Code rejects the incoherent classification at the derivation
+  // boundary; this line stops it being proposed.
+  const negativeScope =
+    typeof kr?.negativeScopeNote === 'string' && kr.negativeScopeNote.trim() !== ''
+      ? `- ${kr.negativeScopeNote.trim()}`
+      : '';
   const surfaces = [
     'THE FINISHED COPY (read it — this is the listing your reference describes, and the placement map is computed from these exact strings):',
     `title: ${emitted.title}`,
@@ -139,6 +161,7 @@ ${recapture}
 - THE TWO ABSENCE WORDS ARE FOR TERMS THE COPY ABOVE DOES NOT CARRY. "Held back for a later cycle" and "deliberately left alone" both say the term is NOT in this listing. Every ingredient you can read in the copy above, every spec it states and every phrase it uses IS in this listing — such a row is a placement, and code records it as one from the copy itself. Spend those two statuses on terms you are choosing to leave out.
 - "why" is required on every row: ONE short sentence of evidence${whyLimit}. It is evidence, not an essay.
 - A row that says a rival's brand name, or any term the compliance rules above forbid, belongs on the negative list. Every negative row states its reason in "why".
+${negativeScope}
 ${ownBrand}
 - Cover the listing properly WITHIN THAT BUDGET: the head terms, the named entities, the qualifier and trust terms, the buyer-language phrases, the invisible-only variants, and the terms this listing deliberately leaves alone. Spend the rows on the terms that decide the listing; a near-duplicate of a row you have already written earns nothing.
 

@@ -237,6 +237,77 @@ import type {
  */
 
 /**
+ * THE FIFTH LIVE DEFECT — `negative` USED AS A BIN FOR "TERMS I CHOSE NOT TO
+ * TARGET", AND THE THIRD INSTANCE OF ONE COHERENCE CLASS.
+ *
+ * Production, two ASINs, three of nine runs, and neither could converge:
+ *
+ *   B00IO89MYA  C28 | keywords[24] | negative term '<an ingredient of the
+ *               |                  | product itself>' appears on 'title'
+ *   B00EEEITVA  C28 | keywords[24] | negative term '<a diet attribute of the
+ *               |                  | product itself>' appears on 'itemHighlights'
+ *
+ * The two terms are quoted verbatim in CONFORMANCE-DEVIATIONS.md and in
+ * `tests/keywordDerivation.productProperty.test.ts`; they are not repeated here
+ * because engine files carry no category vocabulary. One is an ACTUAL INGREDIENT
+ * of the product being optimized and the other a LEGITIMATE DIET ATTRIBUTE of
+ * it. The copy names both because a listing for that product must name them.
+ *
+ * WHY NO REPAIR ROUND COULD CLEAR IT. `negative` is the one status the
+ * derivation must never overwrite — for a genuine rival, presence in the copy IS
+ * the violation R50 exists to report, so deriving it away would turn the check
+ * that keeps rival brands out into a relabelling exercise (see the fourth note).
+ * The model used that status as a dumping ground for "terms I decided not to
+ * target", which is what `not-targeted` is for. C28 was right about its rule and
+ * the model was wrong about its input, and the only fix the failure ASKS for is
+ * "delete your own ingredient from your own title".
+ *
+ * THE SAME PRINCIPLE, ONE CLASS WIDER. The own-brand note above says a term that
+ * IS the subject product's brand cannot be a rival's brand. That is one instance
+ * of a general fact: A TERM THAT IS A PROPERTY OF THE PRODUCT BEING OPTIMIZED
+ * CANNOT BE A RIVAL-EXCLUSION TERM. The brand is one such property; so is an
+ * ingredient, so is a diet or allergen attribute, so is the form or the size it
+ * is sold in. All of them are facts CODE CAN COMPUTE EXACTLY, from the same
+ * place the brand comes from — the INGESTED SNAPSHOT.
+ *
+ * RESOLVED FROM THE SNAPSHOT, NEVER FROM THE GENERATED COPY. Deriving "is this a
+ * property of the product?" from the copy would let the model launder a rival by
+ * simply writing it in: the term would appear, and appearing would be the reason
+ * it stopped being scanned for appearing. So the source is
+ * `snapshot.attributes` — the ingested page's own STRUCTURED marketplace data
+ * (its ingredient and active-ingredient lists, its diet and allergen flags, and
+ * every other structured attribute it declares). The snapshot's free-text
+ * BULLETS and DESCRIPTION are deliberately NOT read: a competitor can be named
+ * legitimately in prose ("unlike the refrigerated brands"), and prose is exactly
+ * where a rival brand would be sitting.
+ *
+ * FOUR BOUNDS, each one narrowing what this can exempt:
+ *   1. STRUCTURED ATTRIBUTES ONLY, per the paragraph above.
+ *   2. EXACT NORMALISED EQUALITY ON A WHOLE ITEM — the same `identityKey` and
+ *      the same equality-only discipline `ownBrandIdentity` established. A list
+ *      value is split into its ITEMS on list punctuation and each item must
+ *      match WHOLE: sharing a word is not being the thing, so a term that is a
+ *      SUBSTRING of an ingredient ("berry" inside an elderberry) is not
+ *      exempted, exactly as "immunity" is not exempted by the brand "Instant
+ *      Immunity".
+ *   3. THE AUTOMATIC COMPETITOR-DERIVED RIVAL SET IS NEVER TOUCHED. That set
+ *      (`lib/audit/rivalBrands.ts`, from the competitor ASINs the OPERATOR
+ *      typed) is not a keyword row at all: it is scanned by C28 directly and
+ *      nothing in this module can reach it. A rival brand that happens to
+ *      collide with an ingredient string therefore still fails the run — see
+ *      `tests/keywordDerivation.productProperty.test.ts` (d). That separation is
+ *      why `rivalBrandNames` subtracts `ownBrandIdentity` and NOT this wider
+ *      set: widening the subtraction would disarm exactly that leg.
+ *   4. NO SNAPSHOT => NO EXEMPTION, like every other identity source here.
+ *
+ * RECLASSIFIED, NOT DELETED, AND SAID OUT LOUD — the own-brand path exactly. The
+ * row's real placement is derived from the finished copy like any other term's
+ * and the correction is written onto `note`. And the floor still counts only
+ * SURVIVING negatives, so a reference whose negatives were all self-descriptions
+ * fails `minNegatives` rather than satisfying it with its own label.
+ */
+
+/**
  * THE STATUS THE MODEL OWNS — exactly one, and this is the whole of the reason:
  * `negative` states an INTENT ("exclude this rival brand") whose falsification
  * by the copy IS THE VIOLATION rather than a mislabelling, so it must never be
@@ -408,6 +479,81 @@ export function ownBrandIdentity(
   return out;
 }
 
+/**
+ * List punctuation that makes ONE structured attribute value a LIST OF ITEMS.
+ *
+ * Marketplace attribute values are semi-structured: a diet field holds
+ * `A, B, C`, an ingredient field holds `X; Y; Z`. Splitting on this and matching
+ * each ITEM whole is what lets one ingredient out of a list be recognised while
+ * keeping the match an EQUALITY — the alternative, substring containment against
+ * the joined value, would exempt every word inside every ingredient name and is
+ * precisely the wildcard this must not be. No category vocabulary: punctuation.
+ */
+const PROPERTY_ITEM_SEPARATOR = /[,;|\n\r]+/;
+
+/**
+ * THINGS THAT ARE PROPERTIES OF THE SUBJECT PRODUCT, read from the ingested
+ * snapshot's STRUCTURED attributes and from nothing else.
+ *
+ * Every value of `snapshot.attributes` — the normalised underscore_case
+ * marketplace fields — split into its list items and keyed by the SAME
+ * `identityKey` the brand identity is matched with. This module names no
+ * attribute KEY: naming one would be a category lexicon in the engine
+ * (`tests/category.literals.test.ts`), and it would also be wrong — the point is
+ * that everything the ingested page declares about ITSELF is a property of
+ * itself, whichever key it arrived under.
+ *
+ * WHAT IS NOT READ, and this is the load-bearing half: the snapshot's `title`,
+ * `bullets` and `description`. Free-text prose can name a competitor lawfully,
+ * so mining prose for "properties" would hand a rival brand an exemption. Also
+ * not read: the GENERATED copy, at all — see the fifth note above.
+ *
+ * Matched by EQUALITY on a whole item. A term that merely contains, or is
+ * contained by, an item is not that property and is not exempted.
+ */
+export function productPropertyIdentity(snapshot?: ListingSnapshot): Set<string> {
+  const out = new Set<string>();
+  for (const value of Object.values(snapshot?.attributes ?? {})) {
+    for (const item of str(value).split(PROPERTY_ITEM_SEPARATOR)) {
+      const k = identityKey(item);
+      if (k) out.add(k);
+    }
+  }
+  return out;
+}
+
+/** Which KIND of self-reference a term turned out to be. */
+export type ProductIdentityKind = 'brand' | 'property';
+
+/**
+ * THE ONE SOURCE OF TRUTH for "this term names the product being optimized".
+ *
+ * The union of the two identity sets, each keyed by `identityKey` and each
+ * matched by equality only, with the KIND recorded so the correction written
+ * onto the row can say which fact it rests on. `brand` wins a collision because
+ * it is the more specific statement.
+ *
+ * DELIBERATELY NOT THE SAME FUNCTION AS `ownBrandIdentity`, and the reason is a
+ * bound rather than an oversight. `lib/audit/rivalBrands.ts` subtracts the
+ * subject's identity from the AUTOMATIC competitor-derived rival set so that an
+ * operator who pastes their own ASIN into the competitor box cannot make their
+ * own brand unwritable. That subtraction must stay BRAND-ONLY: widening it to
+ * every product property would mean a competitor brand colliding with one of our
+ * ingredient strings quietly left the automatic rival set — the operator-supplied
+ * signal disarmed by a coincidence. So `ownBrandIdentity` remains the narrow set
+ * that path uses, and this is the wider set the DERIVATION uses, with one shared
+ * key function and one shared equality rule between them.
+ */
+export function productIdentity(
+  listing: OptimizedListing | undefined,
+  snapshot?: ListingSnapshot,
+): Map<string, ProductIdentityKind> {
+  const out = new Map<string, ProductIdentityKind>();
+  for (const k of productPropertyIdentity(snapshot)) out.set(k, 'property');
+  for (const k of ownBrandIdentity(listing, snapshot)) out.set(k, 'brand');
+  return out;
+}
+
 export function deriveKeywordPlacement(
   rows: KeywordTerm[],
   listing: OptimizedListing,
@@ -458,7 +604,9 @@ export function deriveKeywordPlacement(
   };
 
   // Resolved ONCE per run, from the snapshot and the pinned canonical name.
-  const identity = ownBrandIdentity(listing, snapshot);
+  // The wider of the two sets — see `productIdentity` for why the automatic
+  // competitor-derived rival set deliberately does NOT use it.
+  const identity = productIdentity(listing, snapshot);
 
   return rows.map((raw) => {
     const row = (raw ?? {}) as KeywordTerm;
@@ -469,14 +617,18 @@ export function deriveKeywordPlacement(
 
     const status = str(row.status).trim() as KeywordStatus;
     // THE INCOHERENT CLASSIFICATION, rejected at the boundary. `negative` means
-    // "appears nowhere" and exists to keep RIVAL brands out (R50); the subject
-    // product's own brand is not a rival and MUST appear in its own brand
-    // attributes, so the run could never converge on it. Equality against the
-    // resolved identity only — a term that merely shares a word with the brand
-    // is left exactly where the model put it.
-    const selfBrand = status === 'negative' && identity.has(identityKey(term));
+    // "appears nowhere" and exists to keep RIVAL brands out (R50); a term that
+    // is THIS PRODUCT — its brand, or a property the ingested snapshot's own
+    // structured attributes record about it — is not a rival and appears in the
+    // copy because the listing is about it, so the run could never converge on
+    // it. Equality against the resolved identity only: a term that merely shares
+    // a word with the brand, or sits inside an ingredient name, is left exactly
+    // where the model put it.
+    const selfKind = status === 'negative' ? identity.get(identityKey(term)) : undefined;
+    const selfBrand = selfKind === 'brand';
+    const selfProperty = selfKind === 'property';
 
-    if (!selfBrand && MODEL_OWNED_STATUSES.includes(status)) {
+    if (selfKind === undefined && MODEL_OWNED_STATUSES.includes(status)) {
       // The model's judgement stands, and for `negative` it must: a rival brand
       // sitting in the copy is the violation R50 exists to detect, so this row
       // reaches C28 saying exactly what the model said. It declares no surfaces
@@ -498,6 +650,12 @@ export function deriveKeywordPlacement(
         ` or its canonical product name), so it cannot be a rival-brand negative — a listing must` +
         ` carry its own brand. The row was reclassified from 'negative' and its placement read off` +
         ` the finished copy.`
+      : selfProperty
+      ? `Derived: '${term}' is a PROPERTY OF THIS PRODUCT — the ingested listing's own structured` +
+        ` attributes record it (an ingredient, a diet or allergen attribute, or another declared` +
+        ` attribute value), so it cannot be a rival-exclusion negative: this listing states its own` +
+        ` properties. The row was reclassified from 'negative' and its placement read off the` +
+        ` finished copy.`
       : absenceClaim
         ? `Derived: the row said '${status}', which states this term is NOT in the copy — but the` +
           ` finished copy carries it. The status and the surfaces were read off the copy instead,` +

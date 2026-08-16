@@ -29,7 +29,7 @@ import {
 import { mapProduct } from '@/lib/ingest/providers/rainforest';
 import { toSnapshot } from '@/lib/ingest/toSnapshot';
 import { loadPack } from '@/lib/knowledge/loadPack';
-import type { OptimizedListing } from '@/lib/types';
+import type { KnowledgePack, OptimizedListing } from '@/lib/types';
 import { mockLlm } from './fixtures/mockLlm';
 import { rainforestSample } from './fixtures/rainforest.sample';
 
@@ -139,20 +139,64 @@ import { rainforestSample } from './fixtures/rainforest.sample';
  *            containing that sentinel is reading the listing, whatever its
  *            signature says.
  *
- * WHY IT CANNOT BE FAKED. Neither detector reads a name, a comment or a
- * marker: one reads the TYPES the compiler already enforces, the other reads
- * BEHAVIOUR. And enrollment is not a claim either — a `Reader` row does not
- * carry a closure over the function it names; it carries an ADAPTER, and the
- * oracle passes it the function object it resolved from that module's own
- * exports (§B.0 `resolve`). A row cannot enroll a stub, a wrapper or a
- * lookalike: it is handed the real export or the run fails. A stub row would
- * fail anyway, on every field in §C.
+ * WHAT THE DERIVATION CATCHES — AND WHAT IT DOES NOT.
+ *
+ * R3 — CORRECTED RECORD. This header used to be titled "WHY IT CANNOT BE FAKED"
+ * and the same sentence stood in CONFORMANCE-DEVIATIONS.md. IT WAS FALSE, and an
+ * overstated coverage claim is the exact failure class this whole record exists
+ * to catch — so it is corrected here rather than softened. An adversarial
+ * reviewer put a FIVE-LINE reader into `lib/gate/checks/` that escaped BOTH
+ * detectors, and tried eight evasion shapes in all; SIX escaped.
+ *
+ * WHAT IT CATCHES — THE ACCIDENTAL CLASS, which is what all four historical
+ * bypasses were. A plainly-declared `export function` in `lib/gate/**` that
+ * names `OptimizedListing` / `AplusContent` in its parameter list and declares a
+ * text return type is caught by the STATIC detector on the annotation the
+ * compiler already enforces (a MISSING return type is caught too — undecidable
+ * is treated as a reader). Anything the DYNAMIC detector's argument vectors can
+ * call and that echoes probe text back is caught whatever its signature says —
+ * that leg caught an arrow function assigned to an exported `const`, which the
+ * static parser does not read. Neither detector reads a name, a comment or a
+ * marker, so a reader added the ordinary way cannot be missed by ordinary means.
+ *
+ * WHAT IT DOES NOT CATCH — CODE SHAPED TO EVADE IT. The static half is a REGEX
+ * over ONE declaration form (`export function`) matching ONE literal type name;
+ * the dynamic half only sees paths a fixed set of argument vectors reaches with
+ * one probe listing. Demonstrated escapes:
+ *   - a parameter typed through an ALIAS (`type L2 = OptimizedListing`), so the
+ *     literal type name never appears — combined with a return path the probe
+ *     listing does not exercise, so the behavioural half sees nothing either.
+ *     That pair is the five-line reader;
+ *   - an OBJECT METHOD (`export const readers = { text(l) {…} }`): not
+ *     `export function`, and the export is not itself callable as a function;
+ *   - a FACTORY: the export returns the reader, so the probe gets a function
+ *     back rather than text;
+ *   - a GENERIC with the constraint in the GENERICS group
+ *     (`export function f<T extends OptimizedListing>(l: T)`): the parser skips
+ *     that group before reading the parameters;
+ *   - a function declared without `export` and re-exported afterwards;
+ *   - a reader defined OUTSIDE `lib/gate/**` — both halves are rooted there.
+ * None of these is reachable by accident, and none is claimed to be covered.
+ * What is claimed is that a reader added the way readers have actually been
+ * added must be enrolled, and that is what is asserted below.
+ *
+ * ENROLLMENT IS NOT A CLAIM EITHER. A `Reader` row does not carry a closure over
+ * the function it names; it carries an ADAPTER, and the oracle passes it the
+ * function object it resolved from that module's own exports (§B.0 `resolve`).
+ * A row cannot enroll a stub, a wrapper or a lookalike: it is handed the real
+ * export or the run fails. A stub row would fail anyway, on every field in §C.
  *
  * BOTH DIRECTIONS. A candidate with no row fails, naming `file::function`; a
  * row naming something that is no longer an export, or no longer a candidate,
  * fails too. The one escape hatch is `NOT_A_SURFACE_READER`, whose rows must
  * name a function that still exists AND that the dynamic probe does not observe
  * echoing listing text.
+ *
+ * AND THE ROW'S OTHER CLAIM IS MEASURED NOW TOO — see §B.1. `checks` used to be
+ * prose: nothing verified that the checks a row names actually consume that
+ * reader, so a check refactored onto a private PARTIAL scanner would have
+ * reopened the original bypass class with this file still green and no new
+ * reader to enrol. §B.1 binds them behaviourally and states its own limits.
  */
 
 const SENTINEL = 'ZQXJVSENTINELP1';
@@ -578,8 +622,25 @@ interface Reader {
   name: string;
   /** The file it is exported from, relative to `lib/gate/`. */
   file: string;
-  /** The checks that read the listing through it. */
+  /**
+   * The checks that read the listing through it.
+   *
+   * R3 — THIS WAS PROSE, AND PROSE IS WHAT THIS RECORD EXISTS TO DISTRUST.
+   * Nothing verified that the checks named here consume this reader's coverage,
+   * so a check refactored onto a private partial scanner would reopen the
+   * original bypass class with the oracle still green and no new reader to
+   * enrol. §B.1 now MEASURES it: every check id in this string is resolved from
+   * `runGate`'s own dispatch table, called against an instrumented listing, and
+   * required to touch every field this reader reads. See §B.1 for exactly what
+   * that does and does not prove.
+   */
   checks: string;
+  /**
+   * §B.1 — `CHECKID` or `CHECKID::canonical.path` -> why that check legitimately
+   * does not consume this reader's coverage. Machine-checked for staleness like
+   * every other exemption table here.
+   */
+  checkExempt?: Record<string, string>;
   /**
    * The OBJECT this reader walks, when it is not the whole listing. Taken from
    * the function's own signature, not from a judgement about scope.
@@ -710,6 +771,123 @@ const READERS: Reader[] = [
   },
 ];
 
+// ===========================================================================
+// §B.1 — WHICH CHECK CONSUMES WHICH READER, MEASURED
+// ===========================================================================
+
+/** The gate's OWN dispatch table, parsed from `lib/gate/runGate.ts`. */
+const RUN_GATE_SRC = join(process.cwd(), 'lib', 'gate', 'runGate.ts');
+
+interface Dispatch {
+  checkId: string;
+  fn: string;
+  args: string[];
+}
+
+/**
+ * `guarded('C18', () => c18ProhibitedContent(listing, pack))` -> the row.
+ *
+ * Derived from the gate's own source, so a check added to `runGate` is measured
+ * without anyone editing this file, and a check id named in a `READERS` row that
+ * the gate no longer dispatches fails below.
+ */
+function gateDispatch(src: string): Dispatch[] {
+  const out: Dispatch[] = [];
+  const re = /guarded\(\s*'([^']+)'\s*,\s*\(\)\s*=>\s*(\w+)\(([^)]*)\)\s*\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src)) !== null) {
+    out.push({
+      checkId: m[1]!,
+      fn: m[2]!,
+      args: (m[3] ?? '')
+        .split(',')
+        .map((a) => a.trim())
+        .filter(Boolean),
+    });
+  }
+  return out;
+}
+
+/** Check ids named in a `checks` prose string. */
+const checkIdsIn = (prose: string): string[] => [
+  ...new Set(prose.match(/\b(?:[CA]\d+|PACK|GEN)\b/g) ?? []),
+];
+
+/**
+ * The canonical paths a reader ACTUALLY READS — its subtree, minus whatever the
+ * §C probe found it does not return. A subtree reader is only ever measured
+ * inside its own subtree, so the restriction has to be applied here too; without
+ * it every field outside the subtree would read as "covered" and the binding
+ * would demand that A+ checks read the backend field.
+ */
+const readerCoverage = (reader: Reader): string[] => {
+  const unread = new Set(unreadBy.get(reader.name)!.map((l) => l.canon));
+  return [
+    ...new Set(
+      leaves
+        .filter((l) => !reader.subtree || l.canon.startsWith(`${reader.subtree}.`))
+        .map((l) => l.canon),
+    ),
+  ].filter((c) => !unread.has(c));
+};
+
+/**
+ * The shipped pack with its OPERATOR-SUPPLIED, DEFAULT-EMPTY lexicon ARMED.
+ *
+ * `fictionPhrases` is documented as "operator-supplied known-false descriptors;
+ * empty by default", and C11/A6 return early when it is. Measuring the binding
+ * against the empty default would have said "C11 consumes nothing" — a fact
+ * about this pack's DATA, not about whether the check is wired to its reader,
+ * which is what the row claims. Arming it is therefore not a workaround: it is
+ * the difference between measuring the structure and measuring one config. It
+ * only ever ADDS a live leg, so it cannot hide a missing one.
+ */
+function armedPack(): KnowledgePack {
+  const p = JSON.parse(JSON.stringify(pack)) as KnowledgePack;
+  if (p.compliancePack) p.compliancePack.fictionPhrases = ['zzarmedfictiondescriptor'];
+  return p;
+}
+
+/**
+ * The listing, with every string leaf replaced by a GETTER that records the
+ * canonical path it was read from.
+ *
+ * This is the measurement §B.1 rests on and its limits are exactly the limits of
+ * the claim: it observes that a check READ a field, not that it SCANNED it. That
+ * is an over-approximation in the permissive direction — a check that touches a
+ * field for an unrelated reason counts as consuming it — and it is still the
+ * property that matters here, because the failure mode being closed is a check
+ * that stops touching fields its reader covers.
+ */
+function instrumented(base: OptimizedListing, all: Leaf[]): {
+  listing: OptimizedListing;
+  touched: Set<string>;
+} {
+  const listing = clone(base);
+  const touched = new Set<string>();
+  for (const leaf of all) {
+    const tokens = leaf.concrete.match(/[^.[\]]+/g) ?? [];
+    let node = listing as unknown as Record<string, unknown>;
+    for (let i = 0; i < tokens.length - 1; i++) {
+      node = node[tokens[i]!] as Record<string, unknown>;
+    }
+    const key = tokens[tokens.length - 1]!;
+    let value = node[key];
+    Object.defineProperty(node, key, {
+      configurable: true,
+      enumerable: true,
+      get() {
+        touched.add(leaf.canon);
+        return value;
+      },
+      set(v: unknown) {
+        value = v;
+      },
+    });
+  }
+  return { listing, touched };
+}
+
 /**
  * Fields NO content reader reads, and why. These are the deliberate ones: each
  * row is a decision, and §D asserts each is still true.
@@ -752,6 +930,9 @@ let sources: Map<string, string>;
 let candidates: Map<string, Candidate>;
 /** reader name -> the function resolved from that reader's OWN module export. */
 let resolved: Map<string, SurfaceFn>;
+/** §B.1 — the gate's own dispatch table, and what each check actually touched. */
+let dispatch: Map<string, Dispatch>;
+let touchedByCheck: Map<string, Set<string>>;
 
 const clone = (l: OptimizedListing): OptimizedListing =>
   JSON.parse(JSON.stringify(l)) as OptimizedListing;
@@ -830,6 +1011,28 @@ beforeAll(async () => {
   }
 
   unreadBy = measure(READERS, populated, leaves);
+
+  // --- §B.1: what each CHECK touches, from the gate's own dispatch table ---
+  dispatch = new Map(
+    gateDispatch(readFileSync(RUN_GATE_SRC, 'utf8')).map((d) => [d.checkId, d]),
+  );
+  const checksModule = await GATE_MODULES[moduleKeyFor('checks/index.ts')]!();
+  const probeCtx = { subcategories: ['probiotic', 'digestive'], snapshotText: snapshot.title };
+  const { listing: watched, touched } = instrumented(populated, leaves);
+  const argFor: Record<string, unknown> = { listing: watched, pack: armedPack(), ctx: probeCtx };
+  touchedByCheck = new Map();
+  for (const [id, d] of dispatch) {
+    const fn = checksModule[d.fn];
+    if (typeof fn !== 'function') throw new Error(`runGate dispatches ${id} to a non-export ${d.fn}`);
+    touched.clear();
+    try {
+      (fn as (...a: unknown[]) => unknown)(...d.args.map((a) => argFor[a]));
+    } catch {
+      // A check that throws here is measured as touching whatever it read first;
+      // `runGate`'s own boundary turns a throw into a GATE failure in production.
+    }
+    touchedByCheck.set(id, new Set(touched));
+  }
 });
 
 // ===========================================================================
@@ -911,6 +1114,117 @@ describe('§B.0 every surface reader in the codebase is enrolled in this oracle'
       if (why.length < 40) bad.push(`${id}: no real reason recorded`);
     }
     expect(bad).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// §B.1 — EVERY CHECK CONSUMES THE READER ITS ROW NAMES
+// ===========================================================================
+
+/**
+ * WHAT THIS MEASURES, AND WHAT IT DOES NOT.
+ *
+ * MEASURES. Each check id named in a `READERS` row is resolved from the GATE'S
+ * OWN DISPATCH TABLE (parsed out of `lib/gate/runGate.ts`, so this file holds no
+ * hand-written check list), called exactly as `runGate` calls it, against a
+ * listing whose every string leaf is a recording GETTER. The check must READ
+ * every field its row's reader reads, or carry a reasoned exemption. A check
+ * refactored onto a private partial scanner stops touching the fields it dropped
+ * and fails here, naming them — which is the gap this closes: `READERS[].checks`
+ * used to be prose, and nothing measured it.
+ *
+ * DOES NOT MEASURE — stated plainly, because an overstated coverage claim is the
+ * exact failure class this record exists to catch:
+ *   - It observes a READ, not a SCAN. A check that touches a field for an
+ *     unrelated reason (a length count, a routing key) counts as consuming it.
+ *     The binding is therefore an over-approximation: it can prove a check
+ *     STOPPED reading a field, not that the field reaches that check's rule.
+ *   - It does not prove the read went THROUGH the named reader. A check that
+ *     inlined an identical private walk over the same fields passes. What it
+ *     rules out is the partial one, which is the shape every historical bypass
+ *     had.
+ *   - It measures one pack and one populated listing. A branch that only fires
+ *     on other pack data is not exercised.
+ */
+describe('§B.1 every check named by a READERS row consumes that reader', () => {
+  it('the dispatch table was parsed from the gate itself, and every call landed', () => {
+    expect(dispatch.size, 'runGate dispatch table not parsed').toBeGreaterThanOrEqual(30);
+    const union = new Set<string>();
+    for (const set of touchedByCheck.values()) for (const c of set) union.add(c);
+    expect(union.size, 'the getter instrumentation observed almost nothing').toBeGreaterThan(20);
+  });
+
+  it('every check id a READERS row names is one the gate actually dispatches', () => {
+    const unknown: string[] = [];
+    for (const reader of READERS) {
+      const ids = checkIdsIn(reader.checks);
+      if (ids.length === 0) unknown.push(`${reader.name}: names no check id at all`);
+      for (const id of ids) if (!dispatch.has(id)) unknown.push(`${reader.name}: ${id}`);
+    }
+    expect(unknown, `these rows name a check runGate does not dispatch: ${unknown.join(', ')}`).toEqual([]);
+  });
+
+  for (const reader of READERS) {
+    it(`${reader.name} — its checks read what it reads`, () => {
+      const covered = readerCoverage(reader);
+      expect(covered.length, `${reader.name} reads nothing`).toBeGreaterThan(0);
+
+      const violations: string[] = [];
+      for (const id of checkIdsIn(reader.checks)) {
+        if (reader.checkExempt?.[id]) continue;
+        const touched = touchedByCheck.get(id)!;
+        for (const path of covered) {
+          if (touched.has(path)) continue;
+          if (reader.checkExempt?.[`${id}::${path}`]) continue;
+          violations.push(`${id} does not read ${path}`);
+        }
+      }
+      expect(
+        violations.sort(),
+        `${reader.name}'s row claims these checks read the listing through it, and they do not read ` +
+          `fields it covers. Either the check stopped consuming the reader (the bypass shape), or the ` +
+          `row's claim is wrong, or it needs a reasoned checkExempt row: ${violations.join(' | ')}`,
+      ).toEqual([]);
+    });
+  }
+
+  it('every checkExempt row is still true (names a live check, and is still not covered)', () => {
+    const canon = new Set(leaves.map((l) => l.canon));
+    const bad: string[] = [];
+    for (const reader of READERS) {
+      const covered = new Set(readerCoverage(reader));
+      for (const [key, why] of Object.entries(reader.checkExempt ?? {})) {
+        const [id, path] = key.split('::') as [string, string | undefined];
+        if (!checkIdsIn(reader.checks).includes(id)) bad.push(`${reader.name}: ${key} names a check the row does not claim`);
+        else if (!dispatch.has(id)) bad.push(`${reader.name}: ${key} names a check the gate does not dispatch`);
+        else if (path === undefined) {
+          // A whole-check exemption is stale the moment that check covers
+          // everything the reader reads — it would then be a claim worth making.
+          if ([...covered].every((c) => touchedByCheck.get(id)!.has(c))) {
+            bad.push(`${reader.name}: ${key} IS fully covered now — drop the exemption`);
+          }
+        } else if (!canon.has(path)) bad.push(`${reader.name}: ${key} names a field that does not exist`);
+        else if (!covered.has(path)) bad.push(`${reader.name}: ${key} names a field the reader does not read`);
+        else if (touchedByCheck.get(id)!.has(path)) bad.push(`${reader.name}: ${key} IS read — drop the exemption`);
+        if (why.length < 40) bad.push(`${reader.name}: ${key} has no real reason recorded`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('NOT VACUOUS: a check that reads only part of a reader is reported, naming the fields', () => {
+    // A synthetic "private partial scanner": it consumes the title and nothing
+    // else. This is the refactor the binding exists to catch.
+    const { listing: watched, touched } = instrumented(populated, leaves);
+    const partial = (l: OptimizedListing): string[] => [String(l.title)];
+    partial(watched);
+    const covered = readerCoverage(READERS.find((r) => r.name === 'styleSurfaces')!);
+    const missed = covered.filter((c) => !touched.has(c));
+    expect(missed.length, 'the partial scanner would have passed').toBeGreaterThan(10);
+    expect(missed).toContain('aplusContent.modules[].bannerAltText');
+    // ...and the REAL check does read them, which is what makes the above a test
+    // of the binding rather than of the instrumentation.
+    expect(touchedByCheck.get('C17')!.has('aplusContent.modules[].bannerAltText')).toBe(true);
   });
 });
 

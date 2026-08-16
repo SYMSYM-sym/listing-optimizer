@@ -1258,18 +1258,93 @@ enrolled** (§B.0 of that file):
   returns text-shaped output containing that sentinel is reading the listing,
   whatever its signature claims.
 
-**Why it cannot be faked.** Neither detector reads a name, a comment or a
+**What the derivation catches.** Neither detector reads a name, a comment or a
 marker: one reads the type annotations the compiler already enforces, the other
-reads behaviour. And a `READERS` row no longer carries a closure over the
-function it names — it carries an ADAPTER, and the oracle passes it the function
-object it resolved from that module's own exports. A row cannot enrol a stub, a
-wrapper or a lookalike; it is handed the real export or the run fails. Both
-directions are asserted: a candidate with no row fails naming `file::function`,
-and a row naming something no longer recognised fails too. The single escape
-hatch, `NOT_A_SURFACE_READER`, holds one row (`presentAllergens`, which returns
-filtered PACK rows and is a candidate only because it declares no return type),
-and that row is machine-checked — the function must still exist and must not be
-observed echoing listing text.
+reads behaviour. A `READERS` row no longer carries a closure over the function it
+names — it carries an ADAPTER, and the oracle passes it the function object it
+resolved from that module's own exports. A row cannot enrol a stub, a wrapper or
+a lookalike; it is handed the real export or the run fails. Both directions are
+asserted: a candidate with no row fails naming `file::function`, and a row naming
+something no longer recognised fails too. The single escape hatch,
+`NOT_A_SURFACE_READER`, holds one row (`presentAllergens`, which returns filtered
+PACK rows and is a candidate only because it declares no return type), and that
+row is machine-checked — the function must still exist and must not be observed
+echoing listing text.
+
+**CORRECTED RECORD (round R) — this section, and the matching header in the test,
+used to say "why it cannot be faked". That was FALSE.** An overstated coverage
+claim is the exact failure class this record exists to catch, so it is corrected
+rather than softened. An adversarial reviewer wrote a **five-line reader into
+`lib/gate/checks/` that escaped BOTH detectors**, and tried eight evasion shapes
+in all; **six escaped**.
+
+*Precisely what is and is not covered:*
+
+* **CAUGHT — the accidental class, which is what all four historical bypasses
+  were.** A plainly-declared `export function` under `lib/gate/**` that names
+  `OptimizedListing` / `AplusContent` in its parameter list and declares a text
+  return type is caught statically, on the annotation the compiler enforces; a
+  MISSING return type is caught too (undecidable is treated as a reader).
+  Anything the dynamic vectors can call that echoes probe text back is caught
+  whatever its signature says — that leg caught an arrow function on an exported
+  `const`, which the static parser does not read.
+* **NOT CAUGHT — code shaped to evade it.** The static half is a regex over ONE
+  declaration form matching ONE literal type name; the dynamic half only sees
+  paths a fixed set of argument vectors reaches, with one probe listing.
+  Demonstrated escapes: (1) a parameter typed through an ALIAS
+  (`type L2 = OptimizedListing`) so the literal name never appears, paired with a
+  return path the probe listing never exercises — that pair is the five-line
+  reader; (2) an object METHOD (`export const readers = { text(l) {…} }`);
+  (3) a FACTORY, whose export returns the reader rather than text; (4) a GENERIC
+  with the constraint in the generics group
+  (`export function f<T extends OptimizedListing>(l: T)`), which the parser skips
+  before reading parameters; (5) a function declared without `export` and
+  re-exported afterwards; (6) a reader defined OUTSIDE `lib/gate/**`, which both
+  halves are rooted in.
+
+None of those six is reachable by accident. The claim this guard supports —
+and the only one it now makes — is that **a reader added the way readers have
+actually been added must be enrolled**.
+
+### 12.1a CLOSED (round R) — `READERS[].checks` was prose, and nothing verified it.
+
+The gap ranked highest by the same review. A row asserted, in English, which
+checks read the listing through its reader. Nothing measured it, so **a check
+refactored onto a private PARTIAL scanner would have reopened the original bypass
+class with the oracle still green and needing no new reader** — the guard would
+have kept verifying that the READER covers its object while the CHECK quietly
+stopped consuming the reader.
+
+**§B.1 of `tests/p1.fieldClosure.oracle.test.ts` binds them behaviourally.** Each
+check id in a row's `checks` string is resolved from **the gate's own dispatch
+table**, parsed out of `lib/gate/runGate.ts` (so the test holds no hand-written
+check list, and a check the gate no longer dispatches fails the row), then called
+**exactly as `runGate` calls it** against a listing whose every string leaf has
+been replaced by a recording GETTER. The check must READ every field its row's
+reader reads. Nine rows, zero exemptions: every check named by every row consumes
+its reader's full coverage today.
+
+*One deliberate arrangement:* the pack handed to the checks has
+`compliancePack.fictionPhrases` ARMED (it ships empty — "operator-supplied
+known-false descriptors" — and C11/A6 return early on an empty list). Measuring
+against the empty default would have reported a fact about this pack's DATA
+rather than about whether the check is wired to its reader. Arming only ever adds
+a live leg, so it cannot hide a missing one.
+
+*What §B.1 does NOT prove, stated in the file and here:* it observes a **read,
+not a scan** — a check that touches a field for an unrelated reason counts as
+consuming it; it does not prove the read went **through** the named reader — a
+check that inlined an identical FULL private walk would pass, and only the
+PARTIAL one (the bypass shape) fails; and it measures **one pack and one
+populated listing**, so a branch that only fires on other pack data is not
+exercised.
+
+*Non-vacuous, two ways.* A synthetic partial scanner that reads only the title is
+asserted to be reported on more than ten fields, `bannerAltText` named among
+them, while the real C17 is asserted to read that field. And adding `C3` (backend
+bytes) to the `styleSurfaces` row's `checks` string fails
+*"styleSurfaces — its checks read what it reads"* on the real tree; removing it
+returns 42/42.
 
 **It found real omissions immediately.** The hand list held six readers; the
 derivation found nine. `aplusFactSurfaces` (the C12 A+ corpus),
@@ -1286,10 +1361,12 @@ behaviour]`. Re-typed to dodge the static detector entirely —
 `export function throwawayHygieneSurfaces(l: { title?: unknown; description?: unknown }): string[]`
 — it still fails, `[found by: behaviour]`. Removing it returns 29/29.
 
-**A future change to this must also change:** §B.0 of
+**A future change to this must also change:** §B.0 and §B.1 of
 `tests/p1.fieldClosure.oracle.test.ts` — `signatureCandidates`,
-`behaviourCandidates`, `isTextReturn`, `NOT_A_SURFACE_READER` — and the
-`file` / `read` fields of every `READERS` row.
+`behaviourCandidates`, `isTextReturn`, `NOT_A_SURFACE_READER`, `gateDispatch`,
+`instrumented`, `armedPack`, `readerCoverage` — the `file` / `read` / `checks` /
+`checkExempt` fields of every `READERS` row, and the `guarded('ID', () => fn(…))`
+shape of `lib/gate/runGate.ts`, which §B.1 parses.
 
 ### 12.2 CORRECTED RECORD — prompt hygiene classified pack guidance by WORD COUNT.
 
@@ -1433,3 +1510,141 @@ notes" state to preserve; the coercion hands malformed output to the checks in
 the shape the type promises instead of propagating a hole. Adding guards to match
 the over-broad reading would have made the emitted shape depend on model
 malformation and bought no signal.
+
+---
+
+## 13. ROUND R — a third instance of one coherence class, and two overstated claims.
+
+### 13.1 ARCHITECTURE CHANGE — a PROPERTY OF THE PRODUCT can never be a rival-exclusion term.
+
+**The live defect.** Three of nine production runs, two ASINs, neither able to
+converge:
+
+```
+B00IO89MYA  C28 | keywords[24] | negative term 'elderberry' appears on 'title'
+B00EEEITVA  C28 | keywords[24] | negative term 'dairy free' appears on 'itemHighlights'
+```
+
+`elderberry` is an **actual ingredient of the product being optimized**;
+`dairy free` is a **legitimate diet attribute** of it. The copy names both
+because a listing for that product must name them. The model had used
+`negative` — a status whose sole meaning is rival-brand exclusion (R50) — as a
+**dumping ground for "terms I chose not to target"**, which is what
+`not-targeted` is for.
+
+**Why no repair round could clear it.** `negative` is the one status the
+derivation must never overwrite: for a genuine rival, presence in the copy *is*
+the violation, so deriving it away would turn the check that keeps rival brands
+out into a relabelling exercise (§10). C28 was right about its rule and the model
+was wrong about its input, and the only fix the failure asks for is *"delete your
+own ingredient from your own title"*.
+
+**This is the third instance of one class.** §8 established that a term which IS
+the subject product's brand cannot be a rival's brand; §10 established that a
+status asserting something about the copy belongs on the derived side. The
+general fact both are instances of: **a term that is a property of the product
+being optimized cannot be a rival-exclusion term.** The brand is one such
+property; an ingredient, a diet or allergen flag, a form or a size are others.
+
+**Where it reads from, and where it deliberately does not.**
+`productPropertyIdentity` in `lib/engine/keywordPlacement.ts` reads
+`snapshot.attributes` — the ingested page's own **structured** marketplace data —
+and nothing else.
+
+* **Not the generated copy**, at all. Deriving "is this a property of the
+  product?" from the copy would let a model launder a rival by writing it in: the
+  term would appear, and appearing would be the reason it stopped being scanned
+  for appearing.
+* **Not the snapshot's free-text bullets, description or title.** A competitor
+  can be named lawfully in prose, and prose is exactly where a rival brand would
+  be sitting.
+* **No attribute KEY is named in code.** Naming one would put a category lexicon
+  in the engine (`tests/category.literals.test.ts`) and would also be wrong: what
+  the ingested page declares about ITSELF is a property of itself, whichever key
+  it arrived under.
+
+**The bounds.** (1) structured attributes only; (2) **exact normalised equality
+on a whole list item** — the value is split on list punctuation and each item
+must match whole, so `berry` is not exempted by `elderberry` any more than
+`immunity` is exempted by the brand `Instant Immunity`; (3) the
+**operator-supplied competitor set is never reclassified** (see below); (4) no
+snapshot ⇒ empty set ⇒ nothing exempted. The row is **reclassified, not deleted**,
+with the correction on `note`, exactly as §8's own-brand path does, and
+`minNegatives` still counts only surviving negatives.
+
+**UNIFIED WITH `ownBrandIdentity`, BUT DELIBERATELY NOT THE SAME SET.**
+`productIdentity()` is the one entry point for "this term names the product being
+optimized": it unions the brand identity with the property identity, keyed by the
+same `identityKey` and matched by the same equality rule, and records WHICH kind
+each key is so the note can say what the correction rests on. It is the
+derivation's set. `ownBrandIdentity` stays the **narrow, brand-only** set, because
+`lib/audit/rivalBrands.ts` subtracts it (bound 3 of §7) from the automatic
+competitor-derived rival list — **had that subtraction been widened, a rival brand
+that happens to collide with one of our ingredient strings would have dropped out
+of the operator-supplied signal by coincidence.** That is asserted directly:
+`tests/keywordDerivation.productProperty.test.ts` §(d) plants a rival whose brand
+IS an ingredient item verbatim, watches the derivation reclassify the model's row
+(correctly — it is reading the snapshot the operator's own page supplied), and
+asserts **the run still fails**, on the automatic leg, which reads no label at
+all.
+
+**R50 IS UNWEAKENED, and it is asserted rather than argued.** §(b) of that file
+plants a genuine rival brand marked `negative` in the **title, a bullet, the
+description, the backend field, an attribute value, the A+ `bannerAltText`, the
+video brief and an `imagePlan[].altText`** — eight surfaces, the invisible ones
+included — and every one still fails C28 and still fails the gate, with the row
+still saying `negative` and carrying no note. §(c) asserts the exemption is not a
+wildcard: a term sharing a word with an ingredient still fails; a name that
+appears only in the snapshot's PROSE is not a property; and a rival written all
+over the GENERATED copy is not laundered by having been written there.
+
+**One interaction, pinned rather than hidden.** The fixture snapshot declares
+`primary_supplement_type`, whose value is the word
+`tests/keywordDerivation.ownBrand.test.ts` §(c) used as its "shares a word with
+the brand" probe. Under the full snapshot that word is now exempted — correctly,
+by THIS rule, not by the brand rule. That test's brand-rule leg is therefore
+measured against a snapshot declaring the brand and nothing else, and a new
+assertion beside it states the interaction explicitly: the word is not in
+`ownBrandIdentity`, and the note it earns says `PROPERTY OF THIS PRODUCT` and not
+`OWN brand identity`.
+
+**Prevention, from pack data.** `rules.keywordRules.negativeScopeNote` states what
+`negative` is FOR and what it is not for, and is rendered into the keywords
+prompt. Prompt-only, like `ownBrandNote`: it is not a `REQUIRED_PACK_PIECES` row,
+because what is ENFORCED is the reclassification and the floor.
+
+**STATED RESIDUAL RISK.** A rival brand string that appears **verbatim as an item
+of the subject listing's own structured attributes** would be exempted from the
+model-declared negative scan. Three things bound it: the source is the subject's
+own marketplace attribute data (not prose, not our copy); the match is whole-item
+equality; and the operator-supplied competitor set — the only rival signal that
+does not come from the model — is untouched by it and still fails the run.
+
+**A future change to this must also change:** `productPropertyIdentity`,
+`productIdentity`, `ownBrandIdentity` and `deriveKeywordPlacement` in
+`lib/engine/keywordPlacement.ts`, the bound-3 subtraction in
+`lib/audit/rivalBrands.ts`, `negativeScopeNote` in `lib/types.ts` and
+`knowledge/rules.json`, its rendering in `lib/engine/prompts/keywords.ts`, and
+`tests/keywordDerivation.productProperty.test.ts` +
+`tests/keywordDerivation.ownBrand.test.ts`.
+
+### 13.2 ASSESSED, NO CHANGE — the C4 follow-up was a model overshoot, not a stale number.
+
+A later live run showed `C4 | description | 2088 chars (1930 written + 158
+appended)`. The §12.4 fix is intact and the arithmetic has one home:
+`descriptionBudget(pack)` returns `max 2000`, `reserve 158`
+(`'\n\n'.length` + the pack disclaimer's 156 characters) and `budget 1842`, and
+`descriptionPrompt` renders `budget.budget` / `budget.reserve` / `budget.max`
+directly — it states **1842, the budget the model controls**, never the raw cap.
+`tests/c4.descriptionBudget.test.ts` pins that in both directions: every prompt
+that states the limit must contain the DERIVED budget and the DERIVED reserve,
+and must not contain either of the deleted hand-copied constants (`1700`,
+`~250 chars headroom`).
+
+So the model was told 1842 and wrote 1930 — an 88-character overshoot of a
+correctly-stated budget, not an instruction that reproduced the defect. The
+repair line the loop feeds back says `≤1842`, and the test *"OBEYING the C4 repair
+line converges in one round"* parses the number back out of that very line and
+asserts a model that writes it passes. The run that carried this also carried a
+C28 failure of the §13.1 class, which is what consumed the rounds. **Nothing was
+changed.**

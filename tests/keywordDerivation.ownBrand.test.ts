@@ -225,10 +225,28 @@ describe('(c) a term that merely SHARES A WORD with the brand is still a negativ
     expect(identity.has('brandx labs')).toBe(false);
   });
 
+  /**
+   * THE BRAND RULE, ISOLATED — and why the snapshot is narrowed here.
+   *
+   * E6 later widened the derivation: a term that is a PROPERTY OF THIS PRODUCT
+   * recorded in the snapshot's own STRUCTURED attributes is also not a rival
+   * (`tests/keywordDerivation.productProperty.test.ts`). The fixture's snapshot
+   * declares `primary_supplement_type`, whose value is this shared word, so
+   * under the FULL snapshot the word is exempted — correctly, by that other
+   * rule, and the test below asserts exactly that so the interaction is pinned
+   * rather than hidden. What THIS block is about is the BRAND rule, so it is
+   * measured against a snapshot that declares the brand and nothing else: the
+   * brand's own words must never exempt themselves.
+   */
+  const BRAND_ONLY: ListingSnapshot = {
+    ...snapshot,
+    attributes: { brand_name: BRAND, manufacturer: MANUFACTURER },
+  };
+
   it('marked negative and present in the copy, it STILL FAILS C28', () => {
     const l = clone();
     l.keywords = [
-      ...deriveKeywordPlacement([negativeRow(SHARED, 'Planted')], l, pack, snapshot),
+      ...deriveKeywordPlacement([negativeRow(SHARED, 'Planted')], l, pack, BRAND_ONLY),
       ...NEGATIVE_FLOOR,
     ];
     const row = rowFor(l.keywords, SHARED);
@@ -240,6 +258,18 @@ describe('(c) a term that merely SHARES A WORD with the brand is still a negativ
       ),
     ).toBe(true);
     expect(runGate(l, pack, ctx).pass).toBe(false);
+  });
+
+  it('E6 INTERACTION, pinned: under the FULL snapshot the same word IS exempted — as a product PROPERTY, not as the brand', () => {
+    // The fixture's snapshot declares this word as a structured attribute value
+    // of the product itself, so E6 reclassifies the row. The BRAND identity is
+    // still not what exempts it — that is the point of asserting both.
+    expect(ownBrandIdentity(clean, snapshot).has(SHARED)).toBe(false);
+    const l = clone();
+    const derived = deriveKeywordPlacement([negativeRow(SHARED, 'Planted')], l, pack, snapshot);
+    expect(derived[0]!.status).not.toBe('negative');
+    expect(derived[0]!.note).toContain('PROPERTY OF THIS PRODUCT');
+    expect(derived[0]!.note).not.toContain('OWN brand identity');
   });
 
   it('the live case, literally: brand "Instant Immunity" exempts itself and NOT "immunity"', () => {

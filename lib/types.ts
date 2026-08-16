@@ -535,6 +535,22 @@ export interface KeywordRules {
    * the negative floor that counts only surviving negatives.
    */
   ownBrandNote?: string;
+  /**
+   * The line that states WHAT `negative` IS FOR — and what it is not for.
+   *
+   * `ownBrandNote` covers ONE instance of the class; this covers the class. A
+   * live run used `negative` as a bin for "terms I chose not to target" and put
+   * the product's OWN ingredient (`elderberry`) and its OWN diet attribute
+   * (`dairy free`) on it; the copy then legitimately carried both and C28
+   * correctly reported them, so the run could not converge — `negative` is the
+   * one status derivation must never overwrite, because for a genuine rival its
+   * presence in the copy IS the violation. Code rejects the incoherent
+   * classification at the derivation boundary
+   * (`lib/engine/keywordPlacement.ts`); this line stops it being PROPOSED.
+   * Prompt-only, like `ownBrandNote` and `demandRecapture`: nothing here is
+   * enforced, so it is not a `REQUIRED_PACK_PIECES` row.
+   */
+  negativeScopeNote?: string;
   /** Operator-facing note rendered above the keyword section of the ship sheet. */
   sheetNote?: string;
 }
