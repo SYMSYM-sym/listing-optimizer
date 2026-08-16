@@ -18,7 +18,7 @@ import { sanitizeBullets } from './bulletSanitize';
 import { buildFacts } from './facts';
 import { deriveKeywordPlacement } from './keywordPlacement';
 import { normalizeListingTypography } from './typography';
-import { generateGroup, GroupGenerationError, type LlmClient } from './llm';
+import { describeError, generateGroup, GroupGenerationError, type LlmClient } from './llm';
 import { buildGroupPrompts, buildSystemPrompt, type OperatorPromptContext } from './prompts';
 import {
   aplusGroupSchema,
@@ -172,12 +172,24 @@ export async function optimize(
     try {
       return await fn();
     } catch (e) {
-      // NEVER log the message: a zod message embeds the model's OUTPUT
-      // (lib/server/log.ts contract). Classification and PATHS only.
+      // The message is still NEVER logged raw: a zod message embeds the model's
+      // OUTPUT (lib/server/log.ts contract). `describeError` in
+      // `lib/engine/llm.ts` makes that decision per error CLASS and hands back
+      // fields that are already safe — withholding the message for everything
+      // model-derived, and keeping it, redacted, for an API/transport failure.
+      // Without that split this line said `reason:"transport"` and nothing
+      // else, which is what made a fully-degraded run untriageable: nine
+      // identical lines that could equally have meant a dead key, an empty
+      // balance or a rate limit.
       logServer('optimize.group_degraded', {
+        // Spread FIRST so the four fields this call site owns can never be
+        // shadowed by the description. `safe.issuePaths` is the same list
+        // `GroupGenerationError.issuePaths` carries — both are `zodIssuePaths`
+        // of the same error — and it is the correct one on the branch where
+        // the throw was not a `GroupGenerationError` at all.
+        ...(e instanceof GroupGenerationError ? e.safe : describeError(e)),
         group: g,
         reason: e instanceof GroupGenerationError ? e.reason : 'transport',
-        issuePaths: e instanceof GroupGenerationError ? e.issuePaths : [],
         keptPreviousSlice: fallback !== undefined,
       });
       degraded.add(g);

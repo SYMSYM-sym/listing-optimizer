@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { anthropicClient } from '@/lib/engine/llm';
+import {
+  anthropicClient,
+  describeError,
+  recordUpstreamFailures,
+  upstreamFailureSummary,
+} from '@/lib/engine/llm';
 import { ingestCompetitors } from '@/lib/ingest/competitors';
 import { normalizePanelFacts } from '@/lib/knowledge/panelFacts';
 import { runPipeline } from '@/lib/pipeline/run';
@@ -64,9 +69,17 @@ export async function POST(req: Request): Promise<NextResponse> {
     // request: a rejected ASIN becomes a failed benchmark row.
     const competitors = await ingestCompetitors(body.competitorAsins);
 
+    // OBSERVABILITY ONLY. The wrapper records the first transport/API failure of
+    // the run and rethrows it unchanged, so degrade routing, gate `GEN` and
+    // `verified` behave exactly as they did without it. It exists so that an
+    // operator looking at a fully-degraded run is TOLD the upstream API
+    // rejected the request, instead of being handed nine gate failures and left
+    // to infer the cause from a log line that is not there.
+    const generation = recordUpstreamFailures(anthropicClient());
+
     const { optimized, audit, detection, iterations } = await runPipeline(
       body.snapshot,
-      anthropicClient(),
+      generation.llm,
       env.maxRepairIterations(),
       {
         // R45: per-run operator input, merged into the pack's C11 list for this
@@ -105,6 +118,22 @@ export async function POST(req: Request): Promise<NextResponse> {
       });
     }
 
+    // Present ONLY when an upstream call actually failed, so a healthy response
+    // is byte-for-byte the object it was. `message` is deliberately NOT
+    // included: a response body is held to a stricter standard than a server
+    // log, and the summary plus the status/type/request id are everything an
+    // operator can act on. The redacted message stays in the `llm.error` line.
+    const upstream = generation.firstFailure();
+    const generationFailure = upstream
+      ? {
+          class: upstream.error,
+          ...(upstream.status !== undefined ? { status: upstream.status } : {}),
+          ...(upstream.apiType ? { apiType: upstream.apiType } : {}),
+          ...(upstream.requestId ? { requestId: upstream.requestId } : {}),
+          summary: upstreamFailureSummary(upstream),
+        }
+      : null;
+
     return NextResponse.json({
       optimized,
       audit,
@@ -112,10 +141,13 @@ export async function POST(req: Request): Promise<NextResponse> {
       iterations,
       gateResult: audit.gateResult,
       runId,
+      ...(generationFailure ? { generationFailure } : {}),
     });
   } catch (e) {
+    // Redacted: this message is built from a thrown error that may be an SDK
+    // error echoing request context, and it is returned to a browser.
     return NextResponse.json(
-      { code: 'ENGINE_ERROR', message: e instanceof Error ? e.message : 'Generation failed.' },
+      { code: 'ENGINE_ERROR', message: describeError(e).message ?? 'Generation failed.' },
       { status: 502 },
     );
   }

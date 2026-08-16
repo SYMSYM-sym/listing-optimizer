@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import { buildAudit } from '@/lib/audit/buildAudit';
 import { optimize, type GroupName, ALL_GROUPS } from '@/lib/engine/optimize';
-import { anthropicClient } from '@/lib/engine/llm';
+import {
+  anthropicClient,
+  describeError,
+  recordUpstreamFailures,
+  upstreamFailureSummary,
+} from '@/lib/engine/llm';
 import { ingestCompetitors } from '@/lib/ingest/competitors';
 import { detectCategory } from '@/lib/knowledge/detectCategory';
 import { loadPack } from '@/lib/knowledge/loadPack';
@@ -143,7 +148,12 @@ export async function POST(req: Request): Promise<NextResponse> {
         ingested: competitors.filter((c) => c.snapshot).length,
       });
     }
-    const merged = await optimize(enriched, pack, anthropicClient(), {
+    // Same observability-only wrapper the optimize route uses: it records the
+    // first transport/API failure and rethrows unchanged, so the degrade path
+    // and `verified` are untouched. A regeneration that comes back degraded is
+    // exactly as opaque as a full run was, and gets exactly the same answer.
+    const generation = recordUpstreamFailures(anthropicClient());
+    const merged = await optimize(enriched, pack, generation.llm, {
       groups: [group],
       base: body.listing,
       panelFacts,
@@ -179,16 +189,32 @@ export async function POST(req: Request): Promise<NextResponse> {
       }
     }
 
+    // Absent unless an upstream call failed — see the optimize route for why
+    // the redacted `message` stays in the log rather than travelling here.
+    const upstream = generation.firstFailure();
+    const generationFailure = upstream
+      ? {
+          class: upstream.error,
+          ...(upstream.status !== undefined ? { status: upstream.status } : {}),
+          ...(upstream.apiType ? { apiType: upstream.apiType } : {}),
+          ...(upstream.requestId ? { requestId: upstream.requestId } : {}),
+          summary: upstreamFailureSummary(upstream),
+        }
+      : null;
+
     return NextResponse.json({
       optimized,
       audit,
       detection,
       gateResult: audit.gateResult,
       group,
+      ...(generationFailure ? { generationFailure } : {}),
     });
   } catch (e) {
+    // Redacted for the same reason as the optimize route: an SDK error message
+    // can echo request context and this one is returned to a browser.
     return NextResponse.json(
-      { code: 'ENGINE_ERROR', message: e instanceof Error ? e.message : 'Regenerate failed.' },
+      { code: 'ENGINE_ERROR', message: describeError(e).message ?? 'Regenerate failed.' },
       { status: 502 },
     );
   }
