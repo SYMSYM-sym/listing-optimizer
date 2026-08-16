@@ -16,20 +16,78 @@ import { aplusSurfaces, disclaimerVariantsOf, fail } from './shared';
  * SCOPE — what "every surface" means here, stated exactly (it is the surface
  * set `styleSurfaces()` returns, nothing wider):
  *   title, title75, itemHighlights, every bullet, description, every A+ text
- *   field (module headline/body/subcopy, comparison label/ours/typical, FAQ
- *   q/a), every Q&A q/a, every image-plan purpose/spec/notes, every attribute
- *   VALUE, backendSearchTerms, and every STRING-valued `facts.*` entry.
+ *   field (module headline/body/subcopy, banner ALT, comparison
+ *   label/ours/typical, FAQ q/a), every Q&A q/a, every image-plan
+ *   purpose/spec/notes/altText, every video-brief string
+ *   (aspect/shots[i]/onScreenText[i]/notes), every attribute VALUE,
+ *   backendSearchTerms, and every STRING-valued `facts.*` entry.
  * NOT scanned, deliberately: the code-inserted disclaimer constants
  * (`listing.fdaDisclaimer`, `aplusContent.fdaDisclaimer` — verbatim required
  * text, and the constant is additionally subtracted from every other surface),
- * numeric `facts.*` values (a number carries no markup or symbol), and the
- * three internal/derived strings that are never published on their own:
- * `productName` (published only inside the titles, which ARE scanned),
- * `primaryKeyword` and `bulletAnchors`.
- * The ALWAYS-ON rules (ALL-CAPS, symbols, emoji, ASIN, HTML markup) run on that
- * whole set. The banned-CHARACTER and promo-TERM rules are narrower still: they
- * run only on the surface groups the pack names in `bannedCharsSurfaces` /
- * `titleTermBanSurfaces`.
+ * numeric values (`facts.*`, `videoBrief.durationSeconds` — a number carries no
+ * markup or symbol), and the three internal/derived strings that are never
+ * published on their own: `productName` (published only inside the titles,
+ * which ARE scanned), `primaryKeyword` and `bulletAnchors`.
+ * The ALWAYS-ON rules (symbols, emoji, ASIN, HTML markup) run on that whole
+ * set. The remaining rules are scoped, all of it PACK DATA: banned CHARACTERS
+ * to `bannedCharsSurfaces`, promo TERMS to `titleTermBanSurfaces`, and ALL-CAPS
+ * to everything EXCEPT `allCapsExemptSurfaces`.
+ *
+ * ---------------------------------------------------------------------------
+ * N1 — WHICH SUB-RULES REACH THE TWO SURFACES ADDED HERE, AND WHY NOT THE REST
+ * ---------------------------------------------------------------------------
+ * These are SHORT DISPLAY STRINGS, not prose bullets, so the rules were taken
+ * one at a time rather than blanket-applied. Over-blocking is treated in this
+ * project as exactly as severe as a bypass, and a rule written for a bullet is
+ * not automatically a rule about a motion-graphics overlay.
+ *
+ * APPLIED to `imagePlan[i].altText` AND to every `videoBrief.*` string:
+ *   - banned SYMBOLS (`style.bannedSymbols` — the marks and currency glyphs the
+ *     pack lists). Those are prohibited in listing copy wherever they render,
+ *     and both of these surfaces render.
+ *   - EMOJI. Same rule, same reason; the pack bans them in copy, not in a field.
+ *   - ASIN in copy. An identifier is never legitimate on any customer surface.
+ *   - HTML markup. A tag in an ALT attribute or an overlay string is leaked
+ *     markup with no renderer behind it — it is a defect in every medium.
+ *
+ * APPLIED to `imagePlan[i].altText` ONLY:
+ *   - ALL-CAPS (both the per-word rule and the shouting-RUN rule). ALT text is
+ *     PROSE: it is read aloud by a screen reader, where capitals are announced
+ *     letter by letter, and it is written in the same register as the
+ *     `purpose`/`spec`/`notes` siblings that this check has always scanned for
+ *     exactly this. Treating the fourth string of a slot differently from the
+ *     other three would need an argument, and there isn't one.
+ *
+ * NOT APPLIED to `videoBrief.*` (via the pack's `allCapsExemptSurfaces`):
+ *   - ALL-CAPS. A video brief has two registers and capitals are conventional
+ *     in BOTH: an on-screen title card sets a short line in capitals as
+ *     TYPOGRAPHY, a design decision rather than shouting; and a shot list writes
+ *     its slug lines in capitals because that is how shot lists have always been
+ *     written. This check cannot tell either of those from emphasis, and
+ *     guessing wrong blocks lawful copy. Nothing is given up by declining it:
+ *     the things that actually matter in an overlay — a price, a CTA, a ranking
+ *     claim, a superlative — are caught by C18/C19, whose patterns are compiled
+ *     case-INSENSITIVE, so a shouted one fails there whatever its casing.
+ *
+ * NOT APPLIED to either (they are not always-on rules and the pack does not
+ * name these groups):
+ *   - banned CHARACTERS (`style.bannedChars`). Scoped by the pack to the title
+ *     surfaces and bullets, where the rule is about what a marketplace field
+ *     accepts. The pack already made that decision for the `images` group and
+ *     the same decision covers `altText`; the `video` group is not named
+ *     either.
+ *   - promotional TERM bans. Scoped to the title surfaces, where the rule is
+ *     about what the marketplace indexes from a TITLE.
+ *
+ * NOT APPLIED to either, structurally — the two BULLET rules
+ * (`bulletMustStartCapital`, `bulletNoTrailingPunctuation`). They live in their
+ * own loop over `l.bullets` and always have. They are rules about how Amazon
+ * RENDERS a bullet list: a bullet is a fragment, so it takes no full stop and
+ * starts capitalised. An ALT string is an attribute value and an overlay is a
+ * graphic; neither is rendered as a list item, so there is no rule there to
+ * break. Extending them would have been the single largest false-positive
+ * source in this change.
+ * ---------------------------------------------------------------------------
  *
  * Pure and side-effect free: it REPORTS, it never mutates the listing.
  */
@@ -72,11 +130,40 @@ export function styleSurfaces(l: OptimizedListing): StyleSurface[] {
   });
   // EVERY image-plan text field: purpose and spec render as on-image copy just
   // as often as notes do, so a $ price or an ALL-CAPS banner hides there too.
+  // N1: `altText` joins its three siblings in the SAME group. It is not a
+  // special case — it is the fourth string of the same slot, written in the same
+  // register, and it is the one a screen reader actually reads aloud, which
+  // makes a banned symbol, an emoji, an ASIN or a raw tag in it strictly worse
+  // there than in `notes`. Its group is `images`, so the pack's surface scoping
+  // applies to it identically (no bannedChars, no title term bans).
   arr<Record<string, unknown>>(l.imagePlan).forEach((slot, i) => {
     out.push({ field: `imagePlan[${i}].purpose`, group: 'images', text: s(slot?.purpose) });
     out.push({ field: `imagePlan[${i}].spec`, group: 'images', text: s(slot?.spec) });
     out.push({ field: `imagePlan[${i}].notes`, group: 'images', text: s(slot?.notes) });
+    out.push({ field: `imagePlan[${i}].altText`, group: 'images', text: s(slot?.altText) });
   });
+  /**
+   * N1 — THE VIDEO BRIEF, in its OWN group (`video`), deliberately.
+   *
+   * It is not folded into `images` because the two are not the same medium and
+   * the sub-rules that fit them differ — see `allCapsExemptSurfaces` in the pack
+   * and the partition written out in the module header. Every string field is
+   * collected (`aspect`, `shots[i]`, `onScreenText[i]`, `notes`); the on-screen
+   * strings ship to the customer verbatim and the shot direction is what they
+   * are rendered from, which is the same reasoning `customerSurfaces` records.
+   * `durationSeconds` is a number and carries no markup, symbol or emphasis.
+   */
+  const video = l.videoBrief;
+  if (video && typeof video === 'object') {
+    out.push({ field: 'videoBrief.aspect', group: 'video', text: s(video.aspect) });
+    arr<unknown>(video.shots).forEach((shot, i) =>
+      out.push({ field: `videoBrief.shots[${i}]`, group: 'video', text: s(shot) }),
+    );
+    arr<unknown>(video.onScreenText).forEach((t, i) =>
+      out.push({ field: `videoBrief.onScreenText[${i}]`, group: 'video', text: s(t) }),
+    );
+    out.push({ field: 'videoBrief.notes', group: 'video', text: s(video.notes) });
+  }
   // Attribute VALUES are customer-visible (filters, detail table). The pack's
   // surface scoping keeps '$'/'?' bannedChars off this group so legitimate
   // values like '500 mg' or '60 capsules' never false-trip.
@@ -286,6 +373,19 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
 
   const bannedCharsGroups = new Set(style.bannedCharsSurfaces);
   const titleBanGroups = new Set(style.titleTermBanSurfaces);
+  /**
+   * N1 — the ALL-CAPS exemption, PACK DATA and FALSE-POSITIVE-REDUCING ONLY.
+   *
+   * Note the direction: this list can only ever REMOVE a group from the
+   * ALL-CAPS rules, so a pack that omits it (or ships it empty) gets the
+   * stricter behaviour — every surface checked, exactly as before this existed.
+   * That is why it is not a `REQUIRED_PACK_PIECES` row: emptying it cannot
+   * disarm anything, on the same reasoning `benignContextPhrases` and
+   * `asciiExemptSurfaces` are excluded from the manifest.
+   */
+  const allCapsExemptGroups = new Set(
+    (style.allCapsExemptSurfaces ?? []).map((g) => String(g).trim()).filter(Boolean),
+  );
   const asinRe = style.noAsinInCopy ? new RegExp(style.asinPattern, 'g') : null;
   const emojiRe = style.emojiCheck ? new RegExp(style.emojiPattern, 'gu') : null;
 
@@ -302,7 +402,8 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
 
     // 1 — ALL-CAPS emphasis: shouting RUNS first (allowlist does not apply
     // inside a run), then the per-word length rule for isolated offenders.
-    const runs = allCapsRuns(text, style);
+    // Scoped by `allCapsExemptSurfaces` — see the N1 partition in the header.
+    const runs = allCapsExemptGroups.has(surface.group) ? [] : allCapsRuns(text, style);
     if (runs.length > 0) {
       out.push(
         fail(
@@ -313,7 +414,7 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
         ),
       );
     }
-    const caps = allCapsOffenders(text, style);
+    const caps = allCapsExemptGroups.has(surface.group) ? [] : allCapsOffenders(text, style);
     if (caps.length > 0) {
       out.push(
         fail(

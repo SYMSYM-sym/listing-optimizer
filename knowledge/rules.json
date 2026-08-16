@@ -127,6 +127,10 @@
       "USDA",
       "USP"
     ],
+    "_allCapsExemptSurfacesComment": "N1. FALSE-POSITIVE REDUCER for the ALL-CAPS rules only (per-word and shouting-run). It can only SUBTRACT a surface group, so an empty or missing list means every surface is checked - the stricter behaviour, and the one that shipped before this key existed. It is therefore deliberately NOT a REQUIRED_PACK_PIECES row, on the same reasoning that excludes benignContextPhrases and outputHygiene.asciiExemptSurfaces. ONE group is named: 'video'. A video brief has two registers and capitals are the conventional form in BOTH - an on-screen title card sets a short line in caps as TYPOGRAPHY ('SHELF STABLE'), and a shot list writes slug lines in caps ('CLOSE ON the front label') because that is how shot lists are written. C17 cannot distinguish either from shouting, and guessing wrong blocks lawful copy, which this project treats as exactly as severe as a bypass. Nothing is given up: the things that actually matter in an overlay - a price, a CTA, a rank claim, a superlative - are caught by C18/C19, whose patterns are case-INSENSITIVE, so '#1 BEST SELLER' fails there whatever its casing. Note 'images' is deliberately NOT exempt: imagePlan[i].altText is prose read aloud by a screen reader and is written in the same register as the purpose/spec/notes siblings this check has always scanned.",
+    "allCapsExemptSurfaces": [
+      "video"
+    ],
     "bulletMustStartCapital": true,
     "bulletNoTrailingPunctuation": true,
     "bulletTrailingAllowed": [
@@ -373,6 +377,7 @@
       "backendSearchTerms",
       "qa",
       "imagePlan",
+      "videoBrief",
       "attributes",
       "aplus",
       "facts"
@@ -511,6 +516,7 @@
       "backendSearchTerms",
       "qa",
       "imagePlan",
+      "videoBrief",
       "attributes",
       "aplus",
       "facts"
@@ -718,10 +724,11 @@
       "backendSearchTerms",
       "qa",
       "imagePlan",
+      "videoBrief",
       "attributes",
       "aplus"
     ],
-    "_asciiExemptSurfacesComment": "FALSE-POSITIVE REDUCER for the ASCII rule only (emptying it makes the gate STRICTER, so it is deliberately not a REQUIRED_PACK_PIECE). Backend search terms are the one surface where non-ASCII is the POINT: the field exists for other-language variants and misspellings, and stripping the diacritics off a Spanish or German keyword removes the query it was added to match. The phrase scans (AI tells, leaked instructions) still cover it, and every customer-facing surface stays ASCII-only.",
+    "_asciiExemptSurfacesComment": "FALSE-POSITIVE REDUCER for the ASCII rule only (emptying it makes the gate STRICTER, so it is deliberately not a REQUIRED_PACK_PIECE). Backend search terms are the one surface where non-ASCII is the POINT: the field exists for other-language variants and misspellings, and stripping the diacritics off a Spanish or German keyword removes the query it was added to match. The phrase scans (AI tells, leaked instructions) still cover it, and every customer-facing surface stays ASCII-only. N1 DECISION, stated rather than left implicit: neither the image ALT strings nor the videoBrief fields get a carve-out of this kind. The backend exemption is earned by that field being a SEARCH-INDEX input whose whole job is to carry other-language query variants, so a diacritic there IS the query. ALT text and on-screen video text are the opposite - they are DISPLAY strings that ship to a customer and into a feed, so a surviving non-ASCII character there is a smart quote the emit-time fold left alone, an invisible, or a real accented word, and each of those is a decision a human should make deliberately. videoBrief.shots / .notes are production direction rendered INTO those display strings, so exempting them would just move the same character one field upstream.",
     "asciiExemptSurfaces": [
       "backendSearchTerms"
     ]

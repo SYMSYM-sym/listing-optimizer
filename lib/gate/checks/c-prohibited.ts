@@ -23,6 +23,36 @@ export interface ScanSurface {
 }
 
 /**
+ * Every surface GROUP this collector knows how to read.
+ *
+ * CLOSED-WORLD, in the direction that actually bites here. A pack that names a
+ * group with no branch below is not rejected by anything at run time — the
+ * `want.has(...)` tests simply never fire and the surface is silently
+ * unscanned. That is the exact failure item 1 of CONFORMANCE-DEVIATIONS.md
+ * records for C28: *a surface that is never named is never checked*, and a
+ * coverage claim that lives only in prose survives review.
+ *
+ * So the vocabulary is exported and `tests/prohibited.gate.test.ts` asserts BOTH
+ * directions against the shipped pack: every group the pack declares has a
+ * branch here (nothing is declared-but-unread), and every branch here actually
+ * produces a field for a fully populated listing (nothing is coded-but-dead).
+ */
+export const COLLECTED_SURFACE_GROUPS = [
+  'title',
+  'title75',
+  'itemHighlights',
+  'bullets',
+  'description',
+  'backendSearchTerms',
+  'qa',
+  'imagePlan',
+  'videoBrief',
+  'facts',
+  'attributes',
+  'aplus',
+] as const;
+
+/**
  * The surface set shared by C18 (prohibited detail-page content), C19
  * (prohibited marketing) and C27 (output hygiene). Which of these groups is
  * actually scanned is PACK DATA (`surfaces`), so the gate stays
@@ -56,12 +86,47 @@ export function collectSurfaces(
   }
   // purpose/spec/notes are ALL creative copy — an overlay price or URL written
   // into `purpose` reaches the customer exactly like one written into `notes`.
+  // N1: `altText` was the one image-slot string this collector never read, so a
+  // price, a URL, an email address, a superlative or a non-ASCII glyph parked in
+  // an ALT string was invisible to C18, C19 and C27 — while the SAME string was
+  // already read by C6/C10/C12/C21/C22 (`customerSurfaces`) and by C28
+  // (`keywordSurfaceText`). ALT text is customer-facing and invisible on the
+  // page, which is exactly the combination those checks exist for.
   if (want.has('imagePlan')) {
     (listing.imagePlan ?? []).forEach((slot, i) => {
       surfaces.push({ field: `imagePlan[${i}].purpose`, text: s(slot?.purpose) });
       surfaces.push({ field: `imagePlan[${i}].spec`, text: s(slot?.spec) });
       surfaces.push({ field: `imagePlan[${i}].notes`, text: s(slot?.notes) });
+      surfaces.push({ field: `imagePlan[${i}].altText`, text: s(slot?.altText) });
     });
+  }
+  /**
+   * N1 — THE VIDEO BRIEF. This collector had no branch for it at all, so C18
+   * (prohibited detail-page content), C19 (prohibited marketing) and C27 (output
+   * hygiene) never scanned a single video field, even though a prior fix had
+   * already added the same strings to the C6/C10/C12/C21/C22 corpus
+   * (`customerSurfaces`) and to C28's `video` reader.
+   *
+   * EVERY string field is read, matching the coverage the C28 reader already
+   * has: `aspect`, every `shots[i]`, every `onScreenText[i]`, and `notes`.
+   * `onScreenText` ships to the customer verbatim; `shots`/`notes` are the
+   * production direction the overlay is rendered FROM, which is why a claim, a
+   * price or a URL written there reaches the finished video just as surely
+   * (this is the same reasoning `customerSurfaces` already records).
+   * `durationSeconds` is a number and carries no copy.
+   */
+  if (want.has('videoBrief')) {
+    const video = listing.videoBrief;
+    if (video && typeof video === 'object') {
+      surfaces.push({ field: 'videoBrief.aspect', text: s(video.aspect) });
+      (video.shots ?? []).forEach((shot, i) =>
+        surfaces.push({ field: `videoBrief.shots[${i}]`, text: s(shot) }),
+      );
+      (video.onScreenText ?? []).forEach((t, i) =>
+        surfaces.push({ field: `videoBrief.onScreenText[${i}]`, text: s(t) }),
+      );
+      surfaces.push({ field: 'videoBrief.notes', text: s(video.notes) });
+    }
   }
   // Canonical FACTS are echoed verbatim into every repair prompt and into the
   // export, so a price/URL/marketing claim parked in one used to reach the

@@ -65,6 +65,23 @@ export interface StyleRules {
    * keeps `SAME NON USA GABA blend` failing.
    */
   allCapsRunExempt?: string[];
+  /**
+   * Surface GROUPS the ALL-CAPS rules (per-word and shouting-run) do NOT apply
+   * to — N1.
+   *
+   * A FALSE-POSITIVE REDUCER, and only that: it can subtract a group, never add
+   * one, so an absent or empty list means every surface is checked, which is the
+   * stricter behaviour and the one that shipped before this key existed. It is
+   * therefore deliberately NOT a `REQUIRED_PACK_PIECES` row (emptying it cannot
+   * disarm a check), on the same reasoning that excludes `benignContextPhrases`
+   * and `outputHygiene.asciiExemptSurfaces` from the manifest.
+   *
+   * The shipped supplements pack names one group, `video`: capitals are the
+   * conventional register in BOTH halves of a video brief — typography in an
+   * on-screen title card, slug lines in a shot list — and C17 cannot distinguish
+   * either from emphasis. See the N1 partition in `lib/gate/checks/c-style.ts`.
+   */
+  allCapsExemptSurfaces?: string[];
   /** Every bullet must open with a capital letter. */
   bulletMustStartCapital: boolean;
   /**
