@@ -1642,6 +1642,45 @@ export interface Audit {
    * healthy run's payload is byte-identical to what it was.
    */
   routingGaps?: RoutingGap[];
+  /**
+   * N3 — SNAPSHOT FIDELITY FOR BRAND IDENTITY. **Advisory, never blocking.**
+   *
+   * The gate never receives the source snapshot, so every identity check it
+   * runs (C7 brand leakage, C8/C15 product-name lead, A3/A4 A+ brand and name)
+   * is internal-consistency only. Single-field tampering trips them because the
+   * listing then disagrees with itself; a CONSISTENT rename across every brand
+   * field, title and A+ module does not, because the only thing that could
+   * object is the scraped page.
+   *
+   * It is deliberately advisory rather than a check: a brand-name CORRECTION is
+   * a legitimate and common use case (a stale, mis-cased or mangled scraped
+   * value; a rebrand; an acquisition), and no regeneration round can clear a
+   * disagreement the operator intended — failing it would be an unwinnable run.
+   * So it is surfaced as ONE P1 gap the operator must confirm, and it also
+   * appears in `gaps` as the same single row (both are built from this one
+   * object, in `buildAudit`).
+   *
+   * Omitted entirely when the values agree, when the snapshot carries no brand
+   * field, or when the proposal leaves one blank (C23 owns the blank), so a
+   * healthy run's payload is byte-identical to what it was.
+   *
+   * See `lib/audit/brandParity.ts` for the five bounds.
+   */
+  brandParity?: BrandParityAdvisory;
+}
+
+/** One brand field whose scraped and proposed values disagree (N3). */
+export interface BrandFieldDisagreement {
+  field: 'brand_name' | 'manufacturer';
+  scraped: string;
+  proposed: string;
+}
+
+/** N3 — the non-blocking brand-identity parity advisory. */
+export interface BrandParityAdvisory {
+  disagreements: BrandFieldDisagreement[];
+  /** The operator-facing sentence, built once so audit and sheet agree. */
+  note: string;
 }
 
 // ---------------------------------------------------------------------------

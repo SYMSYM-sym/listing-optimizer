@@ -6,6 +6,7 @@ import type {
   SubstantiationClaim,
 } from '@/lib/types';
 import { allDiseaseNouns } from '@/lib/gate/checks';
+import type { BrandParityAdvisory } from './brandParity';
 import { bulletArchitectureGaps } from './bulletLints';
 import { unevidencedHeaderClaims } from './substantiation';
 import { arr, normalize, scanTerms, subtractDisclaimers, utf8Bytes } from '@/lib/gate/util';
@@ -29,9 +30,42 @@ export function diff(
   proposed: OptimizedListing,
   pack: KnowledgePack,
   substantiationRegister: SubstantiationClaim[] = [],
+  /**
+   * N3 — the brand-parity advisory, computed ONCE in `buildAudit` and handed in
+   * here, exactly like `substantiationRegister`. One source of truth, two
+   * renderings (the named audit key and this gap), so the sheet and the gap list
+   * can never disagree about whether the brand moved.
+   */
+  brandParityAdvisory: BrandParityAdvisory | null = null,
 ): AuditGap[] {
   const gaps: AuditGap[] = [];
   const cp = pack.compliancePack;
+
+  /**
+   * N3 — SNAPSHOT FIDELITY FOR BRAND IDENTITY, as exactly ONE P1 gap.
+   *
+   * The gate never sees the source page, so a listing renamed CONSISTENTLY —
+   * `brand_name`, `manufacturer`, `productName`, every title, every A+ module —
+   * is self-consistent and passes C7/C8/C15/A3/A4 without complaint. Only the
+   * snapshot can object, and only here.
+   *
+   * ADVISORY BY DESIGN, not by omission: a brand-name correction is a real and
+   * common use case, and failing the run would make it unwinnable. See
+   * `lib/audit/brandParity.ts` for the five bounds.
+   */
+  if (brandParityAdvisory) {
+    gaps.push({
+      field: 'attributes.brand_name',
+      current: brandParityAdvisory.disagreements
+        .map((d) => `${d.field}: ${d.scraped}`)
+        .join(' | '),
+      proposed: brandParityAdvisory.disagreements
+        .map((d) => `${d.field}: ${d.proposed}`)
+        .join(' | '),
+      why: brandParityAdvisory.note,
+      severity: 'P1',
+    });
+  }
 
   // --- P0: compliance violations in the CURRENT listing ---
   if (cp) {

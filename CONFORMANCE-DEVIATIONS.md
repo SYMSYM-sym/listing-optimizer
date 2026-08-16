@@ -752,3 +752,109 @@ absence scan still fires on an artifact that never went through derivation.
 truth, read by the prompt in `lib/engine/prompts/shared.ts`), C28's status
 docstring, `KeywordStatus` in `lib/types.ts`, item 5 and item 6 above, and
 `tests/capturedVia.derivation.test.ts`.
+
+---
+
+## 11. STATED LIMIT OF THE GATE — it never sees the source snapshot, so a WHOLE-LISTING rename is invisible to it. Closed with an ADVISORY, deliberately not a check.
+
+### 11.1 The limit
+
+`runGate` receives the listing and the pack. It does **not** receive the scraped
+`ListingSnapshot`. Every identity check it runs is therefore
+**internal-consistency only**:
+
+| check | what it actually compares |
+| --- | --- |
+| C7 | backend-only strings vs the customer surfaces |
+| C8 / C15 | the titles vs `productName` |
+| A3 / A4 | the A+ copy vs `productName` |
+
+A meta reviewer confirmed both halves of the consequence, and
+`tests/brandParity.audit.test.ts` §1 reproduces them:
+
+* tamper with a **single** field — set `attributes.brand_name` to a rival — and
+  those checks fire, because the listing now disagrees with **itself**;
+* rename the listing **consistently** — `brand_name`, `manufacturer`,
+  `productName`, every title, the description, every bullet, every Q&A, every
+  image string, every A+ module — and the gate returns **zero failures and
+  `pass: true`**, correctly by its own rules. The listing is perfectly
+  self-consistent. The only thing that could object is the page it was scraped
+  from, and the gate cannot see it.
+
+### 11.2 Why the answer is an ADVISORY and not a check
+
+Because **a brand-name correction is a legitimate and common use case.** A
+scraped `brand_name` is routinely stale, mis-cased, missing a legal suffix, or
+mangled by the marketplace's own attribute mapping; rebrands and acquisitions
+happen; an operator running the optimizer on a listing they are *about to fix* is
+the intended user.
+
+And a failure here would be **unwinnable**: no regeneration round can clear a
+disagreement the operator INTENDED. The repair loop would spend every round on
+it and the run would end `verified: false` on nothing — which is exactly the live
+shape recorded as item 10.1, and exactly the over-blocking class this project has
+been burned by twice. Over-blocking is treated here as exactly as severe as a
+bypass.
+
+So it **states** the disagreement and asks the operator to CONFIRM it: one **P1**
+gap — high enough that nobody scrolls past it, non-blocking so the legitimate
+correction still ships.
+
+### 11.3 Where it lives, and the five bounds
+
+`lib/audit/brandParity.ts`, resolved in **`buildAudit`** for the same structural
+reason the rival-brand set is (item 7.2): that module is the one place that holds
+BOTH the scraped snapshot and the proposed listing, so a route cannot forget to
+thread something it is never handed. It is computed **once** and rendered twice —
+as `audit.brandParity` and as the single row `diff()` adds to `audit.gaps` — so
+the two can never disagree about whether the brand moved.
+
+| bound | why |
+| --- | --- |
+| structural brand fields only (`brand_name`, `manufacturer`) | the same two keys `ownBrandIdentity`, `rivalBrandNames` and C7 read. The TITLE is not mined: guessing where a brand ends inside a title is the unreliable step, and this is a report a human reads — a noisy one is a report nobody reads |
+| a field the SNAPSHOT does not carry is not a disagreement | many scraped pages have no `manufacturer`; there is nothing to compare, so nothing is said |
+| a BLANK proposed value is not a disagreement | "missing" is a different statement from "different", and C23 already owns the blank. Reporting it twice in two vocabularies is how an operator learns to skim |
+| equality is `identityKey` | the app's ONE definition of brand equality, shared with the own-brand identity and the rival set, so `BrandX Labs, LLC.` and `brandx labs llc` agree here exactly as they agree there |
+| exactly ONE gap, whatever disagrees | two fields renamed together is one EVENT — a rename — not two findings |
+
+It holds no domain vocabulary (two structural marketplace field names), so
+`tests/category.literals.test.ts` stays green.
+
+### 11.4 It is advisory, and the tests say so
+
+`verified` is still exactly `gateResult.pass`; this never enters it and emits no
+gate failure of any id. The ship sheet prints the block **even on a verified
+run** — deliberately, because a verified run is precisely the case where nobody
+would go looking — and the block says in as many words that it does not change
+the verdict, with the copy buttons still offered.
+
+`tests/brandParity.audit.test.ts`, both directions throughout:
+
+* §1 the premise, reproduced: single-field tampering IS caught; a consistent
+  rename is NOT (zero gate failures, `pass: true`); the advisory catches it.
+* §2 agreeing values produce **no** gap and **no** `brandParity` key at all
+  (case, whitespace, trailing punctuation and legal-suffix variants all agree);
+  a disagreement produces **exactly one** P1 gap naming both values, and the
+  wording is asserted to tell the operator what to do and why no check can decide
+  it. Both fields renamed is still exactly one gap.
+* §3 a consistently-renamed run is still `verified: true` with the advisory
+  present.
+* §4 a snapshot missing those fields produces no gap and never throws; nor do
+  null/undefined on either side, a snapshot with no `attributes` object, a blank
+  on either side, a wildly different title, or an unrelated attribute change.
+* §5 the sheet prints it on a verified run, prints nothing when the brand agrees,
+  does not throw on a brand-less snapshot, and HTML-escapes both values.
+
+### 11.5 What this deliberately does NOT do
+
+It does not compare `productName`, the titles or the A+ copy against the
+snapshot. Those are the fields an optimizer is *supposed* to rewrite — a
+restructured title that no longer matches the scraped one is the product working,
+not a finding — and mining a brand out of them is the unreliable step bound 1
+exists to avoid. The two structural fields are the only ones whose whole job is
+to state the brand.
+
+**A future change to this must also change:** `lib/audit/brandParity.ts`, the
+`brandParity` key on `Audit` and `BrandParityAdvisory` /
+`BrandFieldDisagreement` in `lib/types.ts`, the gap in `lib/audit/diff.ts`, the
+block in `lib/export/shipSheet.ts`, and `tests/brandParity.audit.test.ts`.

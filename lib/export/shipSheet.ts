@@ -340,6 +340,42 @@ ul.ops{margin:8px 0 0;padding-left:20px}
       '. Report it — the run stays UNVERIFIED either way.</div>';
   }
 
+  /**
+   * N3 — BRAND-IDENTITY PARITY, a CONFIRM-BEFORE-PUBLISH advisory.
+   *
+   * The gate never receives the source snapshot, so a listing renamed
+   * CONSISTENTLY across every brand field, title and A+ module is
+   * self-consistent and passes C7/C8/C15/A3/A4 without complaint — only the
+   * scraped page can object, and only the audit holds it.
+   *
+   * It is printed EVEN ON A VERIFIED RUN, deliberately: a verified run is
+   * exactly the case where nobody is going to look for this. It is NOT a
+   * blocking notice and does not touch `verified` — a brand-name correction is
+   * a legitimate use case, so this asks the operator to confirm rather than
+   * refusing to ship. One P1 gap carries the same event in `audit.gaps`.
+   */
+  const parity = (audit as { brandParity?: { disagreements?: unknown; note?: unknown } } | null | undefined)
+    ?.brandParity;
+  const parityRows = arr<{ field?: unknown; scraped?: unknown; proposed?: unknown }>(
+    parity?.disagreements,
+  );
+  if (parityRows.length > 0) {
+    h +=
+      '<div class=stale><b>⚠ P1 — CONFIRM THE BRAND BEFORE YOU PUBLISH.</b> ' +
+      'The proposed listing\'s brand identity does not match the page it was scraped from: ' +
+      parityRows
+        .map(
+          (d) =>
+            `<code>${esc(String(d?.field ?? ''))}</code> scraped <b>${esc(String(d?.scraped ?? ''))}</b>` +
+            ` &rarr; proposed <b>${esc(String(d?.proposed ?? ''))}</b>`,
+        )
+        .join('; ') +
+      '. No check can decide this for you — the gate never sees the source page, so a consistent rename is ' +
+      'invisible to every one of them. If you are correcting the brand on purpose, this is expected and you ' +
+      'may ship it; if you did not intend it, you are about to publish someone else\'s brand. ' +
+      'This is ADVISORY and does not change the verdict above.</div>';
+  }
+
   // --- advisory staleness notices (never affect `verified`) ---
   if (audit?.rulesStale) {
     h += `<div class=stale>⏳ ${esc(audit.rulesStaleNotice ?? 'Rule snapshot is stale — re-verify the time-sensitive marketplace limits.')}</div>`;

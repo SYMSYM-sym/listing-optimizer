@@ -12,6 +12,7 @@ import { runGate } from '@/lib/gate/runGate';
 import { buildFacts } from '@/lib/engine/facts';
 import { unroutableFailures } from '@/lib/engine/fieldRouting';
 import { candidateTerms } from './candidateTerms';
+import { brandParity } from './brandParity';
 import { buildBenchmark } from './benchmark';
 import { rivalBrandNames } from './rivalBrands';
 import { diff } from './diff';
@@ -115,7 +116,21 @@ export function buildAudit(
   // R33/R38 — the substantiation register is built BEFORE the diff, because
   // the diff turns its unevidenced HEADER claims into a P1 gap.
   const substantiationRegister = buildSubstantiationRegister(listing, current, pack.compliancePack);
-  const gaps = diff(current, listing, pack, substantiationRegister);
+  /**
+   * N3 — SNAPSHOT FIDELITY FOR BRAND IDENTITY. Advisory; never enters
+   * `verified`, which stays exactly `gateResult.pass`.
+   *
+   * It is resolved HERE for the same structural reason the rival-brand set is:
+   * this is the module that holds both the SCRAPED snapshot and the PROPOSED
+   * listing, and the gate holds only one of them. A route cannot forget to
+   * thread something it is never handed.
+   *
+   * `null` when they agree, when the snapshot carries no brand field, or when
+   * the proposal leaves one blank — so a healthy run's payload is byte-identical
+   * to what it was before this existed.
+   */
+  const brandParityAdvisory = brandParity(current, listing);
+  const gaps = diff(current, listing, pack, substantiationRegister, brandParityAdvisory);
   // Advisory only: staleness never enters `verified` and never becomes a failure.
   const staleness = rulesStaleness(pack.rules);
   // Second, INDEPENDENT advisory snapshot: the attribute template has its own
@@ -159,6 +174,10 @@ export function buildAudit(
       ? { reviewLanguageRejected: inputs.reviewRejected }
       : {}),
     ...(routingGaps.length > 0 ? { routingGaps } : {}),
+    // N3 — omitted entirely when the brand agrees, so the common payload is
+    // unchanged. Present => the ship sheet prints the confirm-before-publish
+    // block, and `gaps` carries the same event as one P1 row.
+    ...(brandParityAdvisory ? { brandParity: brandParityAdvisory } : {}),
     rulesStale: staleness.stale,
     ...(staleness.notice ? { rulesStaleNotice: staleness.notice } : {}),
     attributeSchemaStale: schemaStaleness.stale,
