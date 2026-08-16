@@ -749,7 +749,10 @@ either: the gate scans that absence (item 6) and still does.
 
 **C28 IS NOT WEAKENED — nothing was removed from it.** A `negative` term
 appearing anywhere still fails (R50/AM-9, including the A+ banner ALT and video
-brief surfaces of item 1); a `backend` row on a visible surface still fails; a
+brief surfaces of item 1) — **§14.1 later scoped that sentence to what it was
+always about: a rival brand. A `negative` row whose term IS a compliance-lexicon
+term is deferred to the check that owns the lexicon and enforces it in context,
+and it still fails the run there.** A `backend` row on a visible surface still fails; a
 `captured-via` row with no `via` still fails, and (since item 6) one whose term
 is in the copy fails too; a banned-lexicon term that ends up
 targeted still fails the four-test screen; an unknown surface in pack config
@@ -1088,7 +1091,11 @@ one. **A `negative` term found in the copy is not a mislabelled row; it IS the
 violation R50 exists to detect.** Deriving it to `placed` would turn the single
 check that keeps rival brands out of shipped copy into a relabelling exercise.
 So `negative` is never derived away, and C28's everywhere-scan for it is
-untouched to the byte.
+untouched to the byte. (**§14.1 correction:** "untouched to the byte" is true of
+the RIVAL-BRAND job the sentence is about, and that is the job R50 depends on.
+The same status was also being used to record COMPLIANCE VOCABULARY, and that
+half is now deferred to the checks that own it — never derived away, still
+recorded, still counted, and still failing the run when the usage is a claim.)
 
 `tests/capturedVia.derivation.test.ts` → "the partition is pinned against the
 principle" asserts that membership exactly, with the reason each other status
@@ -1648,3 +1655,130 @@ line converges in one round"* parses the number back out of that very line and
 asserts a model that writes it passes. The run that carried this also carried a
 C28 failure of the §13.1 class, which is what consumed the rounds. **Nothing was
 changed.**
+
+---
+
+## 14. ROUND S — `negative` was doing two jobs, and C28 owned only one of them.
+
+### 14.1 ARCHITECTURE CHANGE — compliance vocabulary on the negative list is DEFERRED to the check that owns it.
+
+**The live defect.** Production, ASIN B00WNDG7V8 (a dental probiotic). One
+failure, and the run ended `verified: false`:
+
+```
+C28 | keywords[26] | negative term 'cavity' appears on 'attributes'
+```
+
+The attribute was
+`recommended_uses_for_product = "General wellness support for oral cavity function"`.
+
+**"Oral cavity" is anatomy — the mouth — not dental caries.** The copy is lawful,
+and **C6 correctly did not fire on it**: `cavity` is a disease noun in the pack's
+`oral` subcategory list, `oral cavity` is a `benignContextPhrases` entry, and C6
+subtracts the benign span. Only C28 fired, because its `negative` leg was a plain
+whole-term match with none of C6's de-obfuscation, negation guard or
+benign-context subtraction. The only fix the failure asked for was *"delete a
+lawful anatomical phrase from your own attributes"*, so no repair round could
+clear it.
+
+**The root cause is not the term — it is that one status carried two jobs.**
+
+1. **Rival-brand exclusion (R50/AM-9)** — the actual purpose of `negative`, and
+   the reason C28 scans every surface. A rival brand is in **no lexicon** (a
+   brand name is not a lexicon item, it is a fact about the market — §7 is built
+   on exactly that), so C28 is the only thing in this system that can enforce it.
+2. **"Compliance terms to avoid"** — which the compliance checks already enforce,
+   properly and in context: **C6** (customer copy, attributes, `facts.*`) and
+   **A2** (every A+ field, FAQ included) over the cross-pack disease and
+   action-paired lexicons, with de-obfuscation, the strict negation guard and
+   pack-declared benign-context subtraction; **C19** over `superlativeBans` on
+   every surface `rules.prohibitedMarketing.surfaces` lists, with no negation
+   guard at all. C28 duplicating job 2 as a blunt substring match is **strictly
+   less accurate than the check that owns it**, and this false positive is the
+   bill for the duplication.
+
+**The fix.** A model-declared `negative` row whose term **IS** a term of the
+compliance lexicon **keeps its row** — it is useful documentation, it still
+steers generation, and it still counts toward `minNegatives` — but it **raises no
+C28 failure of its own**. The compliance checks are the authority on whether that
+word's *usage* is a violation; if the usage is genuinely a claim, they fire and
+the run fails there.
+
+**Why deference and not "share C6's context machinery with C28's scan".** Both
+were on the table. Sharing it would have been the wrong one, for a reason about
+R50: C6's suppression is not a filter that can be bolted onto a term-vs-surface
+match — it is a per-match-index reading of negation cues, meta-phrases and benign
+spans — and running it over this leg would apply it **to rival brand names too**.
+A rival's name parked inside a pack benign phrase, or behind a negation cue,
+would stop failing. That is a direct weakening of the one thing that must not
+weaken, and it would leave the duplication (the root cause) exactly where it was.
+**The deference cannot reach R50 at all, because its gate is membership of the
+compliance lexicon and no brand name is in it.**
+
+**Four bounds, each one keeping job 1 at full strength.**
+
+1. **Equality, never containment.** The whole term, normalised, must EQUAL a
+   lexicon term — the `identityKey` discipline of §8/§13 applied here: sharing a
+   word is not being the thing. A rival brand that merely CONTAINS a disease noun
+   (`Cavity Guard Labs`) is not deferred, and neither is a claim phrase built
+   around one (`cavity prevention`).
+2. **Only what the owning checks actually enforce FOR THIS PACK.** C6/A2
+   early-return without a compliance module and C19's superlative leg reads the
+   ROUTED pack's own list, so **with no `compliancePack` nothing is deferred** and
+   the leg behaves byte-for-byte as before. That is why `complianceOwnedTerms` is
+   built separately from `bannedLexicon`, which is deliberately WIDER (cross-pack
+   superlatives): a wider set only makes the four-test SCREEN stricter, but it
+   would make this DEFERENCE looser.
+3. **The automatic competitor-derived rival set (§7) is not touched.** It reads no
+   status and no lexicon. Belt and braces: a deferred row no longer counts as
+   "already reported", so it cannot silence that leg either — a rival brand string
+   that collided with a lexicon term is still reported by the operator-supplied
+   signal.
+4. **The floor is unmoved.** `negatives` is incremented for a deferred row,
+   because the row IS recorded on the negative list — which is exactly what
+   `minNegatives` counts and exactly what its own failure text asks for ("the
+   banned vocabulary and every rival brand name belong on it").
+
+**Both directions, asserted.** `tests/complianceNegatives.deference.test.ts`:
+(a) the live shape is C28-clean, `runGate().pass === true`, **and C6 is silent
+too** — the copy really is lawful, not merely unreported; (b) a genuine claim
+built on the same word (`Prevents cavities and reverses tooth decay`) still fails
+the run from **twelve** surfaces, via C6/A2/C19; (c) **R50 unweakened** — a rival
+brand marked `negative` planted in title / bullet / description / backend /
+attributes / A+ `bannerAltText` / `videoBrief` / imagePlan `altText` still fails
+every one; (d) the automatic set still fires from all eight and its resolver is
+unchanged, including the colliding-brand case of bound 3; (e) the floor counts
+deferred rows and still fails one row short; (f) the golden fixture gates with
+zero failures; (g) with no compliance module nothing is deferred.
+`tests/keywordPlacement.gate.test.ts` was updated in one place: the `disease`
+case now asserts the division of labour — C28 silent, **C6 firing, run still
+failing** — instead of asserting the C28 leg.
+
+**Prevention, from pack data.** `rules.keywordRules.negativeScopeNote` now states
+the split (a rival brand must appear nowhere in any context; compliance
+vocabulary is enforced by the compliance rules, which read the word in context),
+and `sheetNote` no longer claims that *every* negative term "was verified to
+appear nowhere at all" — it says which negatives that is true of and who enforces
+the rest. Both are prompt/report strings, not `REQUIRED_PACK_PIECES` rows.
+
+**DECLINED, and why.** The keywords prompt was **not** changed to stop the model
+recording compliance vocabulary as `negative`. That list is the record of the
+vocabulary this copy avoids — C28's own `minNegatives` failure text says so — and
+`minNegatives: 3` counts those rows; removing the class would make the floor
+harder to reach for no gain, and the row still steers generation. The model did
+nothing wrong here in any case: it recorded `cavity` exactly as the compliance
+rules name it.
+
+**STATED RESIDUAL RISK.** A rival brand whose whole normalised name is EQUAL to a
+compliance-lexicon term would not raise the model-declared C28 leg. Three things
+bound it: the match is whole-term equality against a lexicon that contains no
+brand names; the operator-supplied competitor set is unaffected and still fails
+the run (asserted); and the owning compliance check still scans that string on
+every surface.
+
+**A future change to this must also change:** `complianceOwnedTerms`, `termKey`,
+the `negative` case and the `declaredNegatives` filter in
+`lib/gate/checks/c-keywords.ts`, `negativeScopeNote` / `sheetNote` in
+`knowledge/rules.json`, §5 and §10.3 above, and
+`tests/complianceNegatives.deference.test.ts` +
+`tests/keywordPlacement.gate.test.ts`.

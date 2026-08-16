@@ -218,13 +218,34 @@ describe('C28 negative — verified absent everywhere, both directions', () => {
     expect(c28(l)).toEqual([]);
   });
 
-  it('FAILS: the same term the moment it appears OUTSIDE the disclaimer', () => {
-    const l = withKeywords([
+  /**
+   * S1 — THE SAME TERM OUTSIDE THE DISCLAIMER STILL FAILS THE RUN, BY THE CHECK
+   * THAT OWNS IT.
+   *
+   * 'disease' is COMPLIANCE VOCABULARY, not a rival brand, so C28 now defers it
+   * to C6 (see THE DEFERENCE in `lib/gate/checks/c-keywords.ts`) — which reads
+   * the word in context, with de-obfuscation, the strict negation guard and the
+   * pack's benign-context subtraction that this leg has none of. This test used
+   * to assert the C28 leg fired; what it is really about is that the copy is
+   * REJECTED, and it still is. The two directions are both here: the deference
+   * happened, AND nothing shipped because of it.
+   */
+  it('DEFERRED but NOT dropped: the compliance term outside the disclaimer still fails the run', () => {
+    const rows = [
       { term: 'disease', tier: 'negative', status: 'negative', surfaces: [], why: 'Named-condition vocabulary' },
       ...NEGATIVE_FLOOR,
-    ]);
+    ];
+    const l = withKeywords(rows);
     l.bullets[1] = `Everyday routine: written for disease free living`;
-    expect(c28(l).some((f) => f.context.includes('negative term'))).toBe(true);
+    // C28 is silent — the word's USAGE is not its question.
+    expect(c28(l).some((f) => f.context.includes('negative term'))).toBe(false);
+    // …and the run fails anyway, at the check that owns the lexicon.
+    const result = runGate(l, pack, ctx);
+    expect(result.pass).toBe(false);
+    expect(
+      result.failures.some((f) => f.checkId === 'C6' && f.field === 'bullets[1]'),
+      JSON.stringify(result.failures),
+    ).toBe(true);
   });
 
   it('FAILS: fewer negative rows than the pack floor', () => {

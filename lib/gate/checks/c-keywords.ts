@@ -34,9 +34,11 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  *                    where a compliant listing MUST carry it. That is fixed
  *                    where the incoherence is (the derivation boundary in
  *                    `lib/engine/keywordPlacement.ts` reclassifies the row and
- *                    records the correction on `note`) — NOT here. This leg is
+ *                    records the correction on `note`) — NOT here. That leg is
  *                    unchanged: whatever reaches it saying `negative` is still
  *                    scanned on every surface, the invisible ones included.
+ *                    ONE CLASS OF `negative` ROW IS DEFERRED, AND IT IS NOT THE
+ *                    RIVAL-BRAND CLASS — see THE DEFERENCE below.
  *   `candidate`    — a term held back for PPC / off-site / the next copy cycle.
  *                    It must NOT be in the current published copy, or the
  *                    "not yet" is a fiction. A live run wrote this status over
@@ -99,6 +101,79 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  * the model declared: the screen's legality leg is not a second opinion, it is
  * the same lexicon C6/C19 enforce, asked one step earlier. That is what makes
  * it impossible for a named-condition keyword to be marked as targeted.
+ *
+ * THE DEFERENCE (S1) — `negative` WAS DOING TWO JOBS, AND ONLY ONE OF THEM IS
+ * THIS CHECK'S.
+ *
+ * THE LIVE DEFECT. Production, ASIN B00WNDG7V8, one failure and the run ended
+ * `verified:false`:
+ *
+ *   C28 | keywords[26] | negative term 'cavity' appears on 'attributes'
+ *
+ * The attribute was a recommended-uses string describing support for ORAL
+ * CAVITY function. "Oral cavity" is ANATOMY — the mouth — not dental caries, the
+ * copy is lawful, and C6 (which OWNS that word) correctly did NOT fire on it:
+ * the pack declares the anatomical span as a benign-context phrase and C6
+ * subtracts it. Only this check fired, because its `negative` leg was a plain
+ * whole-term match with none of C6's machinery. The only fix the failure ASKED
+ * for was "delete a lawful anatomical phrase from your own attributes", so no
+ * repair round could clear it.
+ *
+ * THE ROOT CAUSE, not the one term. The `negative` status carries TWO jobs:
+ *   1. RIVAL-BRAND EXCLUSION (R50) — its actual purpose, and the reason this
+ *      check scans every surface. A rival brand is in NO lexicon (a brand name
+ *      is not a lexicon item, it is a fact about the market), so C28 is the only
+ *      thing in the system that can enforce it.
+ *   2. "COMPLIANCE TERMS TO AVOID" — which the COMPLIANCE checks already
+ *      enforce, properly: C6 and A2 over the cross-pack disease and
+ *      action-paired lexicons with de-obfuscation, the strict negation guard and
+ *      pack-declared benign-context subtraction; C19 over `superlativeBans` on
+ *      every surface the pack lists. A plain substring match here is not a
+ *      second opinion on job 2 — it is a STRICTLY LESS ACCURATE DUPLICATE of the
+ *      check that owns it, and this false positive is what that costs.
+ *
+ * SO JOB 2 IS DEFERRED TO ITS OWNER. A model-declared `negative` row whose term
+ * IS a term of the compliance lexicon KEEPS ITS ROW — it is useful
+ * documentation, it still steers generation, and it still counts toward
+ * `minNegatives` — but it raises no failure of its own here. The compliance
+ * checks are the AUTHORITY on whether that word's USAGE is a violation; if the
+ * usage were genuinely a claim they fire and the run fails anyway, which
+ * `tests/complianceNegatives.deference.test.ts` asserts surface by surface.
+ *
+ * WHY DEFERENCE RATHER THAN SHARING C6's CONTEXT MACHINERY HERE. Both were on
+ * the table; sharing it would have been the wrong one, for a reason about R50.
+ * C6's suppression is not a filter that can be bolted onto a term-vs-surface
+ * match — it is a per-match-index reading of negation cues, meta-phrases and
+ * benign spans — and running it over THIS leg would apply it to RIVAL BRAND
+ * NAMES too. A rival's name parked inside a pack benign phrase, or behind a
+ * negation cue, would stop failing. That is a direct weakening of the one thing
+ * that must not weaken, and it would leave the duplication (the root cause)
+ * exactly where it was. The deference cannot reach R50 at all, because its gate
+ * is MEMBERSHIP OF THE COMPLIANCE LEXICON and no brand name is in it — the same
+ * fact `lib/audit/rivalBrands.ts` is built on.
+ *
+ * FOUR BOUNDS, each one keeping job 1 at full strength:
+ *   1. EQUALITY, NEVER CONTAINMENT. The whole term, normalised, must EQUAL a
+ *      lexicon term — the `ownBrandIdentity` / `productIdentity` discipline
+ *      exactly: sharing a word is not being the thing. A rival brand that
+ *      happens to CONTAIN a disease noun is not deferred, and neither is a claim
+ *      phrase built around one.
+ *   2. ONLY WHAT THE OWNING CHECKS ACTUALLY ENFORCE FOR **THIS** PACK. C6 and A2
+ *      early-return without a compliance module and C19's superlative leg reads
+ *      the ROUTED pack's own list, so with no `compliancePack` NOTHING is
+ *      deferred and this leg behaves byte-for-byte as it did before. That is
+ *      also why the set is built separately from `bannedLexicon` above, which is
+ *      deliberately WIDER (cross-pack superlatives): a wider set only makes the
+ *      four-test SCREEN stricter, but it would make this DEFERENCE looser.
+ *   3. THE AUTOMATIC COMPETITOR-DERIVED RIVAL SET IS NOT TOUCHED. It never reads
+ *      a status or a lexicon; it is scanned below over the same corpus with the
+ *      same regex, and nothing here can reach it. Belt and braces: a deferred
+ *      row no longer suppresses that leg either (see `deferred` below), so even
+ *      a rival brand string that collided with a lexicon term is still reported.
+ *   4. THE FLOOR IS UNMOVED. `negatives` is still incremented for a deferred
+ *      row, because the row IS recorded on the negative list — which is exactly
+ *      what `minNegatives` counts, and exactly what its own failure text asks
+ *      for ("the banned vocabulary and every rival brand name belong on it").
  *
  * CLOSED WORLD, BOTH DIRECTIONS. A declared surface outside the pack's
  * vocabulary is a failure, and a surface IN the pack's vocabulary that this
@@ -252,6 +327,45 @@ function bannedLexicon(pack: KnowledgePack): string[] {
   return [...out];
 }
 
+/** The comparison key for term-vs-lexicon EQUALITY (never containment). */
+const termKey = (v: string): string => normalize(v).trim().toLowerCase();
+
+/**
+ * THE COMPLIANCE VOCABULARY THE COMPLIANCE CHECKS OWN — the deference set.
+ *
+ * Every entry here is a term that some OTHER check enforces over this pack with
+ * full context machinery, so a model-declared `negative` row that IS one of them
+ * is left to that check (see THE DEFERENCE in the header). The membership rule
+ * is "the owning check actually runs and actually scans this term FOR THIS
+ * PACK", which is why it is not `bannedLexicon` above:
+ *
+ *   - disease nouns + action-paired nouns => C6 (customer copy, attributes,
+ *     `facts.*`) and A2 (every A+ field, FAQ included). Both scan exactly
+ *     `crossPackDiseaseNouns` / `crossPackActionPairedNouns`, and both
+ *     EARLY-RETURN when the pack ships no compliance module.
+ *   - superlative bans => C19, which reads the ROUTED pack's own
+ *     `superlativeBans` (not the cross-pack union) across every surface
+ *     `rules.prohibitedMarketing.surfaces` lists, with no negation guard at all.
+ *
+ * NO COMPLIANCE MODULE => THE EMPTY SET. C6/A2 early-return and C19's
+ * superlative leg has nothing to read, so nothing is owned and nothing may be
+ * deferred: on such a pack this check's `negative` leg is the only enforcement
+ * left and it stays exactly as blunt as it was.
+ */
+function complianceOwnedTerms(pack: KnowledgePack): Set<string> {
+  const out = new Set<string>();
+  const cp = pack.compliancePack;
+  if (!cp) return out;
+  const add = (t: string): void => {
+    const k = termKey(t);
+    if (k) out.add(k);
+  };
+  for (const n of crossPackDiseaseNouns(pack)) add(n);
+  for (const n of crossPackActionPairedNouns(pack)) add(n);
+  for (const s of cp.superlativeBans ?? []) add(s);
+  return out;
+}
+
 export function c28KeywordPlacement(
   l: OptimizedListing,
   pack: KnowledgePack,
@@ -318,6 +432,14 @@ export function c28KeywordPlacement(
     [...known]
       .map((name) => ({ name, hay: hayOf(name) }))
       .filter((e): e is { name: string; hay: string } => e.hay !== null);
+
+  const complianceOwned = complianceOwnedTerms(pack);
+  /**
+   * Terms whose `negative` row was DEFERRED to the compliance checks, keyed the
+   * same way `declaredNegatives` is. Recorded so the automatic rival leg below
+   * is NOT silenced by a row this leg chose not to report — see bound 3.
+   */
+  const deferred = new Set<string>();
 
   let negatives = 0;
 
@@ -444,7 +566,25 @@ export function c28KeywordPlacement(
         break;
       }
       case 'negative': {
+        // THE FLOOR COUNTS THE ROW WHATEVER HAPPENS NEXT: a deferred row is
+        // still a negative row RECORDED in the reference, which is the only
+        // thing `minNegatives` measures. Incrementing before the deference is
+        // therefore deliberate, not incidental.
         negatives++;
+        // THE DEFERENCE (S1). This term IS a term of the compliance lexicon,
+        // and the compliance checks own it — with de-obfuscation, the strict
+        // negation guard and pack-declared benign-context subtraction, none of
+        // which the whole-term match below has. Whether the word's USAGE is a
+        // violation is their question, not this check's; if it is, C6/A2/C19
+        // fire and the run fails there. The row is kept (documentation, and it
+        // still steers generation) and counted (above); only the failure is
+        // theirs. EQUALITY, never containment — a rival brand that merely
+        // CONTAINS a lexicon word is not a lexicon term and is not deferred.
+        const key = termKey(term);
+        if (complianceOwned.has(key)) {
+          deferred.add(key);
+          break;
+        }
         for (const { name, hay } of everywhere()) {
           if (present(hay, term)) {
             out.push(
@@ -549,10 +689,18 @@ export function c28KeywordPlacement(
   // `negatives` is not incremented here: `minNegatives` still counts only what
   // the reference itself records, so supplying competitors can never be a way
   // to satisfy the floor without writing the rows.
+  //
+  // A DEFERRED ROW DOES NOT COUNT AS "already reported" (bound 3 of THE
+  // DEFERENCE). The skip below exists so one violation is not reported twice;
+  // a row this check chose NOT to report is not a report, and letting it
+  // suppress the automatic leg would mean a rival brand string that happened to
+  // collide with a compliance term went unreported by both. The operator-
+  // supplied signal is never disarmed by a coincidence.
   const declaredNegatives = new Set(
     terms
       .filter((raw) => str((raw as Partial<KeywordTerm> | null)?.status).trim() === 'negative')
-      .map((raw) => normalize(str((raw as Partial<KeywordTerm> | null)?.term)).trim().toLowerCase()),
+      .map((raw) => normalize(str((raw as Partial<KeywordTerm> | null)?.term)).trim().toLowerCase())
+      .filter((key) => !deferred.has(key)),
   );
   for (const brand of ctx?.rivalBrands ?? []) {
     const name = str(brand).trim();
