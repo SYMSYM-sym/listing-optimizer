@@ -668,11 +668,50 @@
     "_opsPlaceholdersNote": "WS7 SUPERSEDED this list. It held two hand-written reminders (a TIC/cGMP line and a rating line) that named the topic without stating the rule, the date it takes effect, or what happens if it is missed. Both are now structured rows in postPublish.marketplaceChecklist, which the sheet renders with lane, effective date and volatility. The key stays (empty) so an operator pack can still add its OWN account-specific placeholders without touching the marketplace checklist."
   },
   "_attributeGuardComment": "AM-1 / C24 — the DOSAGE-ATTRIBUTE guard, ported from the harness kit's checkC24. Structured attributes are FILTER-FED: a strength figure sitting in an attribute whose KEY names a dose states that number AS a dose, which overstates the product even when the number itself is the canonical one. `keyPattern` is matched against the attribute KEY (case-insensitive); `unitDimensions` names which `units.dimensions` lists supply the hero units the VALUE may not assert beside a number. The figure belongs in copy attached to the blend or formula, never in structured data. Emptying either field disarms C24, so both are REQUIRED_PACK_PIECES.",
+  "_spelledOutNumbersComment": "N2 - a FLAGGED DIVERGENCE from the harness kit, recorded in CONFORMANCE-DEVIATIONS.md item 2. The kit's checkC24 value shape is digit-anchored, so 'Fifty Billion CFU' in a dosage-keyed attribute used to pass while '50 Billion CFU' failed; C12 could not see it either, for the same reason. Those are the same assertion in the same filter-fed field, so this app now reads both - deliberately, and written down. TWO lists, and the split IS the false-positive control: a match must BEGIN with a cardinal, and the magnitude words may only follow one, so a value that merely names its unit ('Billion CFU') is not read as a figure. The other bounds are structural and unchanged: the leg runs only on attribute values whose KEY matches keyPattern, and it still requires a HERO unit from unitDimensions - which is why ordinary dose-form language ('one capsule daily', 'two servings', 'thirty day supply') can never match it, since capsule/serving/day are not potency units. Emptying either list restores EXACT kit parity rather than disarming anything, so this is a widener and deliberately NOT a REQUIRED_PACK_PIECE, on the same reasoning that excludes diseaseActionVerbRoots.",
   "attributeGuard": {
     "keyPattern": "dosage|strength|potency|dose",
     "unitDimensions": [
       "potency"
-    ]
+    ],
+    "spelledOutNumbers": {
+      "cardinals": [
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
+        "nineteen",
+        "twenty",
+        "thirty",
+        "forty",
+        "fifty",
+        "sixty",
+        "seventy",
+        "eighty",
+        "ninety"
+      ],
+      "magnitudes": [
+        "hundred",
+        "thousand",
+        "million",
+        "billion",
+        "trillion"
+      ]
+    }
   },
   "_outputHygieneComment": "C27 — OUTPUT HYGIENE. Three properties of machine-written copy no other check looks at: (1) generated copy must be pure ASCII, which it is by construction because the ENGINE folds typographic punctuation at emit (lib/engine/typography.ts) — anything left is a real character a human must decide about; (2) it carries none of the model's stock phrases; (3) it never echoes a fragment of its own instructions (a live run once shipped an image brief quoting the compliance instruction back at us). Every list is pack data and every one of them is a REQUIRED_PACK_PIECE, because emptying one disarms that third of the check.",
   "outputHygiene": {

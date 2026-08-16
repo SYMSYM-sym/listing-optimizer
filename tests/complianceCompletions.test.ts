@@ -98,23 +98,35 @@ describe('C24 dosage-attribute guard (AM-1)', () => {
   });
 
   /**
-   * F6 — A RECORDED PARITY LIMITATION, PINNED SO IT CANNOT BE REDISCOVERED.
+   * ============================================================================
+   * N2 — THE PARITY LIMITATION IS CLOSED, AS A FLAGGED ADDITION.
+   * ============================================================================
    *
-   * The check is DIGIT-ANCHORED: its value pattern is `\d[\d,.]*` followed by
-   * a hero unit, exactly as the harness kit's `checkC24` was. A hero figure
-   * spelled out in words ("Fifty Billion CFU") therefore passes, and so does
-   * C12, whose scan is unit-anchored on digits for the same reason.
+   * WHAT THIS TEST USED TO SAY. It pinned the opposite behaviour: the check was
+   * DIGIT-ANCHORED, exactly as the harness kit's `checkC24` is, so
+   * `maximum_dosage: "Fifty Billion CFU"` PASSED while `"50 Billion CFU"`
+   * failed. C12 did not catch it either — its scan is unit-anchored on digits
+   * for the same reason. The limitation was recorded in
+   * CONFORMANCE-DEVIATIONS.md item 2 and pinned here so it could not be
+   * rediscovered as a finding, and item 2 stated the conditions any future fix
+   * would have to meet.
    *
-   * This is NOT fixed here, and the omission is deliberate rather than
-   * overlooked: the check is a PORT, its behaviour is the kit's behaviour, and
-   * widening it silently would make the app and the kit disagree about what
-   * C24 means with nothing recording why. It is written down in
-   * CONFORMANCE-DEVIATIONS.md (item 2) as a known limitation with the
-   * conditions any future fix must meet. This test exists so the boundary is
-   * asserted rather than assumed — if someone widens the pattern, this test
-   * fails and they are forced to update the record in the same commit.
+   * WHY IT IS NOW CLOSED. Those two strings are the SAME assertion in the SAME
+   * filter-fed field. C24's objection is to stating a hero figure AS A DOSE in
+   * structured data, and the script the figure is written in has nothing to do
+   * with that objection. Kit parity was worth keeping only for as long as the
+   * divergence was undocumented; item 2 is now rewritten to record this as an
+   * INTENTIONAL improvement over the kit, with the reason.
+   *
+   * The three conditions item 2 set are met and are asserted below:
+   *   - the number vocabulary is PACK DATA (`attributeGuard.spelledOutNumbers`),
+   *     never a literal in the gate — `tests/category.literals.test.ts` still
+   *     passes;
+   *   - both directions are tested: the spelled-out hero figure FAILS, and
+   *     ordinary number-word dose language still PASSES;
+   *   - the record is updated in the same commit as the code.
    */
-  it('KNOWN LIMITATION (recorded): the guard is digit-anchored, so a spelled-out figure passes', () => {
+  it('N2 (was a recorded limitation): a SPELLED-OUT hero figure now FAILS, like the digits', () => {
     const digits = mut((x) => {
       x.attributes.maximum_dosage = '50 Billion CFU';
     });
@@ -122,10 +134,128 @@ describe('C24 dosage-attribute guard (AM-1)', () => {
       x.attributes.maximum_dosage = 'Fifty Billion CFU';
     });
     expect(c24DosageAttributeGuard(digits, pack)).toHaveLength(1);
-    expect(c24DosageAttributeGuard(words, pack)).toEqual([]);
-    // and C12 does not catch it either — same digit anchor, same reason
+    const wordFailures = c24DosageAttributeGuard(words, pack);
+    expect(wordFailures).toHaveLength(1);
+    expect(wordFailures[0]!.field).toBe('attributes.maximum_dosage');
+    expect(idsOf(words)).toContain('C24');
+    // C12 is UNCHANGED and still digit-anchored — this widened C24 only, and
+    // saying so here keeps the two facts from being confused later.
     expect(idsOf(words)).not.toContain('C12');
-    expect(idsOf(words)).not.toContain('C24');
+  });
+
+  it('N2: every spelled-out shape of the hero figure fails', () => {
+    for (const value of [
+      'Fifty Billion CFU',
+      'fifty billion cfu',
+      'Fifty-Billion CFU',
+      'Five Hundred mg',
+      'Twenty Five mg',
+      'Twenty-five mg',
+      'Two Thousand IU',
+      'One Billion CFU',
+      'Ninety Billion',
+      'Five hundred mcg per capsule',
+    ]) {
+      const l = mut((x) => {
+        x.attributes.maximum_dosage = value;
+      });
+      expect(c24DosageAttributeGuard(l, pack).map((f) => f.field), value).toEqual([
+        'attributes.maximum_dosage',
+      ]);
+    }
+  });
+
+  /**
+   * THE OTHER DIRECTION, and the one that actually decides whether this change
+   * was worth making. Words like "one", "two" and "thirty" are everywhere in
+   * legitimate dose-form and direction language, and a widening that fails any
+   * of these would be over-blocking — treated in this project as exactly as
+   * severe as a bypass.
+   */
+  it('N2: ordinary number-word dose language still PASSES, in a dosage-KEYED attribute', () => {
+    for (const value of [
+      'One Capsule Daily',
+      'one capsule daily',
+      'Take one capsule daily with water',
+      'Two Capsules',
+      'two servings',
+      'Two servings per day',
+      'thirty day supply',
+      'Thirty Day Supply',
+      'Do not exceed two capsules in twenty four hours',
+      'One softgel in the morning and one in the evening',
+      'Two gummies daily for adults',
+      'Ten gummies per pouch',
+      'Vegetable Capsule',
+      'One scoop',
+      'Three tablets',
+    ]) {
+      const l = mut((x) => {
+        x.attributes.maximum_dosage = value;
+      });
+      expect(c24DosageAttributeGuard(l, pack), value).toEqual([]);
+    }
+  });
+
+  it('N2: a value that merely NAMES its unit is not read as a figure (cardinal must lead)', () => {
+    for (const value of ['Billion CFU', 'Million CFU', 'mg', 'Billion', 'CFU per serving']) {
+      const l = mut((x) => {
+        x.attributes.maximum_dosage = value;
+      });
+      expect(c24DosageAttributeGuard(l, pack), value).toEqual([]);
+    }
+  });
+
+  it('N2: a number word must be joined to a HERO unit — a count or day unit is not one', () => {
+    // The guarded dimension is `potency`. `capsule`, `count` and `day` live in
+    // other dimensions, which is what makes this widening narrow rather than a
+    // general number-word scan.
+    expect(pack.rules.attributeGuard!.unitDimensions).toEqual(['potency']);
+    for (const value of ['Sixty Capsules', 'Thirty Days', 'Ninety Count', 'Two Tablets']) {
+      const l = mut((x) => {
+        x.attributes.maximum_dosage = value;
+      });
+      expect(c24DosageAttributeGuard(l, pack), value).toEqual([]);
+    }
+  });
+
+  it('N2: the leg is scoped to dosage-KEYED attributes, exactly like the digit leg', () => {
+    const l = mut((x) => {
+      x.attributes.product_description_extra = 'Fifty Billion CFU blend of ten strains';
+      x.attributes.serving_size = 'Two Capsules';
+    });
+    expect(c24DosageAttributeGuard(l, pack)).toEqual([]);
+  });
+
+  it('N2: the vocabulary is PACK DATA — removing it restores EXACT kit parity', () => {
+    const kit = clonePack();
+    delete kit.rules.attributeGuard!.spelledOutNumbers;
+    const words = mut((x) => {
+      x.attributes.maximum_dosage = 'Fifty Billion CFU';
+    });
+    const digits = mut((x) => {
+      x.attributes.maximum_dosage = '50 Billion CFU';
+    });
+    // words pass (the kit's behaviour), digits still fail (the kit's behaviour)
+    expect(c24DosageAttributeGuard(words, kit)).toEqual([]);
+    expect(c24DosageAttributeGuard(digits, kit)).toHaveLength(1);
+    // ...and because it is a WIDENER, emptying it disarms nothing, so it is
+    // deliberately not a manifest piece: the pack still passes PACK.
+    expect(idsOf(digits, kit)).not.toContain('PACK');
+  });
+
+  it('N2: emptying just the cardinals is the same as removing the block', () => {
+    const kit = clonePack();
+    kit.rules.attributeGuard!.spelledOutNumbers = { cardinals: [], magnitudes: ['billion'] };
+    const words = mut((x) => {
+      x.attributes.maximum_dosage = 'Fifty Billion CFU';
+    });
+    expect(c24DosageAttributeGuard(words, kit)).toEqual([]);
+  });
+
+  it('N2: the golden fixture is untouched by the new leg', () => {
+    expect(c24DosageAttributeGuard(clean, pack)).toEqual([]);
+    expect(runGate(clean, pack, ctx).failures).toEqual([]);
   });
 
   it('covers every key shape the pack pattern names', () => {

@@ -416,6 +416,32 @@ export interface AttributeGuardRules {
   keyPattern: string;
   /** Which `units.dimensions` keys supply the guarded unit tokens. */
   unitDimensions: string[];
+  /**
+   * N2 — the SPELLED-OUT number vocabulary, a FLAGGED DIVERGENCE from the
+   * harness kit (see CONFORMANCE-DEVIATIONS.md item 2).
+   *
+   * The kit's `checkC24` value shape is digit-anchored, so `"50 Billion CFU"`
+   * in a dosage-keyed attribute fails and `"Fifty Billion CFU"` passes. The
+   * figure is the same assertion in either script, and the attribute is
+   * filter-fed either way, so this app now reads both — deliberately, and
+   * recorded, rather than silently.
+   *
+   * TWO lists, not one, and the split is the false-positive control:
+   *   `cardinals`   — the counting words (one … ninety). A match must BEGIN
+   *                   with one of these.
+   *   `magnitudes`  — the scale words (hundred … trillion). They may only
+   *                   appear AFTER a cardinal, so a bare unit-declaring value
+   *                   like "Billion CFU" is not read as a figure.
+   *
+   * ABSENT OR EMPTY = EXACT KIT PARITY. The leg is a WIDENER, so emptying it
+   * cannot disarm C24 — it only narrows the check back to the digit-anchored
+   * port. That is why it is deliberately NOT a `REQUIRED_PACK_PIECES` row, on
+   * the same reasoning that excludes `diseaseActionVerbRoots`.
+   */
+  spelledOutNumbers?: {
+    cardinals: string[];
+    magnitudes?: string[];
+  };
 }
 
 /**

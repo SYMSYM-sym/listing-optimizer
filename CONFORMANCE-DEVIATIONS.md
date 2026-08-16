@@ -50,51 +50,200 @@ not in prose.* The closed-world rule was doing its job in one direction the whol
 time (an unknown DECLARED surface fails) and could not help in the other, because
 a surface that is never named is never checked.
 
+### 1.1 THE SAME HOLE, IN FOUR MORE CHECKS — closed by N1.
+
+The fix above closed C28's reader and the C6/C10/C12/C21/C22 corpus. It did not
+close the other two readers, and the difference sat there afterwards:
+
+| reader | behind | image `altText` | `videoBrief.*` |
+| --- | --- | --- | --- |
+| `customerSurfaces` | C6/C10/C12/C21/C22 | read | read |
+| `keywordSurfaceText` | C28 | read | read |
+| `collectSurfaces` | **C18 / C19 / C27** | **NOT read** | **no branch at all** |
+| `styleSurfaces` | **C17** | **NOT read** | **not read** |
+
+So a price, a URL, an email address, a rank claim, a guarantee, a superlative,
+an AI tell, a leaked instruction fragment or a non-ASCII glyph could sit in an
+ALT string or anywhere in the video brief and produce **zero** failures — while
+the identical string one field over, in `imagePlan[i].notes`, failed. That
+asymmetry is the whole tell: these were never new surfaces, they were surfaces
+four checks had been left behind on.
+
+**Status: FIXED.** `collectSurfaces` reads `altText` in its existing `imagePlan`
+branch and gains a `videoBrief` branch over every string field; `styleSurfaces`
+reads `altText` in the existing `images` group and the brief in a new `video`
+group; `videoBrief` is registered in `prohibitedContent.surfaces`,
+`prohibitedMarketing.surfaces` and `outputHygiene.surfaces` so the vocabulary
+stays pack-driven.
+
+**The closed-world hole itself is now closed, in the direction that bit.** The
+collector's group vocabulary is exported as `COLLECTED_SURFACE_GROUPS` and
+`tests/n1.surfaceCoverage.gate.test.ts` §1 asserts it **equals** the set the
+pack declares — so a group declared with no branch (silently unscanned: this
+bug) and a branch nothing declares (dead code that reads as coverage) are both
+test failures now, not review-survivable prose.
+
+**THE C17 SUB-RULE PARTITION, and why it is not a blanket add.** ALT text and
+on-screen video text are SHORT DISPLAY STRINGS; a rule written for a prose
+bullet is not automatically a rule about a motion-graphics overlay, and this
+project treats over-blocking as exactly as severe as a bypass.
+
+| sub-rule | `imagePlan[i].altText` | `videoBrief.*` | why |
+| --- | --- | --- | --- |
+| banned symbols | **applied** | **applied** | prohibited wherever they render, and both render |
+| emoji | **applied** | **applied** | same rule, same reason |
+| ASIN in copy | **applied** | **applied** | an identifier is never legitimate on a customer surface |
+| HTML markup | **applied** | **applied** | a tag with no renderer behind it is a defect in every medium |
+| ALL-CAPS (word + run) | **applied** | **NOT applied** | ALT is prose a screen reader reads aloud, in the same register as its `purpose`/`spec`/`notes` siblings. A brief is capitals in BOTH registers — typography in a title card, slug lines in a shot list — and C17 cannot tell either from shouting |
+| banned characters | not applied | not applied | pack-scoped to the title surfaces + bullets, unchanged |
+| promo term bans | not applied | not applied | pack-scoped to the title surfaces, unchanged |
+| bullet start-capital | not applied | not applied | a rule about how a bullet LIST renders; an ALT attribute and a graphic are not list items |
+| bullet trailing punctuation | not applied | not applied | same |
+
+The ALL-CAPS exclusion is **pack data** (`style.allCapsExemptSurfaces:
+["video"]`), and it can only SUBTRACT — an absent or empty list checks every
+surface, which is the stricter behaviour and the one that shipped before the key
+existed. That is why it is not a `REQUIRED_PACK_PIECES` row, on the same
+reasoning that excludes `benignContextPhrases` and `asciiExemptSurfaces`.
+**Nothing is given up by declining it**: the things that actually matter in an
+overlay — a price, a CTA, a ranking claim, a superlative — are caught by C18/C19,
+whose patterns are compiled case-insensitive, so a shouted one fails there
+whatever its casing. Both the applied and the excluded rules are asserted in
+§3 of the suite, because *an exclusion nobody tests is indistinguishable from an
+omission*.
+
+**THE C27 ASCII CARVE-OUT: decided NO, and recorded either way.**
+`asciiExemptSurfaces` still lists exactly one group, `backendSearchTerms`, and
+that exemption is *earned* by what the field is: a SEARCH-INDEX input whose job
+is to carry other-language query variants, where a diacritic **is** the query.
+ALT text and on-screen video text are the opposite — DISPLAY strings that ship
+to a customer and into a feed — so a surviving non-ASCII character there is a
+smart quote the emit-time fold left alone, an invisible, or a real accented word,
+and each of those is a decision a human should make deliberately. `shots`/`notes`
+are the production direction those display strings are rendered *from*, so
+exempting them would only move the same character one field upstream. Asserted
+in both directions in §5 (backend still exempt from ASCII but still phrase-scanned;
+ALT and every video field not exempt).
+
+**Both directions, and the lawful-copy battery.**
+`tests/n1.surfaceCoverage.gate.test.ts` — 159 cases. §2 plants a genuine
+violation of each applicable check in each of the five new fields and requires a
+failure naming that exact field; §4 is the over-blocking half, running the real
+ALT, overlay, shot-direction and notes shapes the verified runs produce (all
+eight golden ALT strings, the oral-care register of B00WNDG7V8, the
+potency-overlay register of B00EEEITVA, plus shapes that *look* like violations
+and are not) and requiring **zero** findings from all four checks and zero gate
+failures overall; §6 requires every newly-emitted field to route to the images
+group, so a new finding is repairable rather than a round-burning dead end; §7
+reconstructs the pre-fix readers to prove the suite is not vacuous. Removing
+`videoBrief` from the pack fails 64 of the 159.
+
 ---
 
-## 2. KNOWN PARITY LIMITATION — C24 is digit-anchored; a spelled-out figure passes.
+## 2. FLAGGED ADDITION — C24 now reads a SPELLED-OUT figure too. This is an intentional divergence from the kit.
+
+### 2.1 What this entry used to say, and why it changed
 
 `c24DosageAttributeGuard` (`lib/gate/checks/c-attributes.ts`) fails a
 dosage/strength/potency-keyed attribute whose value asserts a hero figure. Its
-value pattern is a **digit** run followed by a hero unit:
+value pattern was a **digit** run followed by a hero unit, exactly as the
+harness kit's `checkC24`:
 
 ```
 new RegExp(`\\d[\\d,.]*\\s*(?:${unitSource})\\b`, 'i')
 ```
 
-So `maximum_dosage: "50 Billion CFU"` fails and `maximum_dosage: "Fifty Billion
-CFU"` **passes**. C12 does not catch it either — its scan is unit-anchored on
-digits for the same reason, so a spelled-out figure is invisible to both.
+So `maximum_dosage: "50 Billion CFU"` failed and `maximum_dosage: "Fifty
+Billion CFU"` **passed**. C12 did not catch it either — its scan is
+unit-anchored on digits for the same reason, so a spelled-out figure was
+invisible to both. This entry recorded that as a **known parity limitation**,
+deliberately not fixed, on two grounds: parity with the kit is the contract, and
+a number-word scan is not obviously free because words like "one", "ten" and
+"hundred" appear all over legitimate dose-form and direction strings.
 
-**This is faithful to the source.** The check is a port of the harness kit's
-`checkC24`, whose value shape is the same digit-anchored one, and the port is
-documented as such in the check's own header. Widening it here would make the
-app and the kit silently disagree about what C24 means.
+**The first ground has been re-decided; the second was met rather than
+abandoned.**
 
-**Deliberately NOT fixed.** Two reasons, in order of weight:
+Those two strings are the **same assertion in the same field**. C24's objection
+is to stating a hero figure **as a dose** in filter-fed structured data — and
+the script the figure happens to be written in has nothing to do with that
+objection. Kit parity was worth keeping only while the divergence would have
+been *undocumented*: the failure mode this file exists to stop is a check that
+quietly grows a rule the source does not have. Documenting the growth removes
+that failure mode, and leaving a real hole open to preserve a byte-for-byte
+match with a port is the wrong trade once the record is being kept honestly.
 
-1. **Parity is the contract.** A ported check that quietly grows a rule the
-   original does not have is a check nobody can reason about from the source.
-2. **The fix is not obviously free.** A number-word scan runs across every
-   attribute value in the pack's key pattern, and words like "one", "ten" and
-   "hundred" appear in legitimate dose-form and direction strings. Over-blocking
-   lawful copy is treated in this project as exactly as severe as a bypass, and
-   an unmeasured widening is how that happens.
+**Status: CLOSED, as a FLAGGED ADDITION.** The app and the kit now
+*deliberately* disagree about C24, and this is the record of it.
 
-**Assessed exposure: low but real.** The generator writes attribute values, and
-it is prompted with the canonical facts in digit form, so the spelled-out shape
-is not a natural output. It is reachable through `/api/audit`, where the listing
-is client-supplied — an operator pasting a hand-written attribute value.
+### 2.2 The mechanism, and the five bounds that keep it narrow
 
-**If this is ever fixed it must be a FLAGGED ADDITION, not a silent widening:**
-recorded here as an intentional divergence from the kit, with both-direction
-tests (spelled-out hero figure in a dosage-keyed attribute FAILS; a lawful
-attribute containing an ordinary number word — "One Capsule Daily", "Take one
-capsule" — still PASSES), and the number-word vocabulary held as **pack data**,
-never as a literal in the gate.
+The number vocabulary is **PACK DATA** (`rules.attributeGuard.spelledOutNumbers`
+— see the `_spelledOutNumbersComment` beside it); the gate names no number word,
+so `tests/category.literals.test.ts` stays green.
 
-**The WS5.5 panel confirmation does not change any of this.** An
-operator-confirmed panel changes what the canonical **number** is (it is the
+It is deliberately **two lists**, and the split is the false-positive control:
+
+| list | contents | rule |
+| --- | --- | --- |
+| `cardinals` | one … ninety | a match must **begin** with one of these |
+| `magnitudes` | hundred … trillion | may only appear **after** a cardinal |
+
+so a value that merely names its unit — `"Billion CFU"` — is not read as a
+figure. The other four bounds are structural and were already there:
+
+1. **Scope.** The leg inherits the whole check's scope: attribute values only,
+   and only where the attribute KEY matches the pack's dosage pattern. Ordinary
+   copy is never read by C24 at all.
+2. **A hero unit is still required.** The guarded dimension is `potency`.
+   "One capsule daily", "two servings" and "thirty day supply" name a dosage
+   FORM, a serving and a day — none of them a potency unit — so none of them can
+   match however the number is written. This is what makes the widening narrow
+   rather than a general number-word scan.
+3. **The separator is required and every token is word-bounded**, so
+   "ten gummies" cannot be read as "ten g".
+4. **Absent pack data = exact kit parity.** The leg is a WIDENER: emptying
+   either list disarms nothing, it only restores the digit-anchored port. That
+   is precisely why it is **not** a `REQUIRED_PACK_PIECES` row — the same
+   reasoning that excludes `diseaseActionVerbRoots`.
+
+### 2.3 Both directions, by test name
+
+`tests/complianceCompletions.test.ts`, all under `C24 dosage-attribute guard`:
+
+- *"N2 (was a recorded limitation): a SPELLED-OUT hero figure now FAILS, like the
+  digits"* — the exact string this entry used to pin as passing, plus the
+  explicit note that **C12 is unchanged** and still digit-anchored.
+- *"N2: every spelled-out shape of the hero figure fails"* — casing, hyphens,
+  `Five Hundred mg`, `Twenty-five mg`, `Two Thousand IU`, `Ninety Billion`.
+- *"N2: ordinary number-word dose language still PASSES, in a dosage-KEYED
+  attribute"* — fifteen lawful values including "One Capsule Daily", "two
+  servings", "thirty day supply", "Ten gummies per pouch".
+- *"N2: a value that merely NAMES its unit is not read as a figure"*.
+- *"N2: a number word must be joined to a HERO unit"*.
+- *"N2: the leg is scoped to dosage-KEYED attributes"*.
+- *"N2: the vocabulary is PACK DATA — removing it restores EXACT kit parity"*
+  and *"...emptying just the cardinals is the same as removing the block"*.
+- *"N2: the golden fixture is untouched by the new leg"*.
+
+The old pinning test is **replaced, not deleted** — it now asserts the opposite
+behaviour under a name that says so, so the transition is legible in the diff
+rather than looking like a test that quietly disappeared.
+
+### 2.4 What is still NOT done, stated
+
+**C12 is untouched and remains digit-anchored.** Its scan is a general
+unit-extraction pass over every customer surface, not a narrow attribute guard,
+so a number-word leg there is a materially larger change with a materially
+larger false-positive surface (ordinary copy legitimately says "one capsule",
+"a hundred servings sold"). C24 was closed because its scope is one pack-matched
+attribute key; C12's is the whole listing. Anyone extending C12 should treat
+that as its own flagged addition with its own battery, not as an obvious
+follow-on from this one.
+
+### 2.5 Unchanged: the WS5.5 panel confirmation
+
+An operator-confirmed panel changes what the canonical **number** is (it is the
 fact source C12 measures against — see `lib/knowledge/panelFacts.ts`); it cannot
 license a claim, and it deliberately does not touch C24. C24's objection is to
 stating a hero figure **as a dose** in filter-fed structured data, which is true
@@ -102,10 +251,10 @@ whether or not the figure is confirmed — the check has no fact source by desig
 and giving it one would turn "you may not say this here" into "you may say it if
 it happens to be true".
 
-The boundary is pinned by a test so it cannot be rediscovered as a finding:
-`tests/complianceCompletions.test.ts` → *"KNOWN LIMITATION (recorded): the guard
-is digit-anchored, so a spelled-out figure passes"*. Widening the pattern breaks
-that test, which forces this file to be updated in the same commit.
+**A future change to this must also change:** `AttributeGuardRules` in
+`lib/types.ts`, `rules.attributeGuard.spelledOutNumbers` (+ its `_comment`) in
+`knowledge/rules.json`, the N2 block in `c24DosageAttributeGuard`'s header, and
+the `N2:` cases in `tests/complianceCompletions.test.ts`.
 
 ---
 

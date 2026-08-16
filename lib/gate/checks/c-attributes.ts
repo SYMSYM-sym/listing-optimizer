@@ -180,6 +180,35 @@ function alternation(tokens: string[]): string {
  * attribute that asserts NO hero unit (a serving size counted in dosage forms,
  * a dosage FORM) is untouched, which is the both-direction contract this check
  * ships with.
+ *
+ * ---------------------------------------------------------------------------
+ * N2 — FLAGGED DIVERGENCE FROM THE KIT: the SPELLED-OUT figure now fails too.
+ * ---------------------------------------------------------------------------
+ * The kit's `checkC24` value shape is digit-anchored, so `"Fifty Billion CFU"`
+ * in a dosage-keyed attribute used to pass while `"50 Billion CFU"` failed.
+ * C12 could not catch it either — its scan is unit-anchored on digits for the
+ * same reason. The two strings are the SAME assertion in a filter-fed field, so
+ * the app now reads both. This is recorded as an intentional improvement over
+ * kit parity in CONFORMANCE-DEVIATIONS.md item 2, not slipped in.
+ *
+ * THE FALSE-POSITIVE CONTROL, because that is the real risk here and words like
+ * "one" and "ten" are everywhere in ordinary dose-form language:
+ *   1. SCOPE. The leg inherits the check's whole scope — it runs ONLY on
+ *      attribute values, and only on attributes whose KEY the pack's dosage
+ *      pattern matches. Ordinary copy is never read by C24 at all.
+ *   2. A HERO UNIT IS STILL REQUIRED. "One capsule daily", "two servings" and
+ *      "thirty day supply" name a dosage FORM, a serving and a day — none of
+ *      which is in the guarded (potency) dimension — so none of them can match
+ *      however the number is written. That was already true of the digit leg;
+ *      it is what makes this widening narrow.
+ *   3. A CARDINAL MUST LEAD. `magnitudes` (hundred/…/billion) can only follow a
+ *      cardinal, so a value that merely names its unit ("Billion CFU") is not
+ *      read as a figure.
+ *   4. THE SEPARATOR IS REQUIRED. Words are joined to their unit by at least
+ *      one space or hyphen, and every token is word-bounded, so "ten gummies"
+ *      cannot be read as "ten g".
+ *   5. ABSENT PACK DATA = EXACT KIT PARITY. The leg is a widener; emptying it
+ *      disarms nothing, it only restores the digit-anchored port.
  */
 export function c24DosageAttributeGuard(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const guard = pack.rules?.attributeGuard;
@@ -197,12 +226,25 @@ export function c24DosageAttributeGuard(l: OptimizedListing, pack: KnowledgePack
     return [];
   }
   // number (with separators) followed by a hero unit — the kit's value shape.
-  const valueRe = new RegExp(`\\d[\\d,.]*\\s*(?:${unitSource})\\b`, 'i');
+  const valueRes: RegExp[] = [new RegExp(`\\d[\\d,.]*\\s*(?:${unitSource})\\b`, 'i')];
+  // N2 — the same shape written in words. Pack data; nothing below names a
+  // number word. See the header for the five bounds that keep it narrow.
+  const cardinalSource = alternation(guard?.spelledOutNumbers?.cardinals ?? []);
+  if (cardinalSource) {
+    const magnitudeSource = alternation(guard?.spelledOutNumbers?.magnitudes ?? []);
+    const anyWord = magnitudeSource ? `${cardinalSource}|${magnitudeSource}` : cardinalSource;
+    valueRes.push(
+      new RegExp(
+        `\\b(?:${cardinalSource})(?:[\\s-]+(?:${anyWord}))*[\\s-]+(?:${unitSource})\\b`,
+        'i',
+      ),
+    );
+  }
   const out: Failure[] = [];
   for (const [key, value] of Object.entries(l.attributes ?? {})) {
     if (!keyRe.test(key)) continue;
     const text = typeof value === 'string' ? value : String(value ?? '');
-    if (!valueRe.test(text)) continue;
+    if (!valueRes.some((re) => re.test(text))) continue;
     out.push(
       fail(
         'C24',
