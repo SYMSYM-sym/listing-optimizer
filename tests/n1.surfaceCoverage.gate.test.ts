@@ -208,18 +208,6 @@ describe('§1 the surface vocabulary is closed in both directions', () => {
 // §2 — DETECTION: each new field × each applicable check
 // ===========================================================================
 
-/**
- * One planted violation. `expectIds` is the set of check ids that MUST report
- * it on that exact field.
- */
-interface Planted {
-  label: string;
-  field: string;
-  put: (l: OptimizedListing, text: string) => void;
-  text: string;
-  expect: string;
-}
-
 const putAlt = (l: OptimizedListing, text: string): void => {
   l.imagePlan[0] = { ...l.imagePlan[0]!, altText: text };
 };
