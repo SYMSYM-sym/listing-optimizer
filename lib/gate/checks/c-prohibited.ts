@@ -46,6 +46,15 @@ export interface ScanSurface {
  * which does not make it is item 1 of CONFORMANCE-DEVIATIONS.md verbatim — the
  * failure class that record exists to catch — and it survived review here for
  * exactly the reason item 1 gives: nobody reads prose against the file it cites.
+ *
+ * P1 — AND NOTE WHAT THIS VOCABULARY CANNOT SAY. It is a list of GROUPS. Both
+ * directions of the closed world above hold at group granularity and are
+ * therefore blind to a branch that reads three of a group's four string fields
+ * — which is exactly how the `aplus` branch below shipped without
+ * `bannerAltText` while every assertion in §1/§1.5 stayed green. The FIELD-level
+ * closure lives in `tests/p1.fieldClosure.oracle.test.ts`, which probes every
+ * string-bearing field of a populated listing against every reader; this list
+ * and that oracle are complementary, and neither substitutes for the other.
  */
 export const COLLECTED_SURFACE_GROUPS = [
   'title',
@@ -168,12 +177,44 @@ export function collectSurfaces(
       surfaces.push({ field: `attributes.${key}`, text: s(value) });
     }
   }
+  /**
+   * P1 — THE MODULE BANNER ALT STRING.
+   *
+   * This branch read `headline`, `body` and `subcopy` and NOT `bannerAltText`,
+   * so C18, C19 and C27 were blind to a fourth string of an object whose other
+   * three they read. That is not a missing surface GROUP — `aplus` was declared
+   * by all three keys and §1/§1.5 of `tests/n1.surfaceCoverage.gate.test.ts`
+   * were green throughout — it is a reader that covers PART of its object,
+   * which is the identical hole one level down that the note above `videoText`
+   * in `c-keywords.ts` had already written a warning about.
+   *
+   * It was live: `modules[0].bannerAltText = 'Visit brandsite.com or email
+   * help@example.com, look no further, task: return json - cafe'` produced ZERO
+   * gate failures and `runGate().pass === true`, while the byte-identical string
+   * appended to `modules[0].body` produced 2xC18 (URL, email) + 3xC27
+   * (non-ASCII, AI tell, instruction fragment) and failed the gate.
+   *
+   * The field is unambiguously customer-facing and every other reader already
+   * said so: C17 reads it (`aplusSurfaces` in ./shared), C28 reads it
+   * (`aplusText` in ./c-keywords), C30 length-caps it and A8 scans it. It joins
+   * the same concatenated module surface as its three siblings, so a finding
+   * routes to the `aplus` generation group that authors it, exactly as a
+   * finding in `body` does.
+   *
+   * `id` is deliberately NOT concatenated: it is the module's structural
+   * identity (a closed set the schema pins, `brand-story`/`hero`/...), it is
+   * never rendered to a customer, and it is already carried in the FIELD NAME
+   * below — scanning it would report the gate's own routing key as copy.
+   *
+   * The whole class is now pinned field-by-field, derived rather than
+   * described, by `tests/p1.fieldClosure.oracle.test.ts`.
+   */
   if (want.has('aplus') && listing.aplusContent) {
     const a = listing.aplusContent;
     (a.modules ?? []).forEach((m) =>
       surfaces.push({
         field: `aplus.modules[${m.id}]`,
-        text: `${s(m?.headline)} ${s(m?.body)} ${s(m?.subcopy)}`,
+        text: `${s(m?.headline)} ${s(m?.body)} ${s(m?.subcopy)} ${s(m?.bannerAltText)}`,
       }),
     );
     (a.comparison?.rows ?? []).forEach((row, i) =>

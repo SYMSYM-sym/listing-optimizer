@@ -167,6 +167,15 @@ function aplusText(l: OptimizedListing): string {
  * Every string field is read, `aspect` and `notes` as well as the two arrays:
  * a surface reader that covers only part of its object is the same hole one
  * level down. `durationSeconds` is a number and can carry no term.
+ *
+ * P1 — THAT SENTENCE WAS RIGHT AND IT WAS ONLY A SENTENCE. While it sat here,
+ * `collectSurfaces` (C18/C19/C27) was reading three of an A+ module's four
+ * strings and `customerSurfaces` (C6/C10/C11/C12/C21/C22) three of this brief's
+ * four, and neither was caught by anything — the group-level surface pinning
+ * cannot see inside an object. It is executable now:
+ * `tests/p1.fieldClosure.oracle.test.ts` probes EVERY string-bearing field of a
+ * populated listing against every reader, so a reader that covers part of its
+ * object fails a test that names the field it dropped.
  */
 function videoText(l: OptimizedListing): string {
   const v = l.videoBrief;

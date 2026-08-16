@@ -27,6 +27,23 @@ import { fail } from './shared';
  *     exemptions are pack data and both leave the two PHRASE scans below in
  *     force. See `_asciiExemptSurfacesComment` in `knowledge/rules.json`.
  *
+ *     P3 — WHAT THIS PARAGRAPH USED TO CLAIM, AND WHY IT WAS WRONG. It said
+ *     the fold premise is *"false for this one group and false for no other."*
+ *     That was overstated: at the time `normalizeListingTypography` also never
+ *     folded `imagePlan[].altText`, `aplusContent.modules[].bannerAltText` or
+ *     any `videoBrief` string — three MODEL-WRITTEN surfaces C27 scans, on
+ *     which a curly apostrophe was reported as a character a human must decide
+ *     about while the identical apostrophe in the sibling field one over had
+ *     been folded away. The conclusion about `facts` was still right, but the
+ *     uniqueness claim was not, and it was the uniqueness claim that made the
+ *     carve-out look principled. The premise is now TRUE of every surface this
+ *     check scans except `facts`: the fold was extended to cover those three
+ *     (see the P3 note in `lib/engine/typography.ts`), which is the direction
+ *     that fixes the asymmetry without weakening anything — the fold touches
+ *     punctuation and spacing only, so every banned symbol, emoji, invisible
+ *     and accented word still reaches this check untouched. `facts` remains
+ *     exempt because it is the one group that is not model-written at all.
+ *
  *  2. NO AI-TELL PHRASES. Stock model phrasing ("delve", "look no further",
  *     "unlock the power") is not illegal, but it is the single clearest signal
  *     to a reader that nobody wrote this listing. Pack list.

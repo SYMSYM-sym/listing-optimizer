@@ -75,8 +75,20 @@ export function customerSurfaces(l: OptimizedListing): [string, string][] {
   });
   // WS8: the video brief's on-screen strings are read by the same OCR that
   // reads the images, so they are copy and are scanned as copy.
+  //
+  // P1: `aspect` was the ONE video string this collector did not read, while
+  // the three other readers of the same object all do — `collectSurfaces`
+  // (C18/C19/C27), `styleSurfaces` (C17) and `videoText` (C28) each read all
+  // four. A reader that covers three of an object's four strings is the exact
+  // shape of the `bannerAltText` bypass one level over, so the odd one out is
+  // closed rather than argued: `aspect` is a short format string today
+  // ('9:16 vertical'), but nothing constrains it to be, and a term parked there
+  // was invisible to C6/C10/C11/C12/C21/C22 and to the fail-closed backstop
+  // (`allGeneratedSurfaces`) while the identical term one field over failed.
+  // `durationSeconds` is a number and carries no copy.
   const video = l.videoBrief;
   if (video && typeof video === 'object') {
+    out.push(['videoBrief.aspect', str(video.aspect)]);
     arr<unknown>(video.shots).forEach((b, i) => out.push([`videoBrief.shots[${i}]`, str(b)]));
     arr<unknown>(video.onScreenText).forEach((t, i) =>
       out.push([`videoBrief.onScreenText[${i}]`, str(t)]),

@@ -66,12 +66,58 @@ export function toAsciiTypography(text: string): string {
  * snapshot, not written by the model), `fdaDisclaimer` and
  * `aplusContent.fdaDisclaimer` (verbatim legal constants — C5/A1 compare them
  * character for character, so this module must never be in a position to edit
- * one), `state`, and the parallel bookkeeping arrays.
+ * one), `state`, the keyword REFERENCE (`keywords[]` — an operator-facing
+ * planning artifact, not published copy, and not a surface any content check
+ * reads), and the parallel bookkeeping arrays.
+ *
+ * ---------------------------------------------------------------------------
+ * P3 — THE THREE MODEL-WRITTEN SURFACES THIS FUNCTION USED TO MISS
+ * ---------------------------------------------------------------------------
+ * `imagePlan[].altText`, `aplusContent.modules[].bannerAltText` and the whole
+ * of `videoBrief` are written by the model exactly like the copy around them,
+ * and they were passing through unfolded — `altText` and `bannerAltText`
+ * because their branches listed their siblings and not them, `videoBrief`
+ * because it had no branch at all and rode the spread.
+ *
+ * That mattered, and in the OVER-BLOCKING direction. C27 judges every surface
+ * POST-fold and its stated premise is *"the engine already folded this text, so
+ * anything non-ASCII that survives is a real character a human must decide
+ * about."* On these three the premise was simply false: a curly apostrophe the
+ * model wrote into an ALT string was reported as a decision for a human, while
+ * the identical apostrophe one field over in `imagePlan[].notes` was folded and
+ * never seen — and the repair loop cannot converge on a character class it is
+ * not told is mechanical. The fold covers them now, so the premise is true for
+ * every surface C27 scans except `facts`, which is the ONE deliberate carve-out
+ * (`asciiExemptSurfaces`) and is deliberate for the opposite reason: facts are
+ * not model-written at all.
+ *
+ * NOTHING IS LAUNDERED BY THIS. The substitution table above is punctuation and
+ * spacing only: banned symbols, currency signs, emoji, zero-width characters and
+ * accented or non-Latin words are all left exactly as written, so every C17 and
+ * C27 finding that could fire on these fields before still fires. What stops
+ * firing is the smart quote — which is what the fold is for.
+ *
+ * OPTIONALITY IS PRESERVED. `altText`, `bannerAltText` and `videoBrief` are all
+ * optional, and C29/C30 report a MISSING one as its own failure. Folding must
+ * not turn `undefined` into `''` and convert "missing" into "empty", so each is
+ * rebuilt only when it is actually there.
  */
 export function normalizeListingTypography(l: OptimizedListing): OptimizedListing {
   const t = toAsciiTypography;
+  const video = l.videoBrief;
   return {
     ...l,
+    ...(video
+      ? {
+          videoBrief: {
+            ...video,
+            aspect: t(video.aspect),
+            shots: (Array.isArray(video.shots) ? video.shots : []).map(t),
+            onScreenText: (Array.isArray(video.onScreenText) ? video.onScreenText : []).map(t),
+            notes: t(video.notes),
+          },
+        }
+      : {}),
     title: t(l.title),
     title75: t(l.title75),
     itemHighlights: t(l.itemHighlights),
@@ -91,6 +137,7 @@ export function normalizeListingTypography(l: OptimizedListing): OptimizedListin
         headline: t(m.headline),
         body: t(m.body),
         ...(m.subcopy === undefined ? {} : { subcopy: t(m.subcopy) }),
+        ...(m.bannerAltText === undefined ? {} : { bannerAltText: t(m.bannerAltText) }),
       })),
       comparison: {
         rows: (l.aplusContent?.comparison?.rows ?? []).map((r) => ({
@@ -106,6 +153,7 @@ export function normalizeListingTypography(l: OptimizedListing): OptimizedListin
       purpose: t(s.purpose),
       spec: t(s.spec),
       notes: t(s.notes),
+      ...(s.altText === undefined ? {} : { altText: t(s.altText) }),
     })),
     qa: (l.qa ?? []).map((f) => ({ ...f, q: t(f.q), a: t(f.a) })),
   };

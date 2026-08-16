@@ -199,7 +199,34 @@ already has the mechanism for saying so.
   says so, in as many words, because facts are deterministic source truth read
   off the scraped page (and, under WS5.5, off an operator's confirmed panel
   reading), not model-written copy. The premise the rule rests on is false for
-  this one group and false for no other.
+  this group.
+
+  > **P3 CORRECTION — this bullet used to end "…false for this one group and
+  > false for no other." That was overstated and wrong.** When it was written,
+  > `normalizeListingTypography` also never folded `imagePlan[].altText`,
+  > `aplusContent.modules[].bannerAltText` or **any** `videoBrief` string
+  > (`aspect`, `shots[]`, `onScreenText[]`, `notes`) — three further surfaces
+  > C27 scans. `altText` and `bannerAltText` were missed because their branches
+  > listed their siblings and not them; `videoBrief` had no branch at all and
+  > rode the object spread. So the premise was false for four groups, not one.
+  > The `facts` conclusion is unaffected — it was argued from facts being
+  > *source truth*, not from being unique — but the uniqueness claim is what
+  > made the carve-out look principled, and it was not true.
+  >
+  > **The other three are FIXED IN THE FOLD, not carved out.** They are
+  > model-written copy, so the honest repair is to make the premise true rather
+  > than to widen the exemption: `normalizeListingTypography` now folds all
+  > three. That direction also removes a real **over-blocking** asymmetry — a
+  > curly apostrophe a model wrote into an ALT string was reported as "a
+  > character a human must decide about" while the identical apostrophe in
+  > `imagePlan[].notes` one field over was folded and never seen, and no repair
+  > round can converge on a character class it is not told is mechanical.
+  > Nothing is laundered: the substitution table is punctuation and spacing
+  > only, so banned symbols, currency signs, emoji, zero-width characters and
+  > accented words still arrive at C17/C27 exactly as the model wrote them, and
+  > `undefined` is preserved as `undefined` so C29/C30 still see a MISSING
+  > brief or ALT as missing rather than as empty. Both directions are in
+  > `tests/p3.typographyFold.test.ts`.
 
 * **And the failure would be unrepairable.** `facts` are rebuilt identically
   from the same snapshot on every round (`buildFacts`), so no regeneration can
@@ -257,6 +284,26 @@ five bounds of items 7.3 and 11.3. The check-id census of item 4.1 is pinned to
 `lib/gate/runGate.ts` by `tests/census.test.ts` and needs no prose spot-check —
 which is the point of it.
 
+> **P3 RE-MEASURED, and one "correction" rejected.** A later review reported that
+> a prior hand-off's figure of **813** for `tests/redteam4.gate.test.ts`
+> *"matches nothing that runs."* **It matches exactly one thing: that file.**
+> `npx vitest run tests/redteam4.gate.test.ts` reports **813 tests** — the file
+> is `it.each`-driven, so its case count is far larger than its line count and
+> is easy to disbelieve from a reading. The 813 stands and nothing was changed
+> for it; the finding is recorded here because an unfounded correction to a
+> record is the same defect as an unfounded claim in one, and this file is where
+> both get written down.
+>
+> Every per-file number this document cites was re-measured in the same run
+> rather than re-read: `n1.surfaceCoverage.gate.test.ts` **170**,
+> `m1.factsHygiene.gate.test.ts` **41**, `keywordPlacement.surfaces.test.ts`
+> **18**, `rivalBrands.gate.test.ts` **24**,
+> `regenerate.competitors.n4.test.ts` **13**, `redteam4.gate.test.ts` **813**,
+> and the 15 planted surfaces of `capturedVia.gate.test.ts` are the 15 entries
+> of its `PLANTERS` table (that file runs 25 tests in total, which is a
+> different quantity and is not what the sentence above claims). **No stale
+> number was found.**
+
 #### M3 — the pinning was against the UNION, which is why M1 was invisible
 
 §1 of `tests/n1.surfaceCoverage.gate.test.ts` asserted `COLLECTED_SURFACE_GROUPS`
@@ -288,6 +335,101 @@ and (e) — while all of §1 still passes.
 `lib/gate/checks/c-prohibited.ts`, §1.5 and §5 of
 `tests/n1.surfaceCoverage.gate.test.ts`, and
 `tests/m1.factsHygiene.gate.test.ts`.
+
+---
+
+### 1.3 THE SAME HOLE, ONE LEVEL DOWN — a reader that covered three of an object's four strings.
+
+#### P1 — `collectSurfaces` did not read `aplusContent.modules[].bannerAltText`
+
+`collectSurfaces` (`lib/gate/checks/c-prohibited.ts`) is the ONE reader behind
+**C18** (prohibited detail-page content), **C19** (prohibited marketing) and
+**C27** (output hygiene). Its A+ branch concatenated `headline`, `body` and
+`subcopy` of each module — and not `bannerAltText`. Reproduced live:
+
+```
+aplusContent.modules[0].bannerAltText =
+  'Visit brandsite.com or email help@example.com, look no further, task: return json – café'
+=> ZERO failures, runGate().pass === true
+```
+
+The byte-identical string appended to `modules[0].body` produced **2×C18** (URL,
+email) and **3×C27** (non-ASCII, AI tell, instruction fragment) and failed the
+gate. The field was never a *new* surface: C17 read it (`aplusSurfaces`), C28
+read it (`aplusText`), C30 length-caps it and A8 scans it. It was a surface
+three checks had been left behind on — the shape of item 1.2/M1 exactly, one
+level further down.
+
+**WHY §1/§1.5 COULD NOT SEE IT, and this is the whole point.** That pinning is
+**group-level**: it asserts that the pack's `aplus` group is declared by each
+key and that the collector has a branch for it. Both were true the entire time.
+A group-level closed world is *structurally* blind to a reader that reads three
+of a group's four string fields — which is precisely why this survived a round
+that was specifically hunting surface-coverage holes. The warning was even
+already written down, as prose, in `lib/gate/checks/c-keywords.ts` above
+`videoText`: *"a surface reader that covers only part of its object is the same
+hole one level down."* Prose is what this whole document exists to say cannot be
+relied on.
+
+**FIXED:** the branch concatenates `bannerAltText` alongside its three siblings,
+so a finding routes to the `aplus` generation group that authors it, exactly as
+a finding in `body` does. `id` stays out deliberately — it is the module's
+structural identity, is never rendered, and is already carried in the FIELD NAME
+the reader emits.
+
+**ONE MORE OMISSION OF THE SAME CLASS, found by auditing every reader:**
+`customerSurfaces` (`lib/gate/checks/shared.ts`) read `videoBrief.shots[]`,
+`.onScreenText[]` and `.notes` and **not `.aspect`**, while all three other
+readers of that same object read all four. It is fixed the same way rather than
+argued about; `aspect` is a short format string today, but nothing constrains it
+to be, and while it was unread a term parked there was invisible to
+C6/C10/C11/C12/C21/C22 and to the fail-closed backstop.
+
+#### P2 — the guard: a FIELD-level closure oracle
+
+`tests/p1.fieldClosure.oracle.test.ts` replaces the group-level claim with a
+field-level one, and derives both ends so it cannot rot the way the prose did:
+
+* **The universe of fields is derived twice.** A fully populated golden listing
+  is *walked* for every string-bearing leaf; that walk is then cross-checked
+  against the zod group schemas through `z.toJSONSchema` — the LLM boundary
+  contract itself — and any field a schema declares that the golden run does not
+  happen to carry is **seeded** into it first, so an optional field is probed
+  like a required one. A field added to a schema enters the suite automatically.
+* **Coverage is measured by PROBE, not by reading code.** Each field gets a
+  unique sentinel written into it; a reader "reads" that field iff the sentinel
+  comes back in the text it returns. Six readers are probed —
+  `collectSurfaces`, `styleSurfaces`, `customerSurfaces`, `aplusSurfaces`,
+  `allGeneratedSurfaces`, and `keywordSurfaceText` over the whole pack
+  vocabulary.
+* **Closure with a reasoned exemption table.** Every field must be read by every
+  applicable reader, or carry a row in `GLOBAL_EXEMPT` (no content reader reads
+  it — the two verbatim disclaimer constants, `productName`, `primaryKeyword`,
+  `bulletAnchors[]`, the module `id`, the keyword reference, `state`,
+  `degradedGroups[]`) or in that reader's own table (`facts.price` is exempt
+  from `collectSurfaces` **by key**, not by omission). A field with neither
+  **fails, naming the field**.
+* **The tables cannot rot either.** Every exemption row is asserted to name a
+  field that still exists, to be genuinely unread, and — for a per-reader row —
+  to be read by at least one *other* reader, so "a sibling covers it" is a
+  checked claim rather than a comment.
+
+**Proved non-vacuous four ways.** In-suite: the pre-P1 `collectSurfaces` is
+reconstructed and the oracle reports **exactly**
+`aplusContent.modules[].bannerAltText`; the pre-P1 `customerSurfaces` reports
+**exactly** `videoBrief.aspect`; a mutant that drops `imagePlan[].altText`
+reports **exactly** that; and a synthetic new string field added to every module
+is reported by name by all six readers. And by hand on the real tree: reverting
+the one-token fix in `collectSurfaces` fails three cases —
+§C `collectSurfaces` naming `aplusContent.modules[].bannerAltText`, §E, and §F —
+and restoring it returns 20/20.
+
+**A future change to this must also change:** the A+ branch of `collectSurfaces`
+and the video branch of `customerSurfaces`, and the reader list / exemption
+tables of `tests/p1.fieldClosure.oracle.test.ts`. Adding a reader that walks the
+listing without adding it to `READERS` there is the one move this suite cannot
+see, which is why the six it does hold are named in the header with the checks
+they arm.
 
 ---
 
