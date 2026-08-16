@@ -32,10 +32,20 @@ export interface ScanSurface {
  * records for C28: *a surface that is never named is never checked*, and a
  * coverage claim that lives only in prose survives review.
  *
- * So the vocabulary is exported and `tests/prohibited.gate.test.ts` asserts BOTH
- * directions against the shipped pack: every group the pack declares has a
- * branch here (nothing is declared-but-unread), and every branch here actually
- * produces a field for a fully populated listing (nothing is coded-but-dead).
+ * So the vocabulary is exported and `tests/n1.surfaceCoverage.gate.test.ts` §1
+ * asserts BOTH directions against the shipped pack: every group the pack
+ * declares has a branch here (nothing is declared-but-unread), and every branch
+ * here actually produces a field for a fully populated listing (nothing is
+ * coded-but-dead) — and, since M3, it asserts that PER CHECK rather than only
+ * against the union of the three declaring keys, so narrowing any ONE check's
+ * list is a test failure.
+ *
+ * M2 — THIS SENTENCE NAMED THE WRONG FILE. It used to say
+ * `tests/prohibited.gate.test.ts` asserts both directions; that file contains no
+ * such assertion and never did. A coverage claim in prose that names a test
+ * which does not make it is item 1 of CONFORMANCE-DEVIATIONS.md verbatim — the
+ * failure class that record exists to catch — and it survived review here for
+ * exactly the reason item 1 gives: nobody reads prose against the file it cites.
  */
 export const COLLECTED_SURFACE_GROUPS = [
   'title',
@@ -133,6 +143,11 @@ export function collectSurfaces(
   // generator with neither C18 nor C19 ever reading it.
   // `facts.price` is exempted BY KEY (it legitimately holds the standard
   // price); every other fact string is scanned.
+  // M1: `facts` was declared by `prohibitedContent` and `prohibitedMarketing`
+  // and NOT by `outputHygiene`, so C27 alone never reached this branch. It is
+  // declared by all three now; the ASCII third of C27 is lifted for the group
+  // via `asciiExemptSurfaces` (the emit-time fold never runs on facts), and the
+  // AI-tell / instruction-fragment thirds apply here like anywhere else.
   if (want.has('facts')) {
     for (const [key, value] of Object.entries(listing.facts ?? {})) {
       if (key === 'price') continue;

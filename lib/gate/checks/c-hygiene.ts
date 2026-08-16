@@ -19,7 +19,13 @@ import { fail } from './shared';
  *     entities and strips invisibles). Surface groups listed in
  *     `asciiExemptSurfaces` are exempt from THIS rule only — the backend
  *     search-term field exists to carry other-language variants, and a
- *     diacritic there is the query, not a defect.
+ *     diacritic there is the query, not a defect; `facts` is exempt because
+ *     the premise in the first sentence is FALSE for it — the emit-time fold
+ *     deliberately never touches `facts` (it is deterministic source truth,
+ *     not model-written copy), so a scraped en dash there is neither a
+ *     surviving oddity nor something any repair round could rewrite. Both
+ *     exemptions are pack data and both leave the two PHRASE scans below in
+ *     force. See `_asciiExemptSurfacesComment` in `knowledge/rules.json`.
  *
  *  2. NO AI-TELL PHRASES. Stock model phrasing ("delve", "look no further",
  *     "unlock the power") is not illegal, but it is the single clearest signal

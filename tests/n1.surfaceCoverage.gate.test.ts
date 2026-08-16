@@ -126,12 +126,25 @@ describe('§0 baseline', () => {
 // §1 — CLOSED WORLD, BOTH DIRECTIONS
 // ===========================================================================
 
+/**
+ * The three pack keys that drive `collectSurfaces`, each with the check it
+ * arms. Named individually rather than folded into a union: see §1.5.
+ */
+const DECLARING_KEYS: [check: string, key: 'prohibitedContent' | 'prohibitedMarketing' | 'outputHygiene'][] = [
+  ['C18', 'prohibitedContent'],
+  ['C19', 'prohibitedMarketing'],
+  ['C27', 'outputHygiene'],
+];
+
+const declaredBy = (key: (typeof DECLARING_KEYS)[number][1]): string[] =>
+  (pack.rules[key]?.surfaces ?? []) as string[];
+
 describe('§1 the surface vocabulary is closed in both directions', () => {
   /** Every group any of the three pack keys declares. */
   const declared = new Set<string>([
-    ...(pack.rules.prohibitedContent?.surfaces ?? []),
-    ...(pack.rules.prohibitedMarketing?.surfaces ?? []),
-    ...(pack.rules.outputHygiene?.surfaces ?? []),
+    ...declaredBy('prohibitedContent'),
+    ...declaredBy('prohibitedMarketing'),
+    ...declaredBy('outputHygiene'),
   ]);
 
   it('(a) DECLARED ⊆ CODED — no pack group is silently unscanned (this is the N1 bug class)', () => {
@@ -201,6 +214,79 @@ describe('§1 the surface vocabulary is closed in both directions', () => {
     expect(() => fourChecks(junk)).not.toThrow();
     expect(() => runGate(junk, pack, ctx)).not.toThrow();
     expect(runGate(junk, pack, ctx).failures.every((f) => f.checkId !== 'GATE')).toBe(true);
+  });
+});
+
+// ===========================================================================
+// §1.5 — THE SAME CLOSURE, PINNED PER CHECK (M3)
+// ===========================================================================
+
+/**
+ * WHY THIS SECTION EXISTS AT ALL.
+ *
+ * §1 pins `COLLECTED_SURFACE_GROUPS` against the **union** of the three
+ * declaring keys, and a union hides a per-check omission completely. It did:
+ * `facts` was declared by `prohibitedContent` and by `prohibitedMarketing` and
+ * NOT by `outputHygiene`, so C18 and C19 read every fact string and **C27 never
+ * read one** — while every assertion in §1 stayed green, because the union still
+ * contained `facts`. That is finding M1, and §1 could not have caught it however
+ * carefully it was read.
+ *
+ * So each check's declared set is asserted INDIVIDUALLY here. A future narrowing
+ * of any ONE of the three lists is a failure in this section, rather than
+ * something §2's shipped-pack cases might or might not happen to trip over.
+ */
+
+/** Groups the collector can read that a declaration list omits. */
+const missingFrom = (list: readonly string[]): string[] =>
+  COLLECTED_SURFACE_GROUPS.filter((g) => !list.includes(g));
+
+/** Groups a declaration list names that the collector cannot read. */
+const orphansIn = (list: readonly string[]): string[] =>
+  list.filter((g) => !(COLLECTED_SURFACE_GROUPS as readonly string[]).includes(g));
+
+describe('§1.5 each check declares the WHOLE vocabulary, asserted per check', () => {
+  for (const [check, key] of DECLARING_KEYS) {
+    it(`(a) ${check} — rules.${key}.surfaces declares every group the collector can read`, () => {
+      const missing = missingFrom(declaredBy(key));
+      expect(
+        missing,
+        `${check} does not scan: ${missing.join(', ')} (the collector reads them for the other checks)`,
+      ).toEqual([]);
+    });
+
+    it(`(b) ${check} — rules.${key}.surfaces declares nothing the collector cannot read`, () => {
+      const orphans = orphansIn(declaredBy(key));
+      expect(orphans, `${check} declares unreadable groups: ${orphans.join(', ')}`).toEqual([]);
+    });
+
+    it(`(c) ${check} — no group is declared twice (a duplicate reads as breadth and adds none)`, () => {
+      const list = declaredBy(key);
+      expect(list.length).toBe(new Set(list).size);
+    });
+  }
+
+  it('(d) the three lists are the SAME set — any divergence between them is the M1 shape', () => {
+    const [first, ...rest] = DECLARING_KEYS.map(([, key]) => [...declaredBy(key)].sort());
+    for (const other of rest) expect(other).toEqual(first);
+  });
+
+  it('(e) NOT VACUOUS — narrowing ONE list by one group fails HERE and is invisible to §1', () => {
+    for (const [, key] of DECLARING_KEYS) {
+      for (const group of COLLECTED_SURFACE_GROUPS) {
+        const narrowed = declaredBy(key).filter((g) => g !== group);
+        // this section catches it...
+        expect(missingFrom(narrowed), `${key} minus ${group}`).toEqual([group]);
+        // ...and §1's union does not, because the other two keys still name it.
+        const union = new Set<string>([
+          ...DECLARING_KEYS.filter(([, k]) => k !== key).flatMap(([, k]) => declaredBy(k)),
+          ...narrowed,
+        ]);
+        expect([...union].sort(), `${key} minus ${group} is invisible to the union`).toEqual(
+          [...COLLECTED_SURFACE_GROUPS].sort(),
+        );
+      }
+    }
   });
 });
 
@@ -544,8 +630,12 @@ describe('§4 lawful ALT and on-screen copy raises NOTHING from any of the four 
 describe('§5 C27 ASCII: no carve-out for ALT or video, and the backend one is untouched', () => {
   const ACCENT = 'Shot in a café with the bottle in frame';
 
-  it('the pack exempts EXACTLY ONE group from the ASCII rule, and it is the backend field', () => {
-    expect(pack.rules.outputHygiene!.asciiExemptSurfaces).toEqual(['backendSearchTerms']);
+  it('the pack exempts EXACTLY the two groups whose exemption is argued for, and no others', () => {
+    // `backendSearchTerms` — N1, argued below and in the pack comment.
+    // `facts` — M1: the ASCII rule's premise (post-fold text) is false for the
+    // one group the emit-time fold never touches. Both directions of that
+    // decision live in `tests/m1.factsHygiene.gate.test.ts`.
+    expect(pack.rules.outputHygiene!.asciiExemptSurfaces).toEqual(['backendSearchTerms', 'facts']);
   });
 
   it('the backend exemption still holds — a diacritic there IS the query, not a defect', () => {

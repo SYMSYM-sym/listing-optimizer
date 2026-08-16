@@ -42,7 +42,15 @@ agency template's competitor name survives.
 (`aspect`, `shots[]`, `onScreenText[]`, `notes`); `video` is registered in
 `knowledge/rules.json` → `keywordRules.visibleSurfaces` so the vocabulary stays
 pack-driven. `tests/keywordPlacement.surfaces.test.ts` holds every leg in both
-directions — 14 of its 18 cases fail against the pre-fix reader.
+directions — **12 of its 18 cases** fail against the pre-fix reader.
+
+> **CORRECTED (M2, re-measured).** This said **14**. Reconstructing the pre-fix
+> reader on the current tree — `aplusText` stops reading `bannerAltText`, and
+> `video` comes out of `keywordRules.visibleSurfaces` — and running the suite
+> gives **12 failed, 6 passed of 18**. The original 14 was measured against a
+> tree that no longer exists in isolation (items 6, 7 and 10 have since added
+> legs to C28), so the honest record is the number a reader can reproduce today
+> by the method just stated, not a number nobody can check.
 
 **The record is corrected here rather than in the old commit message**, which is
 immutable. The lesson is kept deliberately: *a coverage claim belongs in a test,
@@ -83,6 +91,11 @@ pack declares — so a group declared with no branch (silently unscanned: this
 bug) and a branch nothing declares (dead code that reads as coverage) are both
 test failures now, not review-survivable prose.
 
+> **INCOMPLETE AS WRITTEN — see item 1.2 (M3).** "the set the pack declares" was
+> the **UNION** of the three declaring keys, and a union is blind to a
+> per-check omission. One was already there: C27 did not declare `facts`. §1.5
+> now pins each check's list on its own.
+
 **THE C17 SUB-RULE PARTITION, and why it is not a blanket add.** ALT text and
 on-screen video text are SHORT DISPLAY STRINGS; a rule written for a prose
 bullet is not automatically a rule about a motion-graphics overlay, and this
@@ -112,8 +125,9 @@ whatever its casing. Both the applied and the excluded rules are asserted in
 §3 of the suite, because *an exclusion nobody tests is indistinguishable from an
 omission*.
 
-**THE C27 ASCII CARVE-OUT: decided NO, and recorded either way.**
-`asciiExemptSurfaces` still lists exactly one group, `backendSearchTerms`, and
+**THE C27 ASCII CARVE-OUT: decided NO for these surfaces, and recorded either
+way.** At N1 `asciiExemptSurfaces` listed exactly one group,
+`backendSearchTerms` (item 1.2 later adds `facts`, on a different argument), and
 that exemption is *earned* by what the field is: a SEARCH-INDEX input whose job
 is to carry other-language query variants, where a diacritic **is** the query.
 ALT text and on-screen video text are the opposite — DISPLAY strings that ship
@@ -126,7 +140,8 @@ in both directions in §5 (backend still exempt from ASCII but still phrase-scan
 ALT and every video field not exempt).
 
 **Both directions, and the lawful-copy battery.**
-`tests/n1.surfaceCoverage.gate.test.ts` — 159 cases. §2 plants a genuine
+`tests/n1.surfaceCoverage.gate.test.ts` — 170 cases (159 at N1; §1.5 adds 11 at
+M3, item 1.2). §2 plants a genuine
 violation of each applicable check in each of the five new fields and requires a
 failure naming that exact field; §4 is the over-blocking half, running the real
 ALT, overlay, shot-direction and notes shapes the verified runs produce (all
@@ -136,7 +151,143 @@ and are not) and requiring **zero** findings from all four checks and zero gate
 failures overall; §6 requires every newly-emitted field to route to the images
 group, so a new finding is repairable rather than a round-burning dead end; §7
 reconstructs the pre-fix readers to prove the suite is not vacuous. Removing
-`videoBrief` from the pack fails 64 of the 159.
+`videoBrief` from all three declaring pack keys fails **68 of the 170**.
+
+> **RE-MEASURED (M2).** This said "fails 64 of the 159", and a meta review
+> reported 70. Neither was taken again; the number was therefore re-measured
+> from scratch — `videoBrief` deleted from `prohibitedContent.surfaces`,
+> `prohibitedMarketing.surfaces` and `outputHygiene.surfaces`, the suite run,
+> the pack restored. The result is **68 failed / 102 passed of 170**, of which
+> **4** are in the new §1.5, i.e. **64 of the original 159** — so the recorded
+> 64 was right, the meta review's 70 was wrong, and the sentence is updated to
+> the current suite rather than left to be re-derived. The 68 break down as:
+> §1 ×2, §1.5 ×4, §2/C18 ×20, §2/C19 ×20, §2/C27 ×20, §5 ×1, §6 ×1.
+
+---
+
+### 1.2 THE SAME HOLE, ONE PACK KEY FURTHER ALONG — and two errors in this record.
+
+Three findings from a final adversarial meta review, closed together because
+they are one shape: **a coverage claim that no test could falsify.**
+
+#### M1 — C27 did not scan `facts.*`
+
+`outputHygiene.surfaces` declared **eleven** groups while
+`prohibitedContent.surfaces` and `prohibitedMarketing.surfaces` each declared
+**twelve**. The missing one was `facts`. `c27OutputHygiene` reads exactly what
+its own pack key declares, so C17, C18 and C19 all scanned the canonical facts
+and **C27 never scanned one** — a smart quote, a zero-width character, an AI
+tell or a leaked instruction fragment parked in a fact string escaped, while the
+identical string one field over failed. Same shape as N1: `facts` was never a
+new surface, it was a surface one check had been left behind on.
+
+**DECISION: `facts` joins `outputHygiene.surfaces`, and joins
+`asciiExemptSurfaces` in the same change.** That is one decision about one rule,
+not half of each — the three thirds of C27 are separable by design, and the pack
+already has the mechanism for saying so.
+
+* **The two PHRASE scans belong on facts and now run there.** `facts.*` is
+  echoed **verbatim** into every repair prompt, so an AI tell or an instruction
+  fragment sitting in a fact is both a defect in the canonical record and a
+  prompt-injection route into the next round. Nothing about a fact makes stock
+  model phrasing or a fragment of our own scaffolding legitimate.
+
+* **The ASCII scan does not, and C27's own docstring says why without meaning
+  to.** It reads: *the engine folds typographic punctuation to ASCII at emit, so
+  anything non-ASCII that survives is a real character a human must decide
+  about.* `lib/engine/typography.ts` **deliberately never folds `facts`** — and
+  says so, in as many words, because facts are deterministic source truth read
+  off the scraped page (and, under WS5.5, off an operator's confirmed panel
+  reading), not model-written copy. The premise the rule rests on is false for
+  this one group and false for no other.
+
+* **And the failure would be unrepairable.** `facts` are rebuilt identically
+  from the same snapshot on every round (`buildFacts`), so no regeneration can
+  rewrite one — the routing table sends `facts.*` to the attributes group, but
+  that group does not author them. A scraped en dash in `facts.weight` would
+  burn every remaining round and end the run `verified:false` on a character
+  nobody wrote: the unwinnable shape recorded as items 10.1 and 11.2, and this
+  project treats over-blocking as exactly as severe as a bypass.
+
+The evidence was taken before the decision, not after: the golden fixture's
+facts (`50 Billion CFU` / `1 Capsule` / `2.4 Ounces` / `$24.99`) and both
+live-verified fact shapes (B00WNDG7V8's `{price, formulaCount: 11}` and its
+120-count follow-up, B00EEEITVA's potency-bearing block) are **entirely ASCII**,
+so the carve-out gives up nothing that is happening today — it bounds what
+happens the first time a scraped panel string carries a `–`, a `µ` or a
+non-breaking space.
+
+**Both directions in `tests/m1.factsHygiene.gate.test.ts` (41 cases).** §1
+reproduces the hole against a reconstructed pre-M1 pack (the AI tell and the
+fragment raise nothing there and fail now, while C18/C19 are identical either
+side); §2 fires both phrase scans on every string fact, end to end through
+`runGate`, and pins that the emitted failure ROUTES rather than dead-ends, and
+that `facts.price` stays exempt BY KEY; §3 is the carve-out in both directions —
+six kinds of non-ASCII raise nothing in a fact and all six still fail in an
+attribute value, the exemption is ASCII-only (a non-ASCII fact carrying a tell
+still fails, for the tell), and removing it from the pack makes the gate
+STRICTER, so it can only subtract; §4 pins the premise **against the code** —
+`normalizeListingTypography` folds a title's en dash and returns the fact
+byte-identical — so if the fold ever starts covering facts this test fails and
+the exemption has to be re-argued rather than quietly outliving its reason; §5
+is the lawful-value battery over the golden and both live fact shapes.
+
+#### M2 — two errors in this record, both re-measured
+
+1. **"Removing `videoBrief` from the pack fails 64 of the 159."** Re-measured
+   above: **68 of 170** today, **64 of the original 159**. See the note there.
+2. **`lib/gate/checks/c-prohibited.ts` named the wrong test.** The comment above
+   `COLLECTED_SURFACE_GROUPS` said *"`tests/prohibited.gate.test.ts` asserts
+   BOTH directions against the shipped pack."* That file contains no such
+   assertion and never did; the closed-world assertions live in
+   `tests/n1.surfaceCoverage.gate.test.ts` §1. **A coverage claim in prose that
+   names a test which does not make it is item 1 of this file verbatim** — the
+   exact failure class this record exists to catch, reproduced inside the fix
+   for it, and it survived review for the reason item 1 gives: nobody reads
+   prose against the file it cites. The comment now names the real test and says
+   what it got wrong.
+
+The other numeric claims in this file were spot-checked against the code in the
+same pass and are correct as written: 18 cases in
+`tests/keywordPlacement.surfaces.test.ts`, 15 planted surfaces in
+`tests/capturedVia.gate.test.ts`, 24 in `tests/rivalBrands.gate.test.ts`, 13 in
+`tests/regenerate.competitors.n4.test.ts`, fifteen lawful dose values in the
+C24 battery, the `cardinals`/`magnitudes` ranges of item 2.2, and the four and
+five bounds of items 7.3 and 11.3. The check-id census of item 4.1 is pinned to
+`lib/gate/runGate.ts` by `tests/census.test.ts` and needs no prose spot-check —
+which is the point of it.
+
+#### M3 — the pinning was against the UNION, which is why M1 was invisible
+
+§1 of `tests/n1.surfaceCoverage.gate.test.ts` asserted `COLLECTED_SURFACE_GROUPS`
+against the **union** of the three declaring keys. A union cannot see a
+per-check omission: `facts` was in it the whole time, contributed by the two
+keys that did declare it, so **every assertion in §1 stayed green while C27 was
+blind to an entire surface group.** The closed-world rule was doing its job in
+the direction it could and was structurally incapable of the other one — the
+same sentence item 1 ends on, one level up.
+
+**§1.5 now asserts each check's declared set INDIVIDUALLY** — for each of C18,
+C19 and C27: every collector group is declared, nothing undeclarable is
+declared, and no group is declared twice; plus the three lists are asserted to
+be the same set, since a divergence between them *is* the M1 shape. A future
+narrowing of any ONE list is a failure here rather than something §2's
+shipped-pack cases might happen to trip over.
+
+**Proved non-vacuous, twice.** Case (e) narrows each list by each group in turn
+and asserts the section catches it **and that §1's union does not** — the bug is
+demonstrated inside the suite rather than described. And the real thing was done
+by hand: removing `facts` from `outputHygiene.surfaces` in the shipped pack (the
+literal pre-M1 state) fails exactly three cases, all in §1.5 — (a) for C27, (d),
+and (e) — while all of §1 still passes.
+
+**A future change to this must also change:** `outputHygiene.surfaces` and
+`asciiExemptSurfaces` (+ `_asciiExemptSurfacesComment`) in
+`knowledge/rules.json`, the ASCII paragraph of `c27OutputHygiene`'s header, the
+`facts` branch comment and the `COLLECTED_SURFACE_GROUPS` header in
+`lib/gate/checks/c-prohibited.ts`, §1.5 and §5 of
+`tests/n1.surfaceCoverage.gate.test.ts`, and
+`tests/m1.factsHygiene.gate.test.ts`.
 
 ---
 
