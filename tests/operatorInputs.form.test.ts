@@ -110,7 +110,7 @@ describe('operator inputs — parsing', () => {
     expect(normalizePanelFacts(panel)).toEqual(panel);
   });
 
-  it('a fully filled form produces every key, and regenerate carries the three that still apply', () => {
+  it('a fully filled form produces every key, and regenerate now carries ALL FOUR (N4)', () => {
     const filled = form({
       reviewsText: 'It fits my morning routine.',
       competitorAsins: 'B0TESTASIN',
@@ -126,11 +126,18 @@ describe('operator inputs — parsing', () => {
     // A regeneration must not escape C11 phrases or the confirmed panel, and it
     // must not LOSE the operator's review language: a regenerated group written
     // without the mined buyer phrasing stops mirroring the operator's buyers
-    // while every other group still does. COMPETITORS are still not sent —
-    // they feed the benchmark, which a single-group regeneration does not
-    // re-ingest, and the route does not accept them.
+    // while every other group still does.
+    //
+    // N4 — COMPETITORS ARE NOW SENT TOO. The old reason for withholding them
+    // ("they feed the benchmark, which a single-group regeneration does not
+    // re-ingest") was correct when it was written and stopped being correct when
+    // WS9→R50 gave the competitor set a second job: the automatic RIVAL-BRAND
+    // NEGATIVE SET C28 enforces, which feeds `verified`. A regenerated group is
+    // written from scratch — exactly when a rival brand can appear — and it was
+    // being graded with that set empty.
     expect(regenerateOperatorInputs(filled)).toEqual({
       reviewsText: 'It fits my morning routine.',
+      competitorAsins: ['B0TESTASIN'],
       fictionPhrases: ['triple-strength complex'],
       panelFacts: { unit_count: '90 Count' },
     });

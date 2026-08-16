@@ -1,56 +1,19 @@
 import { NextResponse } from 'next/server';
 import { anthropicClient } from '@/lib/engine/llm';
-import { ingestByAsin } from '@/lib/ingest';
-import { parseAsin } from '@/lib/ingest/parseAsin';
+import { ingestCompetitors } from '@/lib/ingest/competitors';
 import { normalizePanelFacts } from '@/lib/knowledge/panelFacts';
 import { runPipeline } from '@/lib/pipeline/run';
 import { checkAccess } from '@/lib/server/guard';
 import { logServer } from '@/lib/server/log';
 import { saveRun } from '@/lib/store/runs';
 import { env } from '@/lib/env';
-import type { CompetitorIngestion, ListingSnapshot } from '@/lib/types';
+import type { ListingSnapshot } from '@/lib/types';
 
 /**
- * WS9 — the operator may benchmark against at most this many competitors.
- *
- * The playbook's Phase 4 is 3-4 competitors (the leader, the closest spec
- * rival, one fast riser). The cap is also a spend control: each ASIN is a
- * paid provider call, and the field is free text on a public route.
+ * WS9 — competitor ingestion moved to `lib/ingest/competitors.ts` (N4) so the
+ * regenerate route can run the IDENTICAL code rather than a second copy of it.
+ * The cap and the never-lose-the-run behaviour are unchanged; see that module.
  */
-const MAX_COMPETITORS = 4;
-
-/**
- * Ingest the competitor ASINs, NEVER losing the run over one.
- *
- * Ingesting somebody else's listing fails routinely — blocked, rate-limited,
- * retired. Each failure becomes a `failed` ROW carrying its reason, which the
- * benchmark renders as failed; the optimize call itself is unaffected. This is
- * why the ingestion lives here in the route rather than inside the pipeline:
- * the route owns the provider, and the pipeline stays injectable and
- * deterministic for the golden test.
- */
-async function ingestCompetitors(input: unknown): Promise<CompetitorIngestion[] | undefined> {
-  if (!Array.isArray(input)) return undefined;
-  const asins = [
-    ...new Set(
-      input
-        .map((v) => (typeof v === 'string' ? (parseAsin(v) ?? v.trim().toUpperCase()) : ''))
-        .filter((v) => /^[A-Z0-9]{10}$/.test(v)),
-    ),
-  ].slice(0, MAX_COMPETITORS);
-  if (asins.length === 0) return undefined;
-  return Promise.all(
-    asins.map(async (asin): Promise<CompetitorIngestion> => {
-      try {
-        return { asin, snapshot: await ingestByAsin(asin) };
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        logServer('competitor.ingest_failed', { asin, message: message.slice(0, 200) });
-        return { asin, error: message.slice(0, 200) };
-      }
-    }),
-  );
-}
 
 export const maxDuration = 300;
 

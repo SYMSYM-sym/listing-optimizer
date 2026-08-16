@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { buildAudit } from '@/lib/audit/buildAudit';
 import { optimize, type GroupName, ALL_GROUPS } from '@/lib/engine/optimize';
 import { anthropicClient } from '@/lib/engine/llm';
+import { ingestCompetitors } from '@/lib/ingest/competitors';
 import { detectCategory } from '@/lib/knowledge/detectCategory';
 import { loadPack } from '@/lib/knowledge/loadPack';
 import { withOperatorFictionPhrases } from '@/lib/knowledge/operatorInputs';
@@ -45,6 +46,37 @@ export async function POST(req: Request): Promise<NextResponse> {
      * is scored against the same evidence. Absent => byte-identical.
      */
     reviewsText?: string;
+    /**
+     * N4 — THE COMPETITOR ASINS, and why this route now takes them.
+     *
+     * They used to be left out deliberately, and the reason recorded was that
+     * "they feed the BENCHMARK, a measurement of pages a single-group
+     * regeneration does not re-ingest, and their absence changes no copy."
+     *
+     * That reason was true when it was written and is no longer true. WS9→R50
+     * (CONFORMANCE-DEVIATIONS item 7) gave the competitor set a SECOND job: it
+     * is resolved by `rivalBrandNames` inside `buildAudit` into the AUTOMATIC
+     * RIVAL-BRAND NEGATIVE SET that C28 enforces — and C28 is a blocking check,
+     * so that set feeds `verified` directly.
+     *
+     * THE CONCRETE SCENARIO. The operator supplies competitors; the original
+     * run is graded with the rival brands armed. They then regenerate one group
+     * — which is written FROM SCRATCH by the model, i.e. exactly the moment a
+     * rival brand can enter — and, without this field, that regeneration is
+     * graded with the automatic set EMPTY. A rival brand the original run's gate
+     * would have caught now ships `verified: true`, and the route PERSISTS that
+     * verdict over the stored run. Regeneration silently became the weakest
+     * grader in the app.
+     *
+     * "Their absence changes no copy" was also only half the story: because the
+     * route re-runs `buildAudit` and persists its result, a regeneration without
+     * competitors also DELETED `audit.benchmark` from the stored run.
+     *
+     * Ingested by the same `ingestCompetitors` the optimize route uses (one
+     * implementation, so the two cannot drift), and absent => byte-identical to
+     * the behaviour before this existed.
+     */
+    competitorAsins?: string[];
   };
   try {
     body = (await req.json()) as typeof body;
@@ -91,6 +123,26 @@ export async function POST(req: Request): Promise<NextResponse> {
     // an ABSENT input must leave P11 `unknown` rather than score it zero.
     const mined = mineReviewLanguage(pack, body.reviewsText);
     const usedReviews = typeof body.reviewsText === 'string' && body.reviewsText.trim() !== '';
+    // N4 — re-ingest the operator's competitors so the AUTOMATIC RIVAL-BRAND
+    // NEGATIVE SET (item 7) is armed for this grading exactly as it was for the
+    // original run. It is resolved inside `buildAudit`, from these snapshots, by
+    // the same `rivalBrandNames` with the same four bounds — so nothing here is
+    // trusted that was not trusted before: every string still comes from a page
+    // the operator asked for, at run time.
+    //
+    // COST, stated: up to `MAX_COMPETITORS` provider calls, in parallel, on an
+    // explicit operator action. That is the price of grading a regenerated group
+    // as strictly as the run it replaces, and a regeneration graded more weakly
+    // than the original is the defect this closes. Ingestion never throws — a
+    // failed ASIN becomes a `failed` row and simply contributes no brand, which
+    // is precisely what it does on the optimize route.
+    const competitors = await ingestCompetitors(body.competitorAsins);
+    if (competitors) {
+      logServer('regenerate.competitors', {
+        requested: competitors.length,
+        ingested: competitors.filter((c) => c.snapshot).length,
+      });
+    }
     const merged = await optimize(enriched, pack, anthropicClient(), {
       groups: [group],
       base: body.listing,
@@ -100,6 +152,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     const audit = buildAudit(enriched, merged, pack, ctx, {
       ...(panelFacts ? { panelFacts } : {}),
       ...(usedReviews ? { reviewTokens: mined.tokens, reviewRejected: mined.rejected } : {}),
+      // N4 — same key, same resolver, same bounds as the optimize path.
+      ...(competitors ? { competitors } : {}),
     });
     const optimized: OptimizedListing = {
       ...merged,

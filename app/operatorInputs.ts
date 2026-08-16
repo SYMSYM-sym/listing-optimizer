@@ -117,26 +117,37 @@ export function buildOperatorInputs(form: OperatorInputForm): OperatorInputBody 
 }
 
 /**
- * The subset a REGENERATE call carries.
+ * The subset a REGENERATE call carries — now ALL FOUR.
  *
- * A regeneration must not be a way to escape — or to LOSE — a per-run input the
- * operator set. Three of the four apply: the phrases still apply (C11 reads
- * them), the confirmed panel is still product truth, and the REVIEW TEXT still
- * shapes the prompt, because a regenerated group is written from scratch and a
- * group written without the mined buyer language is a group that no longer
- * mirrors the operator's buyers while every other group still does. That was
- * the defect: review text was omitted here and in the route, so per-group
- * regeneration silently dropped it and nothing said so.
+ * A regeneration must not be a way to escape, or to LOSE, a per-run input the
+ * operator set. The phrases still apply (C11 reads them), the confirmed panel is
+ * still product truth, and the REVIEW TEXT still shapes the prompt, because a
+ * regenerated group is written from scratch and a group written without the
+ * mined buyer language no longer mirrors the operator's buyers while every other
+ * group still does.
  *
- * COMPETITORS are still not sent, and that is a different case rather than an
- * oversight: they feed the BENCHMARK, which is a measurement of pages a
- * single-group regeneration does not re-ingest, and the route does not accept
- * them. Their absence changes no copy.
+ * N4 — COMPETITORS ARE NOW SENT TOO, and the reason they were not is worth
+ * keeping because it was correct when it was written and stopped being correct
+ * later. It said: "they feed the BENCHMARK, a measurement of pages a
+ * single-group regeneration does not re-ingest, and their absence changes no
+ * copy." WS9→R50 then gave the competitor set a SECOND job — the automatic
+ * RIVAL-BRAND NEGATIVE SET that C28 enforces, which feeds `verified` — and
+ * nothing re-read this comment.
+ *
+ * The consequence was concrete: a regenerated group is written FROM SCRATCH, i.e.
+ * exactly when a rival brand can appear, and it was being graded with that set
+ * EMPTY. A rival brand the original run's gate would have caught shipped
+ * `verified: true`, and the route persisted that verdict. So this now sends the
+ * ASINs and the route re-ingests them through the same code the optimize route
+ * uses. Absence is still absence: an operator who supplied no competitors sends
+ * no key and the call is byte-identical.
  */
 export function regenerateOperatorInputs(form: OperatorInputForm): OperatorInputBody {
-  const { reviewsText, fictionPhrases, panelFacts } = buildOperatorInputs(form);
+  const { reviewsText, competitorAsins, fictionPhrases, panelFacts } =
+    buildOperatorInputs(form);
   return {
     ...(reviewsText ? { reviewsText } : {}),
+    ...(competitorAsins ? { competitorAsins } : {}),
     ...(fictionPhrases ? { fictionPhrases } : {}),
     ...(panelFacts ? { panelFacts } : {}),
   };

@@ -660,15 +660,79 @@ become a line of our copy), passes the mined phrasing to the prompts, and gives
 the audit the same tokens so P11 is scored against the same evidence rather than
 left `unknown`. `app/operatorInputs.ts` sends it on a regenerate call.
 
-**COMPETITORS are still not sent, and that is a different case rather than the
-same oversight:** they feed the BENCHMARK, a measurement of pages a single-group
-regeneration does not re-ingest, and their absence changes no copy.
-
 Both directions in `tests/regenerate.route.test.ts` → "WS9 review text (G4)":
 present, the regenerated group's prompt carries the same `buyerLanguageBlock`
 the optimize path renders and none of the fragments the filter rejected; absent
 — including a whitespace-only value, because absence and emptiness are different
 statements — the prompts are byte-identical and P11 stays `unknown`.
+
+### 9.1 N4 — the FOURTH input is now carried too, and the old reason for withholding it had EXPIRED.
+
+This entry used to end:
+
+> **COMPETITORS are still not sent, and that is a different case rather than the
+> same oversight:** they feed the BENCHMARK, a measurement of pages a
+> single-group regeneration does not re-ingest, and their absence changes no
+> copy.
+
+**That was true when it was written.** Item 7 (WS9 → R50) then gave the
+competitor set a **second job that has nothing to do with the benchmark**:
+`rivalBrandNames` resolves it inside `buildAudit` into the AUTOMATIC RIVAL-BRAND
+NEGATIVE SET that C28 enforces — and C28 is a **blocking** check, so that set
+feeds `verified` directly. Nobody re-read this paragraph when item 7 landed. It
+is the same failure shape as item 1: a claim that was accurate at the time,
+left in prose, outliving the code it described.
+
+**The risk, assessed concretely rather than in the abstract:**
+
+1. the operator supplies competitors, and the ORIGINAL run is graded with the
+   rival brands armed;
+2. they regenerate one group — and a regenerated group is written **from
+   scratch** by the model, which is exactly the moment a rival brand can enter;
+3. without the field, that regeneration was graded with the automatic set
+   **EMPTY**, so a rival brand the original run's gate WOULD have caught came
+   back `verified: true`;
+4. and the route persists that verdict over the stored run
+   (`updateRun({ verified })`).
+
+Regeneration had silently become the weakest grader in the app — strictly weaker
+than the run it replaces, on the one check that keeps a competitor's brand out of
+shipped copy.
+
+A second consequence the old reasoning also missed: because the route re-runs
+`buildAudit` and persists the result, a competitor-less regeneration **deleted
+`audit.benchmark`** from the stored run. So "their absence changes no copy" was
+true and still not the whole story.
+
+**DECISION: THREADED.** `app/api/regenerate/route.ts` accepts `competitorAsins`
+and re-ingests them; `regenerateOperatorInputs` now sends all four inputs. The
+ingestion moved to `lib/ingest/competitors.ts` so both routes run the **same**
+implementation — two ingesters would drift exactly as the two surface collectors
+in item 1 did, and the one that drifted would be the one that stopped resolving a
+rival brand. Nothing new is trusted: every string still comes from a page the
+operator asked for, at run time, and `rivalBrandNames` applies the same four
+bounds (item 7.3), so the own brand is still subtracted and a one-word brand is
+still never admitted.
+
+**The cost, stated rather than discovered later:** up to `MAX_COMPETITORS` (4)
+provider calls per regeneration, issued in parallel, on an explicit operator
+action. That is the price of grading a regenerated group as strictly as the run
+it replaces. Ingestion still never throws — a failed ASIN becomes a `failed` row
+and contributes no brand, precisely as on the optimize route.
+
+**Absence is still absence.** No key, an empty array, or entries that are not
+ASINs => no ingestion, no benchmark, no rival set, and a call byte-identical to
+the one made before this existed.
+
+Both directions in `tests/regenerate.competitors.n4.test.ts` (13 cases):
+§1 reproduces the risk (without competitors the rival brand in a regenerated
+backend field is NOT caught) and closes it (with them the same regeneration
+fails C28 naming the rival, ends `verified: false`, and is persisted that way);
+§2 is the over-blocking half — a clean regeneration with competitors supplied
+still raises zero failures, a failed ingestion never loses the run, and an
+operator who pastes their OWN ASIN into the competitor box still cannot make the
+run unwinnable; §3 pins that absence and emptiness both behave as before, on the
+route and in `regenerateOperatorInputs`.
 
 ---
 
