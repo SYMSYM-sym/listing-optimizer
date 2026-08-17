@@ -106,21 +106,68 @@ export function generationFailureScopeLine(f: GenerationFailure): string | null 
  * run must not over-claim: on a partial run the failures that do NOT touch the
  * degraded groups are ordinary, honest compliance findings, and saying
  * otherwise is worse than saying nothing.
+ *
+ * W1 — WHY THE POSITIVE CLAUSE NAMES THREE STATES AND NOT TWO.
+ *
+ * It used to say "Every other failure below IS: those surfaces generated
+ * normally and the gate graded real copy" — a UNIVERSAL claim over every group
+ * outside the notice's scope. That scope is `openFailures ∩ degradedGroups`,
+ * i.e. only the groups lost to an UPSTREAM failure. A group that degraded for
+ * a SCHEMA or truncation reason is degraded, is NOT in the scope (captioning it
+ * "the upstream API could not be reached" would be a false statement of cause —
+ * `recordedGenerationFailure` is explicit about that), and did NOT generate
+ * normally: the gate graded an empty or partial field there, not real copy. On
+ * a run with one transport-degraded group and one schema-degraded group the
+ * sentence was therefore literally false, and false in the one direction this
+ * notice exists to prevent — telling an operator that a failure IS a judgement
+ * of their listing when the copy behind it was never written.
+ *
+ * A RUN HAS THREE KINDS OF GROUP, so the caveat names three:
+ *
+ *   LOST UPSTREAM   the notice's own scope. Not a judgement of the listing, and
+ *                   the identity line says why.
+ *   DEGRADED OTHERWISE  reported missing below by its own blocking GEN failure
+ *                   ("returned nothing this run could validate"), for a reason
+ *                   this notice does not cover and must not claim. Also not a
+ *                   judgement of the listing.
+ *   GENERATED       everything else. Real copy, really graded — and the whole
+ *                   point of scoping the caveat is that these findings keep
+ *                   their weight.
+ *
+ * The second state is named by a PROPERTY the operator can check in the same
+ * failure list the caveat is talking about ("reported missing below"), not by a
+ * list of group names, because the notice is a pure function of the failure
+ * record: it knows its own scope and nothing else about the run. Threading the
+ * listing's `degradedGroups` in here to name them would make the wording depend
+ * on what each of the three renderers remembered to pass, and the reason this
+ * module exists at all is that the panel, the Markdown record and the Ship
+ * Sheet must not be able to drift. One sentence longer, true in every case, and
+ * every state it names is one the operator can see on the same screen.
  */
 export function generationFailureCaveat(f: GenerationFailure): string {
   if (!generationFailureIsPartial(f)) return GENERATION_FAILURE_CAVEAT;
   return (
     `The failures shown below that come from ${f.groups!.join(', ')} are NOT a judgement of your listing. ` +
-    'Every other failure below IS: those surfaces generated normally and the gate graded real copy.'
+    'Neither are failures on any other group reported missing below. ' +
+    'Every remaining failure IS: that copy generated normally and the gate graded it.'
   );
 }
 
-/** The explanation, matched to the same scope. */
+/**
+ * The explanation, matched to the same scope.
+ *
+ * W1 — "The rest of the run generated normally" was the SAME over-claim as the
+ * old caveat, one sentence away from it and rendered in the same paragraph, so
+ * it goes the same way. What this notice can honestly say about the groups it
+ * does not name is that none of them was lost to an UPSTREAM failure — which is
+ * exactly what the scope means and is true whether the other groups generated
+ * cleanly or degraded on their own schema.
+ */
 export function generationFailureContext(f: GenerationFailure): string {
   if (!generationFailureIsPartial(f)) return GENERATION_FAILURE_CONTEXT;
   return (
     `The copy for ${f.groups!.join(', ')} was never written, so the gate graded empty and partial fields there. ` +
-    'The rest of the run generated normally. ' +
+    'No other group was lost to an upstream failure. ' +
     'Nothing below is hidden or reworded: the checker output is never edited. ' +
     'Re-run once the upstream API is healthy.'
   );

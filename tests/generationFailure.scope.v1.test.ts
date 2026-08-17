@@ -373,16 +373,20 @@ describe('V1 §3b — a PARTIALLY degraded run is told the truth about scope', (
     // failures on copy the model really wrote are not about their listing.
     expect(caveat).not.toBe(GENERATION_FAILURE_CAVEAT);
     expect(caveat).toContain('bullets, qa');
-    expect(caveat).toContain('Every other failure below IS');
+    // W1 — the positive clause. It used to read "Every other failure below IS",
+    // a universal claim over every group outside the notice's scope that a
+    // schema-degraded group falsifies; it now names the three states a run can
+    // actually be in. See `tests/generationFailure.caveatTruth.w1.test.ts`.
+    expect(caveat).toContain('Every remaining failure IS');
 
     const html = renderBanner(failure);
     expect(html).toContain('generation-failure-banner');
-    expect(html).toContain('Every other failure below IS');
+    expect(html).toContain('Every remaining failure IS');
     expect(html).not.toContain('The copy for this run was never written');
     // The Markdown record carries the same scope, out of the same module.
     const md = toMarkdown(result.optimized, result.audit, failure);
     expect(md).toContain(`2 of ${ALL_GROUPS.length} content groups`);
-    expect(md).toContain('Every other failure below IS');
+    expect(md).toContain('Every remaining failure IS');
   });
 
   it('a legacy notice with no scope keeps the whole-run wording it always had', () => {

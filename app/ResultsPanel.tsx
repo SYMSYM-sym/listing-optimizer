@@ -86,11 +86,18 @@ export function GenerationFailureBanner({ failure }: { failure?: GenerationFailu
   //
   // V1 — and the caveat is SCOPED there. On a whole-run failure it is the
   // sentence this banner has always shown; on a PARTIALLY degraded run it names
-  // the groups that were lost and says, in the same breath, that every other
-  // failure on this screen IS a judgement of the listing. Telling an operator
-  // that real compliance findings on real generated copy are "not a judgement
-  // of your listing" is the exact conditioning hazard this banner exists to
-  // prevent, and an unscoped caveat on a partial run does precisely that.
+  // the groups that were lost and says, in the same breath, that a failure on a
+  // surface that generated normally IS a judgement of the listing. Telling an
+  // operator that real compliance findings on real generated copy are "not a
+  // judgement of your listing" is the exact conditioning hazard this banner
+  // exists to prevent, and an unscoped caveat on a partial run does precisely
+  // that.
+  //
+  // W1 — and the converse hazard is live too: a group can be degraded WITHOUT
+  // being in this notice's scope (a schema failure is not an upstream failure),
+  // so the caveat cannot claim that everything it does not name generated
+  // normally. It names three states — lost upstream, reported missing below,
+  // generated — and every one of them is checkable in the failure list below.
   const detail = generationFailureDetail(failure);
   const scope = generationFailureScopeLine(failure);
   return (
