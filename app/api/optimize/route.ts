@@ -111,6 +111,18 @@ export async function POST(req: Request): Promise<NextResponse> {
       },
     );
 
+    // Present ONLY when an upstream call actually failed, so a healthy response
+    // is byte-for-byte the object it was. `message` is deliberately NOT
+    // included: a response body is held to a stricter standard than a server
+    // log, and the summary plus the status/type/request id are everything an
+    // operator can act on. The redacted message stays in the `llm.error` line.
+    //
+    // U3 — computed BEFORE the save, because the run record now carries it too.
+    // The live response and the stored row therefore get the SAME value from
+    // the SAME builder, which is what makes re-opening this run from History
+    // show the same banner instead of eleven unexplained gate failures.
+    const generationFailure = generationFailurePayload(generation.firstFailure());
+
     let runId: string | null = null;
     try {
       runId = await saveRun({
@@ -125,6 +137,8 @@ export async function POST(req: Request): Promise<NextResponse> {
         snapshot: body.snapshot,
         optimized,
         audit,
+        // Omitted on a healthy run — see `SaveRunInput.generationFailure`.
+        ...(generationFailure ? { generationFailure } : {}),
       });
     } catch (e) {
       logServer('store.error', {
@@ -132,13 +146,6 @@ export async function POST(req: Request): Promise<NextResponse> {
         message: e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200),
       });
     }
-
-    // Present ONLY when an upstream call actually failed, so a healthy response
-    // is byte-for-byte the object it was. `message` is deliberately NOT
-    // included: a response body is held to a stricter standard than a server
-    // log, and the summary plus the status/type/request id are everything an
-    // operator can act on. The redacted message stays in the `llm.error` line.
-    const generationFailure = generationFailurePayload(generation.firstFailure());
 
     return NextResponse.json({
       optimized,

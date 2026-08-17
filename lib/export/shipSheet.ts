@@ -2,6 +2,7 @@ import rulesJson from '@/knowledge/rules.json';
 import type {
   AttributeField,
   Audit,
+  GenerationFailure,
   ListingSnapshot,
   MarketplaceChecklistItem,
   Failure,
@@ -11,6 +12,12 @@ import type {
   RuleSet,
 } from '@/lib/types';
 import { utf8Bytes } from '@/lib/shared/utf8Bytes';
+import {
+  GENERATION_FAILURE_CAVEAT,
+  GENERATION_FAILURE_CONTEXT,
+  GENERATION_FAILURE_HEADING,
+  generationFailureDetail,
+} from '@/lib/shared/generationFailure';
 import { arr } from '@/lib/gate/util';
 import { toSellerCentralDescription } from './descriptionHtml';
 
@@ -75,6 +82,17 @@ export interface ShipSheetRun {
    * without it simply omits the scraped column.
    */
   snapshot?: Pick<ListingSnapshot, 'attributes'>;
+  /**
+   * U3 — the upstream generation failure this run hit, when it hit one.
+   *
+   * OPTIONAL, and a sheet built without it is byte-identical to the sheet that
+   * shipped before this field existed. The route passes the value stored on the
+   * run, so a sheet PRINTED from a degraded run says why it is blocked instead
+   * of listing eleven checks and leaving the reader to conclude the listing is
+   * catastrophic. It changes no affordance: `audit.verified` alone still
+   * decides every copy button and the clipboard script.
+   */
+  generationFailure?: GenerationFailure | null;
 }
 
 const DEFAULT_RULES = rulesJson as unknown as RuleSet;
@@ -193,6 +211,34 @@ function blockingBanner(failures: Failure[]): string {
   );
 }
 
+/**
+ * U3 — THE UPSTREAM-FAILURE NOTICE, printed ABOVE the blocking banner.
+ *
+ * Same words as the on-screen banner and the Markdown record — heading, caveat
+ * and identity line all come from `lib/shared/generationFailure`, so the three
+ * media cannot drift. Only the markup is local, because a React component
+ * cannot be rendered into an HTML string builder that must stay a pure
+ * function.
+ *
+ * It is placed FIRST for the same reason it is first in the panel: it is the
+ * context in which everything below it should be read. It SUPPRESSES NOTHING —
+ * the blocking banner still names every failing check, with every field,
+ * context and fix, exactly as it did.
+ *
+ * Amber, not the sheet's red: red on this document means "a check failed on
+ * your listing", and this is not that.
+ */
+function generationFailureNotice(f: GenerationFailure): string {
+  return (
+    '<div class=gfail>' +
+    `<b>⚠ ${esc(GENERATION_FAILURE_HEADING)}</b>` +
+    `<div class=gsum>${esc(f.summary)}</div>` +
+    `<div class=gid><code>${esc(generationFailureDetail(f))}</code></div>` +
+    `<div class=note><b>${esc(GENERATION_FAILURE_CAVEAT)}</b> ${esc(GENERATION_FAILURE_CONTEXT)}</div>` +
+    '</div>'
+  );
+}
+
 /** Entry ORDER + the propagation warning. Both are pack data. */
 function entryOrderBanner(cl: OperatorChecklist): string {
   const steps = (cl.publishOrder ?? []).map((s) => `<li>${esc(s)}</li>`).join('');
@@ -288,6 +334,10 @@ td.v{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
 .bad{color:var(--bad);font-weight:700}
 .banner{background:rgba(134,239,172,.08);border:1px solid rgba(134,239,172,.35);border-radius:11px;padding:14px 16px;margin:0 0 22px;font-size:14px}
 .banner b{color:var(--good)}
+.gfail{background:rgba(251,191,36,.09);border:2px solid rgba(251,191,36,.55);border-radius:11px;padding:14px 16px;margin:0 0 18px;font-size:14px}
+.gfail b{color:#fcd34d}
+.gsum{margin-top:6px}
+.gid{margin-top:6px;font-size:12.5px;opacity:.85}
 .block{background:rgba(252,165,165,.08);border:1px solid rgba(252,165,165,.45);border-radius:11px;padding:14px 16px;margin:0 0 22px;font-size:14px}
 .block b{color:var(--bad)}
 .ord{background:rgba(255,153,0,.07);border:1px solid rgba(255,153,0,.3);border-radius:11px;padding:14px 16px;margin:0 0 22px;font-size:14px}
@@ -310,6 +360,9 @@ ul.ops{margin:8px 0 0;padding-left:20px}
   if (positioning?.sheetNote) {
     h += `<div class=strat><b>${esc(positioning.headline || positioning.id)}</b> ${esc(positioning.sheetNote)}</div>`;
   }
+
+  // --- U3 upstream-failure notice (above everything it should be read with) ---
+  if (run.generationFailure) h += generationFailureNotice(run.generationFailure);
 
   // --- verify / blocking banner ---
   h += verified

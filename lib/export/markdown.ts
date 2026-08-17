@@ -1,13 +1,32 @@
-import type { Audit, OptimizedListing } from '@/lib/types';
+import type { Audit, GenerationFailure, OptimizedListing } from '@/lib/types';
 import { arr } from '@/lib/gate/util';
+import {
+  GENERATION_FAILURE_CAVEAT,
+  GENERATION_FAILURE_CONTEXT,
+  GENERATION_FAILURE_HEADING,
+  generationFailureDetail,
+} from '@/lib/shared/generationFailure';
 import { toSellerCentralDescription } from './descriptionHtml';
 
 /**
  * Pure Markdown export builder — used by the UI download and the golden test.
  * Export-final semantics are enforced by the CALLER (disabled when
  * audit.verified is false); this builder labels the state honestly.
+ *
+ * U3 — `generationFailure` is OPTIONAL and defaults to absent, so every
+ * existing caller and the golden fixture produce a byte-identical document.
+ * When it IS supplied the record states the cause directly under the
+ * NOT-VERIFIED line, in the same words the on-screen banner and the Ship Sheet
+ * use (`lib/shared/generationFailure`). This file is the copy that gets read
+ * when the app is NOT in front of you — a Markdown record listing eleven
+ * blocking failures with no statement that generation never ran is the same
+ * misleading document the screen used to be.
  */
-export function toMarkdown(listing: OptimizedListing, audit: Audit): string {
+export function toMarkdown(
+  listing: OptimizedListing,
+  audit: Audit,
+  generationFailure?: GenerationFailure | null,
+): string {
   const lines: string[] = [];
   const status = audit.verified
     ? '✅ VERIFIED — all gate checks passed'
@@ -16,6 +35,16 @@ export function toMarkdown(listing: OptimizedListing, audit: Audit): string {
   lines.push('');
   lines.push(`> ${status}`);
   lines.push('');
+  if (generationFailure) {
+    lines.push(`> ⚠ **${GENERATION_FAILURE_HEADING}**`);
+    lines.push('>');
+    lines.push(`> ${generationFailure.summary}`);
+    lines.push('>');
+    lines.push(`> \`${generationFailureDetail(generationFailure)}\``);
+    lines.push('>');
+    lines.push(`> **${GENERATION_FAILURE_CAVEAT}** ${GENERATION_FAILURE_CONTEXT}`);
+    lines.push('');
+  }
   lines.push('## Title (legacy ≤200)');
   lines.push(listing.title);
   lines.push('');

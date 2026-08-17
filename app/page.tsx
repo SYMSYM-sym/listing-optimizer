@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import type { IngestError, ListingSnapshot } from '@/lib/types';
+import type { GenerationFailure, IngestError, ListingSnapshot } from '@/lib/types';
 import rules from '@/knowledge/rules.json';
 import {
   buildOperatorInputs,
@@ -13,6 +13,7 @@ import {
 import { Steps, type StepState } from './ui';
 import { ResultsPanel, type ResultsModel } from './ResultsPanel';
 import { openShipSheet } from './shipSheetClient';
+import { GENERATION_FAILURE_HEADING } from '@/lib/shared/generationFailure';
 
 type Provider = 'rainforest' | 'firecrawl' | 'paste';
 type View = 'optimize' | 'history';
@@ -28,6 +29,12 @@ interface RunListItem {
   failure_ids: string[];
   /** WS6 — set once the operator records the run as published. */
   published_at?: string | null;
+  /**
+   * U3 — present ONLY on a run whose generation failed upstream. Absent on
+   * every other row, including every run stored before the column existed, and
+   * the store drops it rather than forwarding a malformed value.
+   */
+  generation_failure?: GenerationFailure | null;
 }
 
 export default function Home() {
@@ -146,6 +153,13 @@ export default function Home() {
           optimized: ResultsModel['optimized'];
           audit: ResultsModel['audit'];
           pack_id: string;
+          /**
+           * U3 — the stored upstream failure, when the run had one. Reading it
+           * here is the whole point: without it a REPLAYED degraded run showed
+           * eleven gate failures and no cause, which is the exact misleading
+           * state U1 fixed on the live screen and left open one surface over.
+           */
+          generation_failure?: GenerationFailure | null;
         };
       };
       const run = body.run;
@@ -155,6 +169,9 @@ export default function Home() {
         detection: { packId: run.pack_id, subcategories: run.snapshot.subcategory ?? [] },
         snapshot: run.snapshot,
         runId: run.id,
+        // Straight onto the SAME model field the live run sets, so the SAME
+        // `GenerationFailureBanner` renders it. There is no second renderer.
+        generationFailure: run.generation_failure ?? null,
       });
     } catch (e) {
       setHistoryError(e instanceof Error ? e.message : 'Failed to load run');
@@ -625,6 +642,41 @@ export default function Home() {
                               <span className="text-red-400">Blocked</span>
                             )}
                             {item.gaps > 0 && <span className="ml-1 text-zinc-600">· {item.gaps} gaps</span>}
+                            {/*
+                              U3 — the DEGRADED marker.
+
+                              Without it the only honest label this cell could
+                              give a run whose generation never happened was the
+                              red "Blocked" — which reads as "your listing failed
+                              eleven checks", the exact misreading the banner
+                              exists to prevent, on the screen an operator sees
+                              FIRST. Being told only after opening the run is
+                              being told late.
+
+                              THE LEAST-NOISY FORM THAT ACTUALLY WARNS, chosen
+                              over three alternatives: a new column costs every
+                              row width for a state most rows never have; a row
+                              tint is unreadable next to the existing selected-
+                              row tint; a tooltip alone is invisible until
+                              hovered, and an operator who does not know to hover
+                              is precisely the operator this is for. So it is one
+                              token appended to the cell that ALREADY answers
+                              "what happened to this run", with the stored
+                              summary as its title.
+
+                              It REPLACES NOTHING: "Blocked" still shows, because
+                              the run really is blocked. Amber, not red, for the
+                              same reason the banner is amber — red on this
+                              screen means a check failed on the listing.
+                            */}
+                            {item.generation_failure && (
+                              <span
+                                className="ml-1 text-amber-400"
+                                title={`${GENERATION_FAILURE_HEADING} — ${item.generation_failure.summary}`}
+                              >
+                                · ⚠ generation failed
+                              </span>
+                            )}
                           </td>
                           <td className="py-2.5 pr-3 tabular-nums text-zinc-300">{item.score}</td>
                           <td className="py-2.5">

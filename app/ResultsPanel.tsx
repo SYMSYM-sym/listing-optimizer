@@ -8,6 +8,11 @@ import type { GroupName } from '@/lib/engine/optimize';
 import { toSellerCentralDescription } from '@/lib/export/descriptionHtml';
 import { downloadShipSheet, openShipSheet } from './shipSheetClient';
 import { isBulletArchitectureGap } from '@/lib/shared/bulletLintTags';
+import {
+  GENERATION_FAILURE_CAVEAT,
+  GENERATION_FAILURE_HEADING,
+  generationFailureDetail,
+} from '@/lib/shared/generationFailure';
 import { regenerateOperatorInputs, EMPTY_OPERATOR_INPUTS, type OperatorInputForm } from './operatorInputs';
 import { CopyButton, Field, SeverityBadge } from './ui';
 
@@ -25,8 +30,12 @@ export interface ResultsModel {
    *
    * Carried from the `/api/optimize` (or `/api/regenerate`) response and
    * rendered by `GenerationFailureBanner` ABOVE everything else. Absent/null on
-   * every healthy run and on a run replayed from History, which has no record
-   * of a transport failure to replay.
+   * every healthy run.
+   *
+   * U3 — a run REPLAYED FROM HISTORY now carries it too. It is persisted on the
+   * run record (`runs.generation_failure`) and read back by `/api/runs/[id]`,
+   * so re-opening yesterday's degraded run renders the SAME banner from the
+   * SAME component rather than eleven gate failures with no stated cause.
    */
   generationFailure?: GenerationFailure | null;
 }
@@ -67,28 +76,22 @@ export interface ResultsModel {
  */
 export function GenerationFailureBanner({ failure }: { failure?: GenerationFailure | null }) {
   if (!failure) return null;
-  const detail = [
-    `class ${failure.class}`,
-    failure.status !== undefined ? `HTTP ${failure.status}` : null,
-    failure.apiType ?? null,
-    failure.requestId ? `request ${failure.requestId}` : null,
-  ].filter((s): s is string => s !== null);
+  // U3 — the heading, the identity line and the caveat sentence come from
+  // `lib/shared/generationFailure`, which is also what the Markdown record and
+  // the Ship Sheet print. One wording, three media.
+  const detail = generationFailureDetail(failure);
   return (
     <section
       role="alert"
       data-testid="generation-failure-banner"
       className="rounded-xl border-2 border-amber-500 bg-amber-950/40 p-4 space-y-2"
     >
-      <div className="text-sm font-semibold text-amber-200">
-        ⚠ Generation failed upstream — this run is incomplete
-      </div>
+      <div className="text-sm font-semibold text-amber-200">⚠ {GENERATION_FAILURE_HEADING}</div>
       <div className="text-sm text-amber-100">{failure.summary}</div>
-      <div className="font-mono text-xs text-amber-300/90">{detail.join(' · ')}</div>
+      <div className="font-mono text-xs text-amber-300/90">{detail}</div>
       <div className="text-sm text-amber-100/90">
         The copy for this run was never written, so the gate below graded empty and partial fields.{' '}
-        <strong className="text-amber-200">
-          The failures shown below are NOT a judgement of your listing.
-        </strong>{' '}
+        <strong className="text-amber-200">{GENERATION_FAILURE_CAVEAT}</strong>{' '}
         They are the honest result of a run whose generation did not happen — they are left visible
         rather than hidden, because the checker&apos;s output is never edited. Nothing here is
         exportable: the run is unverified, so the Ship Sheet and export-final stay locked. Re-run
@@ -175,7 +178,7 @@ export function ResultsPanel({
   const gateFailures = result.audit.gateResult.failures;
 
   function downloadMarkdown() {
-    const md = toMarkdown(result.optimized, result.audit);
+    const md = toMarkdown(result.optimized, result.audit, result.generationFailure);
     const blob = new Blob([md], { type: 'text/markdown' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -308,7 +311,10 @@ export function ResultsPanel({
             text={JSON.stringify({ optimized: result.optimized, audit: result.audit }, null, 2)}
             label="copy all as JSON"
           />
-          <CopyButton text={toMarkdown(result.optimized, result.audit)} label="Copy everything as Markdown" />
+          <CopyButton
+            text={toMarkdown(result.optimized, result.audit, result.generationFailure)}
+            label="Copy everything as Markdown"
+          />
           <button
             onClick={downloadMarkdown}
             className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"

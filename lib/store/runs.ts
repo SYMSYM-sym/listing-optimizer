@@ -3,7 +3,8 @@ import 'server-only';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { env } from '@/lib/env';
 import { logServer } from '@/lib/server/log';
-import type { Audit, ListingSnapshot, OptimizedListing } from '@/lib/types';
+import { coerceGenerationFailure } from '@/lib/shared/generationFailure';
+import type { Audit, GenerationFailure, ListingSnapshot, OptimizedListing } from '@/lib/types';
 
 export interface RunRecord {
   id: string;
@@ -18,6 +19,33 @@ export interface RunRecord {
    * silently pretending the run was published.
    */
   published_at?: string | null;
+  /**
+   * U3 — the upstream generation failure this run hit, when it hit one.
+   *
+   * WHY IT IS PERSISTED AT ALL. U1 put the "generation never ran" banner on the
+   * live optimize screen and nothing carried the value onto the run record, so
+   * re-opening the SAME degraded run from History showed eleven gate failures
+   * and no cause — the exact misleading state U1 exists to prevent, one surface
+   * over. This column is what closes it.
+   *
+   * REQUIRES the column: `alter table runs add column if not exists
+   * generation_failure jsonb;` (see README, beside the `published_at` note). It
+   * is nullable and no other code path depends on it, so a deployment that has
+   * not run the migration keeps working: a healthy run does not send the key at
+   * all (the insert is byte-identical to the one that shipped before), and the
+   * LIVE response still carries `generationFailure` and still renders the
+   * banner even if the save is refused — only the History replay loses it, and
+   * it loses it loudly, in the `store.error` log line the route already writes.
+   *
+   * NEVER TRUSTED ON THE WAY OUT. Every read goes through
+   * `coerceGenerationFailure`, so a legacy NULL, a partial record or outright
+   * junk degrades to "no failure" instead of throwing: a History page that
+   * fails to load is a worse outcome than a missing banner.
+   *
+   * IT DECIDES NOTHING. `verified` is computed only in
+   * `lib/audit/buildAudit.ts`, from the gate.
+   */
+  generation_failure?: GenerationFailure | null;
   asin: string;
   url: string;
   product_name: string;
@@ -42,6 +70,12 @@ export type RunListItem = Pick<
   | 'gaps'
   | 'failure_ids'
   | 'published_at'
+  // U3 — carried into the LIST, not just the detail, so a degraded run is
+  // recognisable as degraded BEFORE it is opened. It is the only jsonb column
+  // the list query selects, and it is ~5 short scalar fields; the three heavy
+  // payloads (snapshot/optimized/audit) stay out, which is what "no jsonb
+  // payloads" was ever about.
+  | 'generation_failure'
 >;
 
 export interface SaveRunInput {
@@ -56,6 +90,11 @@ export interface SaveRunInput {
   snapshot: ListingSnapshot;
   optimized: OptimizedListing;
   audit: Audit;
+  /**
+   * U3 — present ONLY when a call to the model API actually failed. Absent on
+   * every healthy run, and when absent the insert omits the column entirely.
+   */
+  generationFailure?: GenerationFailure | null;
 }
 
 export interface UpdateRunPatch {
@@ -66,7 +105,28 @@ export interface UpdateRunPatch {
   gaps: number;
   failureIds: string[];
   productName?: string;
+  /**
+   * U3 — a regeneration that ALSO failed upstream. It can only ever SET this
+   * column, never clear it, and that asymmetry is deliberate and is the same
+   * rule the live panel follows: a regeneration rewrites ONE group of nine, so
+   * a notice that vanished on the first good group would be announcing a
+   * recovery that did not happen.
+   */
+  generationFailure?: GenerationFailure | null;
 }
+
+/**
+ * The LIST projection. The three heavy jsonb payloads (snapshot/optimized/
+ * audit) are never selected here — the list is a summary. `generation_failure`
+ * is the one jsonb that is, because it is five short scalars and because a
+ * degraded run has to be recognisable as degraded BEFORE it is opened.
+ */
+const LIST_COLUMNS =
+  'id, created_at, asin, product_name, verified, score, gaps, failure_ids, published_at, generation_failure';
+
+/** The same projection for a deployment that has not run the U3 migration. */
+const LIST_COLUMNS_LEGACY =
+  'id, created_at, asin, product_name, verified, score, gaps, failure_ids, published_at';
 
 let _client: SupabaseClient | null | undefined;
 
@@ -91,29 +151,91 @@ export function __resetStoreClientForTests(): void {
   _client = undefined;
 }
 
+/**
+ * Does this Postgres/PostgREST error say the `generation_failure` COLUMN is not
+ * there?
+ *
+ * A deployment can run this code before it runs the migration — that window is
+ * ordinary, not exotic, because the app auto-deploys on push and the migration
+ * is applied by hand. Without this, adding the column to the list SELECT would
+ * mean the whole HISTORY PAGE 502s until someone runs the SQL, which is a far
+ * worse outcome than a missing banner and is precisely the trade this feature
+ * is not allowed to make. So each statement that names the column is retried
+ * ONCE without it, and the app behaves exactly as it did before U3.
+ *
+ * Deliberately NARROW: it must match the missing column and nothing else. A
+ * different store failure has to keep failing loudly.
+ */
+function missingFailureColumn(error: { code?: string; message?: string }): boolean {
+  const code = error?.code ?? '';
+  const message = error?.message ?? '';
+  // 42703 undefined_column (select), PGRST204 unknown column in the schema
+  // cache (insert/update). Both are additionally required to NAME the column,
+  // so an unrelated typo elsewhere can never be swallowed here.
+  return (code === '42703' || code === 'PGRST204') && message.includes('generation_failure');
+}
+
+/**
+ * U3 — the ONE gate every stored `generation_failure` passes through on the way
+ * out, applied to the list rows and the detail row alike.
+ *
+ * A recognised failure is REBUILT field by field (so no stray persisted key —
+ * `message` above all — can survive a round trip); anything else, including the
+ * NULL a row written before the column existed carries, has its key DROPPED
+ * entirely rather than set to `null`. Dropping keeps a legacy run's API
+ * response byte-identical to the one it returned yesterday, and `'x' in row`
+ * stays the exact test for "this run degraded upstream".
+ */
+function normalizeFailure<T extends object>(row: T): T {
+  const { generation_failure: raw, ...rest } = row as T & { generation_failure?: unknown };
+  const failure = coerceGenerationFailure(raw);
+  return (failure ? { ...rest, generation_failure: failure } : rest) as T;
+}
+
 export async function saveRun(run: SaveRunInput): Promise<string | null> {
   const sb = client();
   if (!sb) {
     logServer('store.disabled', { op: 'saveRun', reason: 'missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' });
     return null;
   }
-  const { data, error } = await sb
-    .from('runs')
-    .insert({
-      asin: run.asin,
-      url: run.url,
-      product_name: run.productName,
-      pack_id: run.packId,
-      verified: run.verified,
-      score: run.score,
-      gaps: run.gaps,
-      failure_ids: run.failureIds,
-      snapshot: run.snapshot,
-      optimized: run.optimized,
-      audit: run.audit,
-    })
-    .select('id')
-    .single();
+  const storedFailure = coerceGenerationFailure(run.generationFailure);
+  const insert = (withFailure: boolean) =>
+    sb
+      .from('runs')
+      .insert({
+        asin: run.asin,
+        url: run.url,
+        product_name: run.productName,
+        pack_id: run.packId,
+        verified: run.verified,
+        score: run.score,
+        gaps: run.gaps,
+        failure_ids: run.failureIds,
+        snapshot: run.snapshot,
+        optimized: run.optimized,
+        audit: run.audit,
+        // Omitted, not `null`, when there was no failure: a healthy run's
+        // insert is the exact statement that shipped before this column
+        // existed.
+        //
+        // COERCED ON THE WAY IN as well as on the way out. The payload is
+        // rebuilt field by field from the five-field contract, so "the stored
+        // row never contains `message`" is a property of this function rather
+        // than a promise about every present and future caller — and `message`
+        // is the field `e885f23` deliberately kept out of anything a browser
+        // can read.
+        ...(withFailure && storedFailure ? { generation_failure: storedFailure } : {}),
+      })
+      .select('id')
+      .single();
+  let { data, error } = await insert(true);
+  if (error && missingFailureColumn(error)) {
+    // The run itself is worth more than the annotation on it. The LIVE response
+    // still carries `generationFailure` and still renders the banner; only the
+    // History replay loses it, and it says so here.
+    logServer('store.generation_failure_column_missing', { op: 'saveRun' });
+    ({ data, error } = await insert(false));
+  }
   if (error) {
     throw new Error(`saveRun failed: ${error.message}`);
   }
@@ -126,18 +248,30 @@ export async function updateRun(id: string, patch: UpdateRunPatch): Promise<void
     logServer('store.disabled', { op: 'updateRun', reason: 'missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' });
     return;
   }
-  const { error } = await sb
-    .from('runs')
-    .update({
-      optimized: patch.optimized,
-      audit: patch.audit,
-      verified: patch.verified,
-      score: patch.score,
-      gaps: patch.gaps,
-      failure_ids: patch.failureIds,
-      ...(patch.productName !== undefined ? { product_name: patch.productName } : {}),
-    })
-    .eq('id', id);
+  const storedFailure = coerceGenerationFailure(patch.generationFailure);
+  const update = (withFailure: boolean) =>
+    sb
+      .from('runs')
+      .update({
+        optimized: patch.optimized,
+        audit: patch.audit,
+        verified: patch.verified,
+        score: patch.score,
+        gaps: patch.gaps,
+        failure_ids: patch.failureIds,
+        ...(patch.productName !== undefined ? { product_name: patch.productName } : {}),
+        // SET-ONLY — see `UpdateRunPatch.generationFailure`. A successful
+        // regeneration writes no key here, so it cannot erase the record of
+        // the eight groups that never ran. Coerced on the way in for the same
+        // reason `saveRun` coerces.
+        ...(withFailure && storedFailure ? { generation_failure: storedFailure } : {}),
+      })
+      .eq('id', id);
+  let { error } = await update(true);
+  if (error && missingFailureColumn(error)) {
+    logServer('store.generation_failure_column_missing', { op: 'updateRun' });
+    ({ error } = await update(false));
+  }
   if (error) {
     throw new Error(`updateRun failed: ${error.message}`);
   }
@@ -191,19 +325,26 @@ export async function listRuns(opts: {
   }
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100);
   const offset = Math.max(opts.offset ?? 0, 0);
-  let q = sb
-    .from('runs')
-    .select('id, created_at, asin, product_name, verified, score, gaps, failure_ids, published_at')
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
-  if (opts.asin?.trim()) {
-    q = q.ilike('asin', opts.asin.trim());
+  const query = (columns: string) => {
+    let q = sb
+      .from('runs')
+      .select(columns)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (opts.asin?.trim()) {
+      q = q.ilike('asin', opts.asin.trim());
+    }
+    return q;
+  };
+  let { data, error } = await query(LIST_COLUMNS);
+  if (error && missingFailureColumn(error)) {
+    logServer('store.generation_failure_column_missing', { op: 'listRuns' });
+    ({ data, error } = await query(LIST_COLUMNS_LEGACY));
   }
-  const { data, error } = await q;
   if (error) {
     throw new Error(`listRuns failed: ${error.message}`);
   }
-  return (data ?? []) as RunListItem[];
+  return ((data ?? []) as unknown as RunListItem[]).map(normalizeFailure);
 }
 
 export async function getRun(id: string): Promise<RunRecord | null> {
@@ -216,5 +357,6 @@ export async function getRun(id: string): Promise<RunRecord | null> {
   if (error) {
     throw new Error(`getRun failed: ${error.message}`);
   }
-  return (data as RunRecord | null) ?? null;
+  const row = (data as RunRecord | null) ?? null;
+  return row ? normalizeFailure(row) : null;
 }

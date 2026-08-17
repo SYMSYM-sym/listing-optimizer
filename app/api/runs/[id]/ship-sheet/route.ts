@@ -53,6 +53,10 @@ export async function GET(
     // WS10 — the scraped listing, so the sheet can mark the brand identity that
     // came off the live page as a value to CONFIRM rather than an answer.
     snapshot: run.snapshot,
+    // U3 — a sheet PRINTED from a degraded run says why it is blocked. The
+    // store validates the stored value on read, so anything malformed arrives
+    // here as `undefined` and the sheet is the one that shipped before.
+    ...(run.generation_failure ? { generationFailure: run.generation_failure } : {}),
     pack: loadPack(asPackId(run.pack_id)),
   });
   return new Response(html, {

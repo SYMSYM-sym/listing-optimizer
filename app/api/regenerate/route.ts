@@ -189,6 +189,16 @@ export async function POST(req: Request): Promise<NextResponse> {
       state: audit.verified ? 'verified' : 'draft',
     };
 
+    // Absent unless an upstream call failed — see the optimize route for why
+    // the redacted `message` stays in the log rather than travelling here.
+    //
+    // U3 — computed BEFORE the update, so the stored run carries what the
+    // response carries. `updateRun` only ever SETS this column: a regeneration
+    // that succeeded rewrote ONE group of nine and cannot honestly clear a
+    // notice about the other eight, which is the same rule the live panel
+    // applies with `body.generationFailure ?? result.generationFailure`.
+    const generationFailure = generationFailurePayload(generation.firstFailure());
+
     if (body.runId) {
       try {
         await updateRun(body.runId, {
@@ -199,6 +209,7 @@ export async function POST(req: Request): Promise<NextResponse> {
           gaps: audit.gaps.length,
           failureIds: audit.gateResult.failures.map((f) => f.checkId),
           productName: optimized.productName,
+          ...(generationFailure ? { generationFailure } : {}),
         });
       } catch (e) {
         logServer('store.error', {
@@ -207,10 +218,6 @@ export async function POST(req: Request): Promise<NextResponse> {
         });
       }
     }
-
-    // Absent unless an upstream call failed — see the optimize route for why
-    // the redacted `message` stays in the log rather than travelling here.
-    const generationFailure = generationFailurePayload(generation.firstFailure());
 
     return NextResponse.json({
       optimized,

@@ -63,14 +63,31 @@ stays `unknown`.
 
 ### Run store schema
 
-The optional Supabase `runs` table gains one nullable column for the publish
-state (WS6). Existing deployments keep working without it — only
-`POST /api/runs/[id]/publish` needs it, and it fails loudly rather than
-silently reporting success:
+The optional Supabase `runs` table gains two nullable columns beyond
+`supabase/migrations/0001_runs.sql`. **A fresh deployment must run both.**
 
 ```sql
+-- WS6 — the publish state.
 alter table runs add column if not exists published_at timestamptz;
+
+-- U3 — the upstream generation failure a degraded run hit, so re-opening that
+-- run from History shows WHY it degraded instead of an unexplained wall of
+-- gate failures. Stores exactly {class, status, apiType, requestId, summary};
+-- never the raw SDK message, which stays in the `llm.error` server log.
+alter table runs add column if not exists generation_failure jsonb;
 ```
+
+Existing deployments keep working without either one:
+
+* `published_at` — only `POST /api/runs/[id]/publish` needs it, and it fails
+  loudly rather than silently reporting success.
+* `generation_failure` — every statement that names it is retried once without
+  it (`store.generation_failure_column_missing` is logged), so History, the run
+  detail route, the Ship Sheet and the optimize save all behave exactly as they
+  did before. Only the History *replay* of a degraded run loses its banner; the
+  live optimize response still carries `generationFailure` and still renders it.
+  Reads are validated, so a legacy `NULL` or a malformed value degrades to "no
+  failure" instead of throwing.
 
 `APP_ACCESS_TOKEN` protects the deployed API routes (recommended — runs spend
 real LLM/provider credits).
