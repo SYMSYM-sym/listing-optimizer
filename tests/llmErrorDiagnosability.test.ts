@@ -252,7 +252,16 @@ describe('(c) an Anthropic APIError logs status + type + message', () => {
     expect(described.message).toContain(message);
   });
 
-  it.each(cases)('status %s emits llm.error AND enriches llm.reparse', async (status, apiType, message) => {
+  /**
+   * UPDATED BY V2. This asserted that a transport failure "enriches
+   * llm.reparse" — which it did, because the reparse retry re-sent the prompt
+   * for a call that never returned. That was the defect, not the feature: it
+   * cost a second call per group and fed the SDK's own error back to the model
+   * as a description of the model's own output. `llm.error` is unchanged and is
+   * still the event whose ABSENCE used to be the only clue; there is simply no
+   * reparse to enrich any more.
+   */
+  it.each(cases)('status %s emits llm.error, and NO llm.reparse (V2)', async (status, apiType, message) => {
     await failGroup(throwingLlm(apiError(status, apiType, message)));
 
     // The event whose ABSENCE used to be the only clue.
@@ -264,17 +273,35 @@ describe('(c) an Anthropic APIError logs status + type + message', () => {
     expect(errs[0]!.message).toContain(message);
     expect(typeof errs[0]!.ms).toBe('number');
 
-    const [reparse] = events('llm.reparse');
-    expect(reparse!.error).toBe('APIError');
-    expect(reparse!.status).toBe(status);
-    expect(reparse!.apiType).toBe(apiType);
+    // V2 — the call never returned, so there is nothing to reparse.
+    expect(events('llm.reparse')).toEqual([]);
   });
 
-  it('both attempts are logged, so a retried call is not invisible', async () => {
+  it('a transport failure is ONE attempt and ONE llm.error line (V2)', async () => {
     await failGroup(throwingLlm(apiError(429, 'rate_limit_error', 'slow down')));
     const errs = events('llm.error');
-    expect(errs).toHaveLength(2);
-    expect(errs.map((e) => e.retry)).toEqual([false, true]);
+    expect(errs).toHaveLength(1);
+    expect(errs.map((e) => e.retry)).toEqual([false]);
+  });
+
+  it('the PER-ATTEMPT flag still works: a reparse call that fails on transport is marked retry:true', async () => {
+    // Attempt 1 returns output that will not parse (so the reparse retry is
+    // legitimately taken); the reparse call then dies on the wire. Exactly one
+    // `llm.error`, and it is the SECOND attempt — which is what `retry` is for.
+    let n = 0;
+    const llm: LlmClient = async () => {
+      n += 1;
+      if (n === 1) return 'not json at all';
+      throw apiError(529, 'overloaded_error', 'Overloaded');
+    };
+    await failGroup(llm);
+    const errs = events('llm.error');
+    expect(errs).toHaveLength(1);
+    expect(errs[0]!.retry).toBe(true);
+    expect(errs[0]!.status).toBe(529);
+    // ...and the reparse that WAS taken is still recorded, named by its class.
+    expect(events('llm.reparse')).toHaveLength(1);
+    expect(events('llm.reparse')[0]!.error).toBe('NoJsonFound');
   });
 
   it('an error with no status at all is named by CLASS, which is all there is', () => {
@@ -301,11 +328,14 @@ describe('(c) an Anthropic APIError logs status + type + message', () => {
     ).not.toContain(MODEL_OUTPUT);
   });
 
-  it('recordUpstreamFailures keeps the FIRST failure and rethrows unchanged', async () => {
+  it('recordUpstreamFailures keeps the first UNRECOVERED failure and rethrows unchanged', async () => {
     const thrown = apiError(401, 'authentication_error', 'invalid x-api-key');
     const rec = recordUpstreamFailures(throwingLlm(thrown));
     await expect(rec.llm({ system: 's', user: 'u', maxTokens: 10 })).rejects.toBe(thrown);
     expect(rec.firstFailure()).toMatchObject({ error: 'APIError', status: 401 });
+    // V1 — an unnamed call is recorded under `unknown`; the un-latch and the
+    // scope rule are pinned in `tests/generationFailure.scope.v1.test.ts`.
+    expect(rec.failedGroups()).toEqual(['unknown']);
   });
 });
 

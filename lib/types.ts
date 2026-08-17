@@ -1741,6 +1741,33 @@ export interface GenerationFailure {
   requestId?: string;
   /** The operator-facing sentence, built from status and type only. */
   summary: string;
+  /**
+   * V1 — THE SCOPE. The engine groups this failure actually cost, i.e. the
+   * groups that both hit an unrecovered upstream call failure AND are still
+   * degraded in the listing this notice is attached to.
+   *
+   * WHY IT EXISTS. The notice used to make one claim — "the copy for this run
+   * was never written" — for every run that carried it. On a PARTIALLY
+   * degraded run that claim is false, and its falsehood runs in the dangerous
+   * direction: the caveat sentence tells the operator that the failures below
+   * are not a judgement of their listing, and on a partial run some of those
+   * failures are exactly that. Scope is what lets the notice say only what is
+   * true.
+   *
+   * ABSENT means UNKNOWN, not empty, and is the LEGACY case only: a row
+   * written before this field existed. Every writer sets it. Unknown scope
+   * renders the whole-run wording — which is byte-for-byte what those rows
+   * rendered before this field existed, so nothing stored is re-captioned —
+   * and is never narrowed (see `narrowGenerationFailure`).
+   */
+  groups?: string[];
+  /**
+   * V1 — how many groups the run has in total, so `groups.length <
+   * groupsTotal` is the whole-run/partial test. Carried on the payload rather
+   * than imported, because `ALL_GROUPS` lives in `lib/engine/optimize.ts`,
+   * which is server-only and which imports the engine that BUILDS this.
+   */
+  groupsTotal?: number;
 }
 
 /** Typed ingestion errors — surfaced to the UI, never opaque 500s. */

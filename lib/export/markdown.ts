@@ -1,10 +1,11 @@
 import type { Audit, GenerationFailure, OptimizedListing } from '@/lib/types';
 import { arr } from '@/lib/gate/util';
 import {
-  GENERATION_FAILURE_CAVEAT,
-  GENERATION_FAILURE_CONTEXT,
   GENERATION_FAILURE_HEADING,
+  generationFailureCaveat,
+  generationFailureContext,
   generationFailureDetail,
+  generationFailureScopeLine,
 } from '@/lib/shared/generationFailure';
 import { toSellerCentralDescription } from './descriptionHtml';
 
@@ -36,13 +37,23 @@ export function toMarkdown(
   lines.push(`> ${status}`);
   lines.push('');
   if (generationFailure) {
+    // V1 — scoped. A partial failure names the groups it cost and restricts
+    // the caveat to them; a whole-run failure prints the two constants this
+    // record has always printed.
+    const scope = generationFailureScopeLine(generationFailure);
     lines.push(`> ⚠ **${GENERATION_FAILURE_HEADING}**`);
     lines.push('>');
     lines.push(`> ${generationFailure.summary}`);
+    if (scope) {
+      lines.push('>');
+      lines.push(`> ${scope}`);
+    }
     lines.push('>');
     lines.push(`> \`${generationFailureDetail(generationFailure)}\``);
     lines.push('>');
-    lines.push(`> **${GENERATION_FAILURE_CAVEAT}** ${GENERATION_FAILURE_CONTEXT}`);
+    lines.push(
+      `> **${generationFailureCaveat(generationFailure)}** ${generationFailureContext(generationFailure)}`,
+    );
     lines.push('');
   }
   lines.push('## Title (legacy ≤200)');

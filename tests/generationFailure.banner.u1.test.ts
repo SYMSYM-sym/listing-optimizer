@@ -257,15 +257,31 @@ describe('U1 — every place a run is rendered carries the failure into the mode
     expect(page).toContain('generationFailure: r.generationFailure ?? null');
   });
 
-  it('a regeneration that fails upstream replaces the notice, and one that succeeds keeps it', () => {
-    // A single-group regeneration cannot clear a notice about the other eight.
-    expect(src('ResultsPanel.tsx')).toContain(
-      'generationFailure: body.generationFailure ?? result.generationFailure ?? null',
+  /**
+   * UPDATED BY V1. This used to pin the literal
+   * `body.generationFailure ?? result.generationFailure ?? null`, i.e. the
+   * set-only rule. That rule kept a stale notice on screen after the ONLY
+   * degraded group had been successfully regenerated. The property it was
+   * really defending — a single-group regeneration cannot announce the
+   * recovery of the other eight — is now a consequence of the SCOPED rule, and
+   * that is what is pinned instead. The behaviour itself is asserted, not just
+   * grepped, in `tests/generationFailure.scope.v1.test.ts` §4.
+   */
+  it('a regeneration narrows the carried notice by what is STILL degraded, and merges a new one', () => {
+    const panel = src('ResultsPanel.tsx');
+    expect(panel).toContain('mergeGenerationFailure(');
+    expect(panel).toContain(
+      'narrowGenerationFailure(result.generationFailure, body.optimized.degradedGroups)',
     );
   });
 
-  it('both routes build the payload with the ONE shared builder', () => {
+  it('both routes build the payload with the ONE shared builder, cross-checked against degradedGroups', () => {
     const routes = ['api/optimize/route.ts', 'api/regenerate/route.ts'].map(src);
-    for (const r of routes) expect(r).toContain('generationFailurePayload(generation.firstFailure())');
+    for (const r of routes) expect(r).toContain('recordedGenerationFailure(');
+    // V1 — the cross-check is the fix. `firstFailure()` alone latched a failure
+    // the group had RECOVERED from, so a healthy run could carry the notice.
+    expect(src('api/optimize/route.ts')).toContain('optimized.degradedGroups');
+    expect(src('api/regenerate/route.ts')).toContain('merged.degradedGroups');
+    for (const r of routes) expect(r).not.toContain('generationFailurePayload(generation.firstFailure())');
   });
 });

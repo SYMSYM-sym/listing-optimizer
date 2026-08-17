@@ -3,7 +3,11 @@ import 'server-only';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { env } from '@/lib/env';
 import { logServer } from '@/lib/server/log';
-import { coerceGenerationFailure } from '@/lib/shared/generationFailure';
+import {
+  coerceGenerationFailure,
+  mergeGenerationFailure,
+  narrowGenerationFailure,
+} from '@/lib/shared/generationFailure';
 import type { Audit, GenerationFailure, ListingSnapshot, OptimizedListing } from '@/lib/types';
 
 export interface RunRecord {
@@ -106,11 +110,32 @@ export interface UpdateRunPatch {
   failureIds: string[];
   productName?: string;
   /**
-   * U3 — a regeneration that ALSO failed upstream. It can only ever SET this
-   * column, never clear it, and that asymmetry is deliberate and is the same
-   * rule the live panel follows: a regeneration rewrites ONE group of nine, so
-   * a notice that vanished on the first good group would be announcing a
-   * recovery that did not happen.
+   * U3/V1 — the notice raised by THIS regeneration, if it raised one.
+   *
+   * IT IS NO LONGER THE WHOLE STORY, AND THE COLUMN IS NO LONGER SET-ONLY.
+   *
+   * U3 made this write-only-upward, and the reason was right: a regeneration
+   * rewrites ONE group of nine, so a notice that vanished on the first good
+   * group would announce a recovery that did not happen. But the rule was
+   * blunter than its reason. A run whose ONLY degraded group was then
+   * successfully regenerated stayed amber in History forever, with no way back
+   * — and once V1's exploit could brand a healthy run amber in the first place,
+   * "can never be cleared" meant one recovered blip during a regenerate was
+   * permanent.
+   *
+   * The rule is now SCOPED rather than one-directional, and it lives in
+   * `narrowGenerationFailure`/`mergeGenerationFailure` so the live panel
+   * applies the identical logic to the session it is holding: a notice covers a
+   * SET OF GROUPS and survives exactly as long as any of them is still in
+   * `patch.optimized.degradedGroups`. Recovering one of several narrows it;
+   * recovering all of them clears it; recovering none leaves it untouched. The
+   * other eight groups therefore keep the notice alive on their own — U3's
+   * reason is preserved as a CONSEQUENCE of the rule instead of as a separate
+   * prohibition.
+   *
+   * A stored notice with NO scope (written before V1) is never narrowed and
+   * never cleared, exactly as under U3: there is nothing in the row to narrow
+   * it by, and dropping it on a guess would be the announcement U3 forbade.
    */
   generationFailure?: GenerationFailure | null;
 }
@@ -242,13 +267,65 @@ export async function saveRun(run: SaveRunInput): Promise<string | null> {
   return (data as { id: string }).id;
 }
 
+/**
+ * V1 — read the notice this run is currently carrying, so `updateRun` can
+ * narrow or clear it.
+ *
+ * FAILS TOWARD SET-ONLY. Any error other than "the column is not there" is
+ * logged and answered with `undefined`, which the caller treats as "I do not
+ * know what is stored" and therefore never clears anything. Clearing an
+ * operator's only statement of cause on the strength of a failed read would be
+ * the worst outcome available here.
+ */
+async function carriedFailure(
+  sb: SupabaseClient,
+  id: string,
+): Promise<GenerationFailure | null | undefined> {
+  const { data, error } = await sb
+    .from('runs')
+    .select('generation_failure')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) {
+    if (missingFailureColumn(error)) {
+      logServer('store.generation_failure_column_missing', { op: 'updateRun.read' });
+      // The column does not exist, so there is nothing stored and nothing to
+      // clear. That is a KNOWN empty, not an unknown — `null`, not `undefined`.
+      return null;
+    }
+    logServer('store.error', { op: 'updateRun.read', message: String(error.message ?? '').slice(0, 200) });
+    return undefined;
+  }
+  return coerceGenerationFailure((data as { generation_failure?: unknown } | null)?.generation_failure);
+}
+
 export async function updateRun(id: string, patch: UpdateRunPatch): Promise<void> {
   const sb = client();
   if (!sb) {
     logServer('store.disabled', { op: 'updateRun', reason: 'missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' });
     return;
   }
-  const storedFailure = coerceGenerationFailure(patch.generationFailure);
+  const incoming = coerceGenerationFailure(patch.generationFailure);
+  // V1 — the two-step rule. `carried` is what the row already says; it is
+  // narrowed to the groups STILL degraded in the listing being written, and the
+  // notice this round raised (if any) is merged on top.
+  const carried = await carriedFailure(sb, id);
+  const narrowed =
+    carried === undefined
+      ? // Unknown: behave exactly as U3 did — set only, clear never.
+        incoming
+      : narrowGenerationFailure(carried, patch.optimized.degradedGroups);
+  const storedFailure =
+    carried === undefined ? incoming : mergeGenerationFailure(narrowed, incoming);
+  /**
+   * Write the column when there is something to SET or something to CLEAR, and
+   * omit it otherwise — so a regeneration of a run that never had a notice
+   * issues the exact statement it issued before this column existed.
+   *
+   * `null` is written, deliberately, when a stored notice no longer covers any
+   * degraded group. That is the clear.
+   */
+  const touchesFailure = storedFailure !== null || (carried !== undefined && carried !== null);
   const update = (withFailure: boolean) =>
     sb
       .from('runs')
@@ -260,11 +337,11 @@ export async function updateRun(id: string, patch: UpdateRunPatch): Promise<void
         gaps: patch.gaps,
         failure_ids: patch.failureIds,
         ...(patch.productName !== undefined ? { product_name: patch.productName } : {}),
-        // SET-ONLY — see `UpdateRunPatch.generationFailure`. A successful
-        // regeneration writes no key here, so it cannot erase the record of
-        // the eight groups that never ran. Coerced on the way in for the same
-        // reason `saveRun` coerces.
-        ...(withFailure && storedFailure ? { generation_failure: storedFailure } : {}),
+        // V1 — SCOPED, not set-only. See `UpdateRunPatch.generationFailure`.
+        // Coerced on the way in for the same reason `saveRun` coerces, so the
+        // stored row can never contain `message` or any key outside the
+        // contract regardless of what a caller hands over.
+        ...(withFailure && touchesFailure ? { generation_failure: storedFailure } : {}),
       })
       .eq('id', id);
   let { error } = await update(true);

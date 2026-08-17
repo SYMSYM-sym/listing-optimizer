@@ -13,10 +13,11 @@ import type {
 } from '@/lib/types';
 import { utf8Bytes } from '@/lib/shared/utf8Bytes';
 import {
-  GENERATION_FAILURE_CAVEAT,
-  GENERATION_FAILURE_CONTEXT,
   GENERATION_FAILURE_HEADING,
+  generationFailureCaveat,
+  generationFailureContext,
   generationFailureDetail,
+  generationFailureScopeLine,
 } from '@/lib/shared/generationFailure';
 import { arr } from '@/lib/gate/util';
 import { toSellerCentralDescription } from './descriptionHtml';
@@ -229,12 +230,18 @@ function blockingBanner(failures: Failure[]): string {
  * your listing", and this is not that.
  */
 function generationFailureNotice(f: GenerationFailure): string {
+  // V1 — the caveat and the context are SCOPED to the groups the failure
+  // actually cost. On a whole-run failure they are the same two constants this
+  // document has always printed; on a partial one they name the groups, so the
+  // findings on the surfaces that DID generate keep their weight.
+  const scope = generationFailureScopeLine(f);
   return (
     '<div class=gfail>' +
     `<b>⚠ ${esc(GENERATION_FAILURE_HEADING)}</b>` +
     `<div class=gsum>${esc(f.summary)}</div>` +
+    (scope ? `<div class=gsum>${esc(scope)}</div>` : '') +
     `<div class=gid><code>${esc(generationFailureDetail(f))}</code></div>` +
-    `<div class=note><b>${esc(GENERATION_FAILURE_CAVEAT)}</b> ${esc(GENERATION_FAILURE_CONTEXT)}</div>` +
+    `<div class=note><b>${esc(generationFailureCaveat(f))}</b> ${esc(generationFailureContext(f))}</div>` +
     '</div>'
   );
 }

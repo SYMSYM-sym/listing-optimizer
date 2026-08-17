@@ -4,7 +4,7 @@ import { optimize, type GroupName, ALL_GROUPS } from '@/lib/engine/optimize';
 import {
   anthropicClient,
   describeError,
-  generationFailurePayload,
+  recordedGenerationFailure,
   recordUpstreamFailures,
   withTransientRetry,
 } from '@/lib/engine/llm';
@@ -189,15 +189,24 @@ export async function POST(req: Request): Promise<NextResponse> {
       state: audit.verified ? 'verified' : 'draft',
     };
 
-    // Absent unless an upstream call failed — see the optimize route for why
-    // the redacted `message` stays in the log rather than travelling here.
+    // Absent unless an upstream call failed AND cost this regeneration its
+    // group — see the optimize route for the cross-check and why the redacted
+    // `message` stays in the log rather than travelling here.
     //
     // U3 — computed BEFORE the update, so the stored run carries what the
-    // response carries. `updateRun` only ever SETS this column: a regeneration
-    // that succeeded rewrote ONE group of nine and cannot honestly clear a
-    // notice about the other eight, which is the same rule the live panel
-    // applies with `body.generationFailure ?? result.generationFailure`.
-    const generationFailure = generationFailurePayload(generation.firstFailure());
+    // response carries.
+    //
+    // V1 — the intersection is with `merged.degradedGroups`, which carries the
+    // ORIGINAL run's degraded groups forward alongside anything this round
+    // lost. So the notice this route raises names only what THIS call failed to
+    // fetch: a group that was already degraded before this regeneration is not
+    // re-attributed to this call's error, and the marker already stored for it
+    // is preserved by `updateRun` rather than overwritten here.
+    const generationFailure = recordedGenerationFailure(
+      generation,
+      merged.degradedGroups,
+      ALL_GROUPS.length,
+    );
 
     if (body.runId) {
       try {

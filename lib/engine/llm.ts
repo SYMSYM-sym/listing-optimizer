@@ -28,6 +28,19 @@ export interface LlmRequest {
 
 export type LlmClient = (req: LlmRequest) => Promise<string>;
 
+/**
+ * The per-CALL timeout handed to the SDK, and therefore the longest a single
+ * attempt can take before the transport gives up on it.
+ *
+ * V3 — it is a named export because `withTransientRetry` has to project the
+ * cost of an attempt that HAS NOT HAPPENED YET, and this is the only true
+ * upper bound on one. A projection built from anything smaller is a guess that
+ * the deadline check then treats as a fact; see `TransientRetryOptions.
+ * attemptTimeoutMs`. Two literals — one here and one in the projection — is
+ * exactly how a 90s transport and a 60s reservation come to disagree.
+ */
+export const CLIENT_TIMEOUT_MS = 90_000;
+
 let _anthropic: Anthropic | null = null;
 
 export function anthropicClient(): LlmClient {
@@ -45,7 +58,7 @@ export function anthropicClient(): LlmClient {
     // see the deadline, and it is the one whose retries appear in our logs.
     _anthropic ??= new Anthropic({
       apiKey: env.anthropicApiKey(),
-      timeout: 90_000,
+      timeout: CLIENT_TIMEOUT_MS,
       maxRetries: 0,
     });
     const started = Date.now();
@@ -362,8 +375,20 @@ export function upstreamFailureSummary(f: SafeErrorFields): string {
  *   NOT SEEN    the reparse path. Schema and JSON failures happen AFTER the
  *               call returned, above this wrapper, and already have their own
  *               single retry with the validation error fed back to the model.
- *               A different failure mode with a different remedy; it is not
- *               reached from here and must not be.
+ *               A different failure mode with a different remedy.
+ *
+ *               CORRECTED RECORD (V2). This paragraph used to end "it is not
+ *               reached from here and must not be", and that was FALSE when it
+ *               was written. A call failure that escaped this wrapper — a
+ *               permanent 400, or a transient one that exhausted the attempt
+ *               budget — was rethrown into `generateGroup`, whose reparse
+ *               retry re-attempted ANY error and therefore made a second call.
+ *               It was reached from here, on every degraded group, twice per
+ *               group. That is the same defect as U2's "sent EXACTLY ONCE"
+ *               claim and it was the mechanism of the V1 false-notice exploit.
+ *               `generateGroup` now scopes the reparse retry to the classes
+ *               `classify` calls model-derived, so the sentence is true — as a
+ *               property of that function, not of this comment.
  *
  * Anything that is not an SDK error at all — including the boundary's own
  * "LLM returned no text content" — is NOT retried. Fails closed: an unknown
@@ -482,6 +507,16 @@ export interface TransientRetryOptions {
   deadline?: number;
   /** Total attempts including the first. Defaults to `TRANSIENT_MAX_ATTEMPTS`. */
   maxAttempts?: number;
+  /**
+   * V3 — the WORST CASE cost of an attempt that has not happened yet.
+   * Defaults to `CLIENT_TIMEOUT_MS`, which is the only true upper bound: the
+   * transport gives up at that mark and not one millisecond earlier, so a
+   * retry approved on a smaller number is approved on a hope.
+   *
+   * Injected only so the deadline tests can state a small, exact number
+   * instead of arranging a 90-second clock.
+   */
+  attemptTimeoutMs?: number;
   /** Injected for tests. */
   now?: () => number;
   /** Injected for tests. */
@@ -509,17 +544,33 @@ export interface TransientRetryOptions {
  */
 export function withTransientRetry(inner: LlmClient, opts: TransientRetryOptions = {}): LlmClient {
   const maxAttempts = Math.max(1, opts.maxAttempts ?? TRANSIENT_MAX_ATTEMPTS);
+  const attemptTimeoutMs = Math.max(0, opts.attemptTimeoutMs ?? CLIENT_TIMEOUT_MS);
   const now = opts.now ?? (() => Date.now());
   const random = opts.random ?? Math.random;
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   return async (req) => {
     const group = req.groupName ?? 'unknown';
     /**
-     * The longest attempt MEASURED so far, used to project how long the retry
-     * itself will take. The deadline has to cover the wait AND the call after
-     * it — sleeping until one millisecond before the mark and then starting a
-     * 60-second request is not respecting a deadline. Same projection the
-     * repair loop makes from its longest measured round (`lib/engine/repair.ts`).
+     * The longest attempt MEASURED so far. Kept for the LOG, and as a floor
+     * under the projection — not as the projection itself.
+     *
+     * V3 — THE DEFECT THIS REPLACES. This number alone used to decide whether
+     * a retry fits. It is a measurement of attempts that ALREADY FAILED, and
+     * the cheapest failure in this system is the fastest: a 529 from the edge
+     * comes back in single-digit milliseconds, so after three of them
+     * `longestAttemptMs` is ~5ms and the check reserved ~5ms for a call the
+     * transport is willing to spend `CLIENT_TIMEOUT_MS` on. A retry approved
+     * at 239.9s of a 240s mark passed that check and could then run for a
+     * further 90 seconds — straight through `maxDuration`, into the platform
+     * kill, into the 502 that loses every surface and every gate finding.
+     * That is the exact outcome the deadline exists to prevent, approved by
+     * the deadline's own check.
+     *
+     * So the projection is the WORST CASE for an attempt that has not
+     * happened yet, and the worst case is the client timeout. A measured
+     * attempt that somehow ran LONGER than the timeout (a clock jump, an
+     * injected client) still wins, because it is evidence and the constant is
+     * only a bound.
      */
     let longestAttemptMs = 0;
     for (let attempt = 1; ; attempt++) {
@@ -545,9 +596,12 @@ export function withTransientRetry(inner: LlmClient, opts: TransientRetryOptions
         // because the clamp exists to bound our own guess, not the server's
         // instruction.
         const backoff = advised ?? transientBackoffMs(attempt, random);
+        // V3 — see `longestAttemptMs`. The projection is the client timeout,
+        // raised only by a measured attempt that exceeded it.
+        const projectedAttemptMs = Math.max(longestAttemptMs, attemptTimeoutMs);
         if (
           typeof opts.deadline === 'number' &&
-          now() + backoff + longestAttemptMs > opts.deadline
+          now() + backoff + projectedAttemptMs > opts.deadline
         ) {
           // D5 — stop rather than overrun. The group degrades, which is a
           // complete and honest `verified:false`; overrunning is a 502.
@@ -555,7 +609,8 @@ export function withTransientRetry(inner: LlmClient, opts: TransientRetryOptions
             group,
             attempt,
             backoffMs: backoff,
-            projectedAttemptMs: longestAttemptMs,
+            projectedAttemptMs,
+            measuredAttemptMs: longestAttemptMs,
             remainingMs: opts.deadline - now(),
             ...describeError(e),
           });
@@ -594,7 +649,15 @@ export function withTransientRetry(inner: LlmClient, opts: TransientRetryOptions
  * response is byte-for-byte the object it was and `'generationFailure' in body`
  * remains the exact test for "an upstream call failed".
  */
-export function generationFailurePayload(f: SafeErrorFields | null): GenerationFailure | null {
+export function generationFailurePayload(
+  f: SafeErrorFields | null,
+  /**
+   * V1 — the groups this failure actually cost, and how many the run has.
+   * OMITTED entirely when not supplied, so a caller that has no scope to give
+   * produces exactly the object it produced before scope existed.
+   */
+  scope?: { groups: readonly string[]; total: number },
+): GenerationFailure | null {
   if (!f) return null;
   return {
     class: f.error,
@@ -602,38 +665,146 @@ export function generationFailurePayload(f: SafeErrorFields | null): GenerationF
     ...(f.apiType ? { apiType: f.apiType } : {}),
     ...(f.requestId ? { requestId: f.requestId } : {}),
     summary: upstreamFailureSummary(f),
+    ...(scope ? { groups: [...scope.groups], groupsTotal: scope.total } : {}),
   };
 }
 
+/** The name a call that did not declare a group is recorded under. */
+export const UNNAMED_GROUP = 'unknown';
+
+export interface UpstreamGroupFailure {
+  group: string;
+  safe: SafeErrorFields;
+}
+
+export interface UpstreamFailureRecorder {
+  llm: LlmClient;
+  /**
+   * The earliest still-UNRESOLVED call failure, or null when every group that
+   * failed went on to succeed.
+   */
+  firstFailure: () => SafeErrorFields | null;
+  /** Every still-unresolved failure with the group it belongs to, in order. */
+  openFailures: () => UpstreamGroupFailure[];
+  /** The groups whose call failure was never followed by a success, in order. */
+  failedGroups: () => string[];
+}
+
 /**
- * Wrap a client so the FIRST transport/API failure of a run is available to the
- * caller after the run finishes.
+ * Wrap a client so the first UNRECOVERED transport/API failure of each GROUP is
+ * available to the caller after the run finishes.
  *
  * This is how an operator staring at nine `GEN` gate failures gets told the run
  * died on a 401 instead of being left to infer it. It wraps the CLIENT, so
  * everything it sees is by construction a call failure — a parse failure never
  * reaches it, and model output never enters this path at all.
  *
+ * V1 — WHY IT UN-LATCHES, AND WHAT THE OLD LATCH DID.
+ *
+ * It used to keep the FIRST failure of the whole run, forever, on the reasoning
+ * that `withTransientRetry` sits inside it and therefore only escaped failures
+ * are ever seen. That reasoning had a hole, and the hole was reachable: the
+ * reparse retry in `generateGroup` sits ABOVE this wrapper, so a call failure
+ * that escaped the retry wrapper was still followed by a SECOND call, and if
+ * that call succeeded THE GROUP SUCCEEDED. The run then came back
+ * `verified:true` with no degraded group at all — and a latched failure, which
+ * the routes attached unconditionally, which rendered U1's banner, which told
+ * the operator that "generation never ran" and that "the failures below are NOT
+ * a judgement of your listing". On a run with genuine compliance failures that
+ * is the precise operator-conditioning hazard U1 was built to prevent, wearing
+ * U1's own colours. (V2 removes one of the two ways in by scoping the reparse
+ * retry to schema failures; this removes the class.)
+ *
+ * So the record is PER GROUP and it is CLEARED when that same group later
+ * returns a value. What survives is exactly "this group's copy could not be
+ * fetched", which is the claim the notice makes and the claim
+ * `degradedGroups` makes — the two now agree by construction rather than by
+ * hope.
+ *
+ * A call that declares no `groupName` is recorded under `UNNAMED_GROUP`. No
+ * such caller exists (`generateGroup` always names its group, asserted in
+ * `tests/generationFailure.scope.v1.test.ts`); if one were added, its failure
+ * could not intersect any degraded group and so would raise no notice. That is
+ * the fail-closed direction: a missing notice, never a false one.
+ *
  * It records and RETHROWS: the degrade behaviour downstream, and therefore
  * `verified`, is completely untouched. Removing the wrapper would change
  * nothing except how much the operator is told.
  */
-export function recordUpstreamFailures(inner: LlmClient): {
-  llm: LlmClient;
-  firstFailure: () => SafeErrorFields | null;
-} {
-  let first: SafeErrorFields | null = null;
+export function recordUpstreamFailures(inner: LlmClient): UpstreamFailureRecorder {
+  // Insertion-ordered, so "first" means first observed rather than
+  // alphabetically first. A `Map` delete + re-set on a group that fails, then
+  // succeeds, then fails again correctly moves it to the end: the surviving
+  // failure really is the later one.
+  const open = new Map<string, SafeErrorFields>();
   return {
     llm: async (req) => {
+      const group = req.groupName ?? UNNAMED_GROUP;
       try {
-        return await inner(req);
+        const text = await inner(req);
+        // THE UN-LATCH. This group produced copy, so whatever went wrong on the
+        // way is no longer something the operator needs to be warned about.
+        open.delete(group);
+        return text;
       } catch (e) {
-        first ??= describeError(e);
+        if (!open.has(group)) open.set(group, describeError(e));
         throw e;
       }
     },
-    firstFailure: () => first,
+    firstFailure: () => open.values().next().value ?? null,
+    openFailures: () => [...open].map(([group, safe]) => ({ group, safe })),
+    failedGroups: () => [...open.keys()],
   };
+}
+
+/**
+ * V1 — THE ONE RULE that decides whether a run gets the upstream-failure
+ * notice, and what the notice may claim.
+ *
+ * Both routes call this instead of attaching `firstFailure()` unconditionally.
+ *
+ * THE RULE: a group raises the notice only if it BOTH failed upstream without
+ * recovering AND is still degraded in the listing being returned. The
+ * intersection is the notice's SCOPE.
+ *
+ * WHY THE INTERSECTION RATHER THAN EITHER SIDE ALONE.
+ *
+ *   `degradedGroups` alone would be wrong in the other direction: a group that
+ *   degraded purely on schema validation never involved an upstream failure,
+ *   and captioning it "the upstream model API could not be reached" would be a
+ *   second false statement of cause.
+ *
+ *   The recorder alone is *nearly* right after the un-latch above — but "nearly"
+ *   is what the exploit was made of. `degradedGroups` is what `GEN` and
+ *   therefore `verified` are computed from, so cross-checking against it makes
+ *   the notice's scope a subset of the run's own record of what is missing, by
+ *   construction, no matter what future composition someone builds around this.
+ *
+ * THE PARTIAL CASE IS THE POINT. When some groups degraded and others
+ * recovered, the operator is STILL told — silence would hide a real,
+ * unexplained hole in the copy — but the notice names the groups it covers and
+ * the wording (`lib/shared/generationFailure.ts`) restricts the caveat to
+ * them, so the failures on the surfaces that DID generate are left standing as
+ * the real findings they are.
+ *
+ * It decides nothing: `verified` is computed only in `lib/audit/buildAudit.ts`,
+ * and this reads `degradedGroups` without writing it.
+ */
+export function recordedGenerationFailure(
+  recorder: Pick<UpstreamFailureRecorder, 'openFailures'>,
+  degradedGroups: readonly string[] | undefined,
+  totalGroups: number,
+): GenerationFailure | null {
+  const stillDegraded = new Set(degradedGroups ?? []);
+  const inScope = recorder.openFailures().filter((f) => stillDegraded.has(f.group));
+  if (inScope.length === 0) return null;
+  // The IDENTITY is the first failure IN SCOPE, not the first failure of the
+  // run: quoting the status of a group that recovered, or of a group that is
+  // not degraded, would name a cause the notice does not cover.
+  return generationFailurePayload(inScope[0]!.safe, {
+    groups: inScope.map((f) => f.group),
+    total: totalGroups,
+  });
 }
 
 /**
@@ -664,6 +835,22 @@ export class GroupGenerationError extends Error {
   }
 }
 
+/**
+ * V2 — is this failure one the REPARSE RETRY can do anything about?
+ *
+ * Expressed as a question about the EXISTING taxonomy rather than as a second
+ * list of classes beside it: the reparse retry re-sends the prompt with the
+ * validation error appended, which is a remedy for output the model produced
+ * and nothing else. `classify` already partitions exactly that way —
+ * `'schema'` (`ZodError`) and `'truncated-or-unparseable'` (`SyntaxError` from
+ * `JSON.parse`, and `extractJson`'s own error) are the model's output;
+ * `'transport'` is everything else. So this is a one-line consequence of
+ * `classify` and cannot drift from it.
+ */
+function isReparseable(e: unknown): boolean {
+  return classify(e) !== 'transport';
+}
+
 function classify(e: unknown): GroupFailureReason {
   if (e instanceof ZodError) return 'schema';
   // A truncated response fails at JSON.parse (SyntaxError), and a response the
@@ -677,6 +864,32 @@ function classify(e: unknown): GroupFailureReason {
 /**
  * Generate one group: prompt → JSON → zod parse; ONE reparse retry with the
  * validation error appended (separate from the gate's repair budget).
+ *
+ * V2 — THE REPARSE RETRY IS FOR SCHEMA AND JSON FAILURES, AND NOW ONLY THOSE.
+ *
+ * It re-attempted ANY error, and for a TRANSPORT failure that was wrong twice
+ * over:
+ *
+ *   IT COST A SECOND CALL PER GROUP. During the credit-balance outage every
+ *   group made two calls, not one — 18 per run against an account that could
+ *   not pay for the first nine. U2's own commit claimed a 400 was "sent
+ *   EXACTLY ONCE"; U2's own pipeline test pinned `ALL_GROUPS.length * 2` and
+ *   was right. See CONFORMANCE-DEVIATIONS §15.4.
+ *
+ *   IT FED THE SDK'S ERROR TO THE MODEL. `detail` becomes the prompt line
+ *   "your previous output was invalid: 400 {...credit balance too low...}".
+ *   The model produced no previous output; there is nothing for it to correct;
+ *   the sentence is incoherent, and it sends a redacted transport error back
+ *   upstream to be read as a description of the model's own work.
+ *
+ *   AND IT WAS THE MECHANISM OF A FALSE OPERATOR NOTICE. A transport failure
+ *   whose reparse call SUCCEEDED produced a healthy group off the back of a
+ *   failure the run recorder had already latched — see the V1 note on
+ *   `recordUpstreamFailures`.
+ *
+ * A transport failure now goes straight to the degrade path with reason
+ * `'transport'`, which is the reason it was classified with before, so `GEN`,
+ * the degrade routing and `verified` see exactly what they saw.
  */
 export async function generateGroup<S extends z.ZodType>(
   llm: LlmClient,
@@ -720,6 +933,20 @@ export async function generateGroup<S extends z.ZodType>(
   try {
     return await attempt();
   } catch (e) {
+    if (!isReparseable(e)) {
+      // V2 — the call did not return. There is no model output to correct, so
+      // there is nothing a reparse retry can do except spend a second call and
+      // hand the SDK's message to the model as if it were the model's own.
+      // Degrade now, with the SAME classification and the SAME safe fields the
+      // second attempt would have produced.
+      throw new GroupGenerationError(
+        groupName,
+        classify(e),
+        zodIssuePaths(e),
+        `Group '${groupName}' failed upstream: ${e instanceof Error ? e.message.slice(0, 300) : String(e)}`,
+        describeError(e),
+      );
+    }
     // `detail` is fed back to the MODEL in the retry prompt, never to the log.
     // It is redacted anyway: for an infrastructure failure it is an SDK message
     // that can echo request context, and putting that in a prompt would send it

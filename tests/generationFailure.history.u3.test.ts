@@ -53,11 +53,14 @@ const db = {
   listRows: [] as Record<string, unknown>[],
   /** Fail any statement naming `generation_failure` (a pre-migration store). */
   columnMissing: false,
+  /** V1 — fail the single-row READ with an UNRELATED error, once armed. */
+  readError: null as { code?: string; message?: string } | null,
   reset(): void {
     db.statements = [];
     db.detailRow = null;
     db.listRows = [];
     db.columnMissing = false;
+    db.readError = null;
   },
 };
 
@@ -104,8 +107,11 @@ function fakeClient() {
           range: () => chain,
           ilike: () => chain,
           eq: () => ({
-            maybeSingle: async () =>
-              fail ? { data: null, error: MISSING } : { data: db.detailRow, error: null },
+            maybeSingle: async () => {
+              if (fail) return { data: null, error: MISSING };
+              if (db.readError) return { data: null, error: db.readError };
+              return { data: db.detailRow, error: null };
+            },
           }),
           // The list query is AWAITED directly, so the builder is thenable.
           then: (resolve: (v: unknown) => unknown) =>
@@ -229,6 +235,29 @@ const storedRow = async (generation_failure?: unknown): Promise<Record<string, u
     ...(generation_failure !== undefined ? { generation_failure } : {}),
   };
 };
+
+/** V1 — an `UpdateRunPatch`, with the listing's degraded scope under control. */
+const patchFor = (
+  run: { optimized: OptimizedListing; audit: ReturnType<typeof buildAudit> },
+  degradedGroups?: string[],
+) => ({
+  optimized: {
+    ...run.optimized,
+    ...(degradedGroups && degradedGroups.length > 0 ? { degradedGroups } : {}),
+  } as OptimizedListing,
+  audit: run.audit,
+  verified: run.audit.verified,
+  score: run.audit.scorecard.total,
+  gaps: run.audit.gaps.length,
+  failureIds: run.audit.gateResult.failures.map((f) => f.checkId),
+});
+
+/** V1 — a stored notice that KNOWS which groups it covers. */
+const scopedFailure = (groups: string[]): GenerationFailure => ({
+  ...outageFailure(),
+  groups,
+  groupsTotal: 9,
+});
 
 /** Exactly what `app/page.tsx#openRun` builds from a run-detail response. */
 const replayModel = (row: {
@@ -382,22 +411,72 @@ describe('§(a) a degraded run round-trips and the replayed run renders the bann
     expect(sheet).not.toContain('navigator.clipboard');
   });
 
-  it('a regeneration that ALSO failed upstream is persisted; a successful one cannot clear it', async () => {
+  /**
+   * UPDATED BY V1. This used to assert the SET-ONLY rule outright ("a
+   * successful one cannot clear it"). That rule was too blunt: a run whose ONLY
+   * degraded group was successfully regenerated stayed amber in History
+   * forever. The property it was defending — a single-group regeneration cannot
+   * announce the recovery of the other eight — is preserved below as a
+   * consequence of the SCOPED rule, and asserted directly.
+   */
+  it('a regeneration that ALSO failed upstream is persisted', async () => {
     const run = await realFailingRun();
-    const patch = {
-      optimized: run.optimized,
-      audit: run.audit,
-      verified: run.audit.verified,
-      score: run.audit.scorecard.total,
-      gaps: run.audit.gaps.length,
-      failureIds: run.audit.gateResult.failures.map((f) => f.checkId),
-    };
-    await updateRun('run-u3', { ...patch, generationFailure: outageFailure() });
+    await updateRun('run-u3', { ...patchFor(run), generationFailure: outageFailure() });
     expect(db.statements.at(-1)!.payload!.generation_failure).toEqual(outageFailure());
+  });
 
-    db.statements = [];
-    await updateRun('run-u3', patch);
+  it('a run that never had a notice still issues the pre-U3 statement — no key at all', async () => {
+    const run = await realFailingRun();
+    db.detailRow = await storedRow();
+    await updateRun('run-u3', patchFor(run));
     expect(db.statements.at(-1)!.payload).not.toHaveProperty('generation_failure');
+  });
+
+  it('V1 — a regenerate that recovers the ONLY degraded group CLEARS the stale marker', async () => {
+    const run = await realFailingRun();
+    db.detailRow = await storedRow(scopedFailure(['bullets']));
+    // The regenerated listing has NOTHING degraded any more.
+    await updateRun('run-u3', patchFor(run, []));
+    expect(db.statements.at(-1)!.payload!.generation_failure).toBeNull();
+  });
+
+  it('V1 — a regenerate that recovers ONE OF SEVERAL keeps the marker, narrowed', async () => {
+    const run = await realFailingRun();
+    db.detailRow = await storedRow(scopedFailure(['bullets', 'qa', 'images']));
+    await updateRun('run-u3', patchFor(run, ['qa', 'images']));
+    const stored = db.statements.at(-1)!.payload!.generation_failure as GenerationFailure;
+    expect(stored).not.toBeNull();
+    expect(stored.groups).toEqual(['qa', 'images']);
+    expect(stored.groupsTotal).toBe(9);
+  });
+
+  it('V1 — a single-group regenerate cannot announce recovery of the other eight', async () => {
+    const run = await realFailingRun();
+    const all = ['title', 'bullets', 'description', 'backend', 'attributes', 'aplus', 'images', 'qa', 'keywords'];
+    db.detailRow = await storedRow(scopedFailure(all));
+    await updateRun('run-u3', patchFor(run, all.filter((g) => g !== 'title')));
+    const stored = db.statements.at(-1)!.payload!.generation_failure as GenerationFailure;
+    expect(stored.groups).toHaveLength(8);
+    expect(stored.groups).not.toContain('title');
+  });
+
+  it('V1 — a LEGACY marker with no scope is never narrowed and never cleared', async () => {
+    const run = await realFailingRun();
+    db.detailRow = await storedRow(outageFailure());
+    await updateRun('run-u3', patchFor(run, []));
+    expect(db.statements.at(-1)!.payload!.generation_failure).toEqual(outageFailure());
+  });
+
+  it('V1 — a failed READ falls back to set-only; a stored marker is never cleared on a guess', async () => {
+    const run = await realFailingRun();
+    db.readError = { code: 'XX000', message: 'connection reset' };
+    await updateRun('run-u3', patchFor(run, []));
+    // Nothing to set and nothing KNOWN to clear => the column is not touched.
+    expect(db.statements.at(-1)!.payload).not.toHaveProperty('generation_failure');
+    expect(logServer).toHaveBeenCalledWith(
+      'store.error',
+      expect.objectContaining({ op: 'updateRun.read' }),
+    );
   });
 });
 
@@ -595,10 +674,23 @@ describe('§(d) a malformed stored value never throws and degrades to no banner'
 // ===========================================================================
 
 describe('§(e) the persisted payload never contains `message` or anything key-shaped', () => {
-  const CONTRACT = ['class', 'status', 'apiType', 'requestId', 'summary'];
+  // V1 added `groups`/`groupsTotal` — the SCOPE. They are part of the contract
+  // and are subject to exactly the same stripping rule as the rest of it.
+  const CONTRACT = ['class', 'status', 'apiType', 'requestId', 'summary', 'groups', 'groupsTotal'];
 
-  it('the builder itself produces exactly the five-field contract', () => {
-    expect(Object.keys(outageFailure()).sort()).toEqual([...CONTRACT].sort());
+  it('the builder produces exactly the contract, and only the SCOPE is optional-by-caller', () => {
+    // No scope supplied => the five fields this record has always carried.
+    expect(Object.keys(outageFailure()).sort()).toEqual(
+      ['class', 'status', 'apiType', 'requestId', 'summary'].sort(),
+    );
+    expect(
+      Object.keys(
+        generationFailurePayload(describeError(CREDIT_BALANCE_400), {
+          groups: ['bullets'],
+          total: 9,
+        })!,
+      ).sort(),
+    ).toEqual([...CONTRACT].sort());
   });
 
   it('saveRun stores exactly those keys and nothing else', async () => {

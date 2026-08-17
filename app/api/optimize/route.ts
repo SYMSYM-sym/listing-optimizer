@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import {
   anthropicClient,
   describeError,
-  generationFailurePayload,
+  recordedGenerationFailure,
   recordUpstreamFailures,
   withTransientRetry,
 } from '@/lib/engine/llm';
+import { ALL_GROUPS } from '@/lib/engine/optimize';
 import { ingestCompetitors } from '@/lib/ingest/competitors';
 import { normalizePanelFacts } from '@/lib/knowledge/panelFacts';
 import { runPipeline } from '@/lib/pipeline/run';
@@ -111,17 +112,35 @@ export async function POST(req: Request): Promise<NextResponse> {
       },
     );
 
-    // Present ONLY when an upstream call actually failed, so a healthy response
-    // is byte-for-byte the object it was. `message` is deliberately NOT
-    // included: a response body is held to a stricter standard than a server
-    // log, and the summary plus the status/type/request id are everything an
-    // operator can act on. The redacted message stays in the `llm.error` line.
+    // Present ONLY when an upstream call actually failed AND cost this run a
+    // group, so a healthy response is byte-for-byte the object it was.
+    // `message` is deliberately NOT included: a response body is held to a
+    // stricter standard than a server log, and the summary plus the
+    // status/type/request id are everything an operator can act on. The
+    // redacted message stays in the `llm.error` line.
     //
     // U3 — computed BEFORE the save, because the run record now carries it too.
     // The live response and the stored row therefore get the SAME value from
     // the SAME builder, which is what makes re-opening this run from History
     // show the same banner instead of eleven unexplained gate failures.
-    const generationFailure = generationFailurePayload(generation.firstFailure());
+    //
+    // V1 — and it is now CROSS-CHECKED against what actually degraded. This
+    // line used to attach `generation.firstFailure()` unconditionally, and a
+    // failure the group RECOVERED from — a one-shot blip that the reparse call
+    // answered — was still latched, so a run that came back `verified:true`
+    // with zero degraded groups could carry the notice, render U1's banner and
+    // be persisted amber forever. On a run with GENUINE compliance failures the
+    // banner then told the operator those failures were not a judgement of
+    // their listing, which is the exact conditioning hazard U1 exists to
+    // prevent. `recordedGenerationFailure` intersects the unrecovered call
+    // failures with `optimized.degradedGroups` — the same list `GEN` and
+    // therefore `verified` are computed from — and the notice can claim
+    // nothing outside it.
+    const generationFailure = recordedGenerationFailure(
+      generation,
+      optimized.degradedGroups,
+      ALL_GROUPS.length,
+    );
 
     let runId: string | null = null;
     try {

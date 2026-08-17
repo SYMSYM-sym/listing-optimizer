@@ -1782,3 +1782,232 @@ the `negative` case and the `declaredNegatives` filter in
 `knowledge/rules.json`, §5 and §10.3 above, and
 `tests/complianceNegatives.deference.test.ts` +
 `tests/keywordPlacement.gate.test.ts`.
+
+---
+
+## 15. ROUND V — a proven false-notice exploit, two defects it rode in on, and three factual errors in the record.
+
+### 15.1 THE EXPLOIT — U1's banner could be raised on a run that did not degrade.
+
+**Proven at runtime against the real composition**, on both trigger paths, before
+anything was changed:
+
+```
+VERIFIED= true  DEGRADED= null
+FIRSTFAILURE= {"class":"APIError","status":529,"apiType":"overloaded_error",
+               "summary":"Generation failed: the upstream model API returned a server error (status 529, overloaded_error)."}
+```
+
+**The mechanism.** `recordUpstreamFailures` latched the FIRST call failure of a
+run and never let go, on the reasoning that `withTransientRetry` sits inside it
+and therefore only ESCAPED failures are ever seen. The reasoning had a hole and
+the hole was reachable: `generateGroup`'s reparse retry sits **above**
+`withTransientRetry` and re-attempted **any** error, so a call failure that
+escaped the retry wrapper was followed by a SECOND call — and when that call
+succeeded, **the group succeeded**. The run came back `verified: true` with zero
+degraded groups, `firstFailure()` was still latched, `/api/optimize` attached it
+**unconditionally** (no cross-check against `optimized.degradedGroups`), U1's
+banner rendered *"generation never ran — the failures below are NOT a judgement
+of your listing"*, and `saveRun`/`updateRun` persisted it — where `updateRun` was
+**set-only and could never clear it**.
+
+Two paths, both demonstrated:
+
+1. a one-shot `"LLM returned no text content"` blip. Classified **non-transient**
+   (fails closed — it is not an SDK error), so `withTransientRetry` passes it
+   straight through to the reparse retry, which recovers it.
+2. a 529 persisting through all three wrapper attempts, then succeeding on the
+   reparse call.
+
+**Why this is the dangerous direction, not merely an over-report.** On a run with
+GENUINE compliance failures plus one recovered blip, the operator is told those
+failures are not a judgement of their listing. That is precisely the
+operator-conditioning hazard U1 was built to prevent — a false "the upstream API
+failed" caption teaches operators that gate failures are noise, and the next real
+one gets waved through — printed in U1's own words and colours. And one blip
+during a regenerate branded a healthy stored run amber in History **permanently**.
+
+### 15.2 THE RULE, and why it is truthful in the PARTIAL case.
+
+Two changes, both required, neither sufficient alone.
+
+**(1) The recorder un-latches per group.** `recordUpstreamFailures` now holds a
+failure open **per group** and **clears it when that same group later returns a
+value**. What survives is exactly "this group's copy could not be fetched" — the
+claim the notice makes and the claim `degradedGroups` makes. The two agree by
+construction rather than by hope.
+
+**(2) The route cross-checks against `degradedGroups`.**
+`recordedGenerationFailure(recorder, optimized.degradedGroups, ALL_GROUPS.length)`
+intersects the unrecovered call failures with the run's own record of what is
+missing. The intersection is the notice's **SCOPE**.
+
+Neither side alone is right. `degradedGroups` alone would caption a purely
+schema-degraded group "the upstream model API could not be reached" — a second
+false statement of cause. The recorder alone is *nearly* right after the
+un-latch, and "nearly" is what the exploit was made of; `degradedGroups` is what
+`GEN` and therefore `verified` are computed from, so intersecting with it makes
+the notice a subset of the verdict's own evidence no matter what composition is
+built around this later.
+
+**THE PARTIAL CASE — some groups degraded, others recovered.** Silence would be
+wrong: there is a real, unexplained hole in the copy and the operator has to know
+about it. So the notice is still raised, and it is **scoped**. `GenerationFailure`
+gains `groups` and `groupsTotal`, and `lib/shared/generationFailure.ts` derives
+the wording from them:
+
+| scope | caveat |
+|---|---|
+| whole run (`groups.length === groupsTotal`) | *"The failures shown below are NOT a judgement of your listing."* — unchanged, byte for byte |
+| partial | *"The failures shown below that come from `bullets, qa` are NOT a judgement of your listing. **Every other failure below IS**: those surfaces generated normally and the gate graded real copy."* |
+| unknown (`groups` absent) | the whole-run wording |
+
+The second row is the whole point. An unqualified caveat on a partially degraded
+run tells the operator that compliance failures on copy the model really wrote
+are not about their listing — the exact hazard, one case narrower.
+
+**UNKNOWN scope is the LEGACY case only.** Every writer sets scope. A stored row
+without it was written by the code that attached the notice unconditionally;
+rendering it with the whole-run wording is byte-for-byte what it rendered
+yesterday. This change stops false notices being **written**; it does not
+retroactively re-caption stored ones, because there is nothing in the row to
+re-caption them from. Half a record (`groups` with no total, or the reverse)
+degrades to unknown rather than to a guess.
+
+### 15.3 `updateRun` IS NO LONGER SET-ONLY — it is SCOPED.
+
+U3 made the column write-only-upward and the reason was right: *a regeneration
+rewrites ONE group of nine, so a notice that vanished on the first good group
+would announce a recovery that did not happen.* The **rule** was blunter than its
+**reason**. A run whose only degraded group was successfully regenerated stayed
+amber forever, and once §15.1 could brand a healthy run amber at all, "can never
+be cleared" made that permanent.
+
+The rule is now: **a notice covers a set of groups and survives exactly as long
+as any of them is still degraded.**
+
+* recovering **one of several** → narrowed (`['bullets','qa','images']` →
+  `['qa','images']`), and the wording follows the narrowed scope;
+* recovering **all of them** → cleared (`generation_failure` written as `null`);
+* recovering **none** → untouched;
+* a **single-group regenerate** narrows by at most that one group — the other
+  eight are still in `degradedGroups` and hold the notice open on their own. U3's
+  reason is preserved as a **consequence** of the rule rather than as a separate
+  prohibition.
+
+`updateRun` reads the stored value first, and **fails toward set-only**: a read
+error that is not "the column is not there" is logged and answered with
+"unknown", which never clears anything. A legacy notice with no scope is never
+narrowed and never cleared, exactly as under U3. The identical two-step
+(`narrowGenerationFailure` → `mergeGenerationFailure`) runs in `ResultsPanel`
+against the live session, out of the same module, so the panel and History cannot
+disagree.
+
+### 15.4 CORRECTED RECORD — "a 400 is sent EXACTLY ONCE" was FALSE when written.
+
+U2's commit message ends: *"§4's call-count assertion is the one that matters
+most: a 400 is sent EXACTLY ONCE, because 'it degraded' is equally true of a
+policy that burned three calls against an unpayable account first."*
+
+**That was false when it was written, and U2's own test said so.** The test it
+points at pinned:
+
+```ts
+expect(calls).toHaveLength(ALL_GROUPS.length * 2);
+```
+
+Nine groups × **two** calls. The second was `generateGroup`'s reparse retry,
+which re-attempted **any** error including a transport one. During the
+credit-balance outage the run made **18 calls, not 9**, against an account that
+could not pay for the first nine. The claim was true of
+`withTransientRetry` in isolation — which is all §4's unit assertions covered —
+and false of the pipeline, which is what the sentence claimed.
+
+**It becomes true only after V2.** `generateGroup` now scopes the reparse retry
+to the classes `classify` calls model-derived (`ZodError`, `SyntaxError`, and the
+module's own no-JSON-found error), asked as `classify(e) !== 'transport'` so it
+is a consequence of the existing taxonomy rather than a second list beside it. A
+transport failure goes straight to the degrade path with the reason it always had.
+The test now pins `ALL_GROUPS.length`, and
+`tests/reparseScope.deadline.v2v3.test.ts` §1 asserts the same thing directly at
+both the `generateGroup` and the pipeline level.
+
+The second harm was as bad as the wasted call: `detail` is fed to the **model**
+as *"your previous output was invalid: 400 {...credit balance too low...}"*. The
+model produced no previous output, there is nothing for it to correct, and a
+redacted SDK error was being sent back upstream to be read as a description of
+the model's own work.
+
+### 15.5 CORRECTED RECORD — "the reparse path … is not reached from here and must not be" was FALSE.
+
+`lib/engine/llm.ts`, in `withTransientRetry`'s policy note, under `NOT SEEN`.
+Call failures **did** flow into the reparse retry — that is the same defect as
+§15.4 and it is the mechanism of the §15.1 exploit. The comment now records what
+it got wrong, and the sentence is true as a **property of `generateGroup`**
+rather than as an assertion in a comment about a function that could not enforce
+it.
+
+### 15.6 CORRECTED RECORD — U3's "72 assertions" is 72 TEST CASES.
+
+U3's commit message says *"tests/generationFailure.history.u3.test.ts, 72
+assertions"*. `vitest run` on that file at `6b33550` reports `Tests 72 passed
+(72)` — that is **72 test cases**, and they contain many times 72 `expect`
+calls. Test cases, not assertions.
+
+### 15.7 V3 — the deadline projection could UNDER-project by 90 seconds.
+
+`withTransientRetry` approved a retry when `now() + backoff + longestAttemptMs <=
+deadline`, where `longestAttemptMs` is the longest attempt **measured** so far.
+Measured attempts here are **failures**, and the cheapest failure is the fastest:
+a 529 from the edge returns in single-digit milliseconds. After three of them the
+check reserved ~5ms for a call the transport is willing to spend **90 seconds** on
+(`CLIENT_TIMEOUT_MS`, the SDK client's `timeout`). A retry approved at 239.9s of
+the 240s mark could therefore run 90 seconds past it — into the platform kill at
+`maxDuration`, into the 502 that loses every surface and every gate finding. The
+deadline's own check was approving the overrun it exists to prevent.
+
+**The fix:** project the un-happened attempt as its **worst case** —
+`max(longestAttemptMs, CLIENT_TIMEOUT_MS)`. A measured attempt that beat the
+timeout still wins, because it is evidence and the constant is only a bound. The
+timeout is now a named export used by both the client construction and the
+projection, so a 90s transport and a 60s reservation cannot drift apart.
+
+**THE ARITHMETIC, for an ordinary run** (`tests/reparseScope.deadline.v2v3.test.ts`
+pins all three numbers). `/api/optimize`: `maxDuration` 300s × 0.8 = a **240s**
+mark. A retry at elapsed `t` is approved while `t + backoff + 90_000 ≤ 240_000`:
+
+| backoff | latest elapsed time at which a retry is still approved |
+|---|---|
+| 500ms (first retry) | **149.5s** |
+| 1000ms (second retry) | **149.0s** |
+| 30s (the longest server-advised wait this layer will obey) | **120.0s** |
+
+So retries stay available for the first ~62% of the budget. The nine group calls
+and the repair rounds all start well inside that window on any run that is not
+already doomed, so ordinary retries are unaffected — the arithmetic only removes
+the retries that were being approved in the last ninety seconds, which are exactly
+the ones that could not have finished.
+
+### 15.8 NO VERDICT MOVES.
+
+`verified` is still computed only in `lib/audit/buildAudit.ts`, from the gate.
+Everything in this round reads `degradedGroups` and writes nothing the gate sees:
+the recorder still records-and-rethrows; V2 changes only how many times a failed
+call is repeated and wraps the outcome in the `GroupGenerationError` with the
+**same** `classify` reason and the **same** safe fields the second attempt would
+have produced; V3 can only DECLINE retries, and a declined retry is the degrade
+path that already existed. The golden fixture still gates with zero failures,
+`tests/falsePositives.gate.test.ts` (206) is untouched and green, and
+`tests/llmErrorDiagnosability.test.ts` §(e) — which pins that `verified`,
+`degradedGroups` and the `GEN` failures are byte-identical across every failure
+class — is unchanged and green.
+
+**A future change to this must also change:** `recordUpstreamFailures`,
+`recordedGenerationFailure`, `isReparseable` and the projection in
+`withTransientRetry` (`lib/engine/llm.ts`); `narrowGenerationFailure`,
+`mergeGenerationFailure` and the three wording functions
+(`lib/shared/generationFailure.ts`); `updateRun` (`lib/store/runs.ts`); the two
+routes; `GenerationFailureBanner` and the regenerate merge (`app/ResultsPanel.tsx`);
+the notice blocks in `lib/export/markdown.ts` and `lib/export/shipSheet.ts`; and
+`tests/generationFailure.scope.v1.test.ts` +
+`tests/reparseScope.deadline.v2v3.test.ts`.

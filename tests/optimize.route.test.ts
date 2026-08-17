@@ -180,7 +180,20 @@ describe('POST /api/optimize', () => {
      * completes with a 200, which is the situation that used to leave the
      * operator with no statement of the cause.
      */
-    const loopThatCalls = (toThrow: unknown) => {
+    /**
+     * V1 — `degraded` is now part of the arrangement, and it has to be.
+     *
+     * The route no longer attaches `firstFailure()` unconditionally: it
+     * intersects the unrecovered call failures with the listing's own
+     * `degradedGroups`. So a fixture that throws from the transport and then
+     * returns a listing with NOTHING degraded is describing a run that
+     * RECOVERED, and the correct answer for it is no notice at all — which is
+     * exactly the exploit case, pinned separately below.
+     *
+     * Default `['title']`: the call that failed is the `title` group's, and the
+     * group really was lost.
+     */
+    const loopThatCalls = (toThrow: unknown, degraded: string[] = ['title']) => {
       vi.mocked(anthropicClient).mockReturnValue(async () => {
         throw toThrow;
       });
@@ -191,7 +204,10 @@ describe('POST /api/optimize', () => {
           // degrade, never lose the run
         }
         return {
-          listing: mockListing,
+          listing: {
+            ...mockListing,
+            ...(degraded.length > 0 ? { degradedGroups: degraded } : {}),
+          },
           gateResult: { pass: true, failures: [] } as GateResult,
           iterations: 1,
           unroutable: [],
@@ -224,10 +240,53 @@ describe('POST /api/optimize', () => {
         requestId: 'req_route_401',
         summary:
           'Generation failed: the upstream model API rejected the request (status 401, authentication_error).',
+        // V1 — the SCOPE, so the notice can only claim what the run lost.
+        groups: ['title'],
+        groupsTotal: 9,
       });
       // and the run itself is unchanged — this field decides nothing
       expect(data.audit.verified).toBe(true);
       expect(data.optimized.title).toBe(snapshot.title);
+    });
+
+    /**
+     * V1 — THE EXPLOIT, at the route. A call failed and the group RECOVERED
+     * (nothing is degraded), so the run is a healthy `verified:true` run. The
+     * route used to attach the latched failure anyway, render U1's banner and
+     * persist it. It must now attach nothing.
+     */
+    it('a call failure the run RECOVERED from attaches NOTHING and persists nothing', async () => {
+      loopThatCalls(
+        APIError.generate(
+          529,
+          { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } },
+          undefined,
+          new Headers({ 'request-id': 'req_route_529' }),
+        ),
+        [],
+      );
+      const res = await post({ snapshot });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect('generationFailure' in data).toBe(false);
+      expect(data.audit.verified).toBe(true);
+      expect(vi.mocked(saveRun).mock.calls.at(-1)![0]).not.toHaveProperty('generationFailure');
+    });
+
+    it('a PARTIAL loss is scoped to the group that was actually lost', async () => {
+      loopThatCalls(
+        APIError.generate(
+          500,
+          { type: 'error', error: { type: 'api_error', message: 'boom' } },
+          undefined,
+          new Headers({ 'request-id': 'req_route_500' }),
+        ),
+        ['title'],
+      );
+      const res = await post({ snapshot });
+      const data = await res.json();
+      expect(data.generationFailure.groups).toEqual(['title']);
+      expect(data.generationFailure.groupsTotal).toBe(9);
     });
 
     it('carries no message field, so an SDK message can never travel to a browser', async () => {

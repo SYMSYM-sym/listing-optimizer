@@ -9,9 +9,13 @@ import { toSellerCentralDescription } from '@/lib/export/descriptionHtml';
 import { downloadShipSheet, openShipSheet } from './shipSheetClient';
 import { isBulletArchitectureGap } from '@/lib/shared/bulletLintTags';
 import {
-  GENERATION_FAILURE_CAVEAT,
   GENERATION_FAILURE_HEADING,
+  generationFailureCaveat,
+  generationFailureContext,
   generationFailureDetail,
+  generationFailureScopeLine,
+  mergeGenerationFailure,
+  narrowGenerationFailure,
 } from '@/lib/shared/generationFailure';
 import { regenerateOperatorInputs, EMPTY_OPERATOR_INPUTS, type OperatorInputForm } from './operatorInputs';
 import { CopyButton, Field, SeverityBadge } from './ui';
@@ -79,7 +83,16 @@ export function GenerationFailureBanner({ failure }: { failure?: GenerationFailu
   // U3 — the heading, the identity line and the caveat sentence come from
   // `lib/shared/generationFailure`, which is also what the Markdown record and
   // the Ship Sheet print. One wording, three media.
+  //
+  // V1 — and the caveat is SCOPED there. On a whole-run failure it is the
+  // sentence this banner has always shown; on a PARTIALLY degraded run it names
+  // the groups that were lost and says, in the same breath, that every other
+  // failure on this screen IS a judgement of the listing. Telling an operator
+  // that real compliance findings on real generated copy are "not a judgement
+  // of your listing" is the exact conditioning hazard this banner exists to
+  // prevent, and an unscoped caveat on a partial run does precisely that.
   const detail = generationFailureDetail(failure);
+  const scope = generationFailureScopeLine(failure);
   return (
     <section
       role="alert"
@@ -88,14 +101,13 @@ export function GenerationFailureBanner({ failure }: { failure?: GenerationFailu
     >
       <div className="text-sm font-semibold text-amber-200">⚠ {GENERATION_FAILURE_HEADING}</div>
       <div className="text-sm text-amber-100">{failure.summary}</div>
+      {scope ? <div className="text-sm text-amber-100">{scope}</div> : null}
       <div className="font-mono text-xs text-amber-300/90">{detail}</div>
       <div className="text-sm text-amber-100/90">
-        The copy for this run was never written, so the gate below graded empty and partial fields.{' '}
-        <strong className="text-amber-200">{GENERATION_FAILURE_CAVEAT}</strong>{' '}
-        They are the honest result of a run whose generation did not happen — they are left visible
-        rather than hidden, because the checker&apos;s output is never edited. Nothing here is
-        exportable: the run is unverified, so the Ship Sheet and export-final stay locked. Re-run
-        once the upstream API is healthy.
+        <strong className="text-amber-200">{generationFailureCaveat(failure)}</strong>{' '}
+        {generationFailureContext(failure)} Failures are left visible rather than hidden, because
+        the checker&apos;s output is never edited. Nothing here is exportable: the run is
+        unverified, so the Ship Sheet and export-final stay locked.
       </div>
     </section>
   );
@@ -242,12 +254,23 @@ export function ResultsPanel({
         optimized: body.optimized,
         audit: body.audit,
         detection: body.detection,
-        // A regeneration that ALSO failed upstream replaces the notice; one
-        // that succeeded does NOT clear it, because it only rewrote ONE group.
-        // The other eight are still whatever the failed run left behind, and a
-        // banner that vanished the moment a single group came back would be
-        // telling the operator the run recovered when it did not.
-        generationFailure: body.generationFailure ?? result.generationFailure ?? null,
+        // V1 — the SAME two-step rule `updateRun` applies to the stored row, out
+        // of the same module, so the live panel and History can never disagree
+        // about whether the notice still stands.
+        //
+        //   NARROW  the notice this session was carrying down to the groups
+        //           that are STILL degraded in the listing that just came back.
+        //           A single-group regeneration cannot clear a notice about the
+        //           other eight — they are still in `degradedGroups`, so they
+        //           keep it alive on their own. But a regeneration that
+        //           recovered the ONLY degraded group leaves nothing for the
+        //           notice to be about, and the banner goes.
+        //   MERGE   a regeneration that ALSO failed upstream contributes its own
+        //           identity and its own scope.
+        generationFailure: mergeGenerationFailure(
+          narrowGenerationFailure(result.generationFailure, body.optimized.degradedGroups),
+          body.generationFailure ?? null,
+        ),
       });
     } catch (e) {
       setRegenError(e instanceof Error ? e.message : 'Regenerate failed');

@@ -299,16 +299,29 @@ describe('U2 §4 — a 400 is retried ZERO times', () => {
     );
     expect(result.audit.verified).toBe(false);
     expect([...(result.optimized.degradedGroups ?? [])].sort()).toEqual([...ALL_GROUPS].sort());
-    // Nine groups x (one call + the boundary's own single reparse retry). Not
-    // one call more: the reparse retry is a DIFFERENT failure mode and U2 does
-    // not multiply it.
-    expect(calls).toHaveLength(ALL_GROUPS.length * 2);
+    /**
+     * UPDATED BY V2, and the old number was the honest one.
+     *
+     * This pinned `ALL_GROUPS.length * 2` — nine groups x TWO calls — while
+     * U2's commit message claimed a 400 was "sent EXACTLY ONCE". The test was
+     * right and the claim was false: the second call was the boundary's
+     * reparse retry, which re-attempted ANY error including a transport one,
+     * so the billing outage cost 18 calls per run against an account that
+     * could not pay for the first nine.
+     *
+     * V2 scopes the reparse retry to the classes `classify` calls
+     * model-derived, so a transport failure now goes straight to the degrade
+     * path. ONE call per group. The claim is true now; see
+     * CONFORMANCE-DEVIATIONS §15.4.
+     */
+    expect(calls).toHaveLength(ALL_GROUPS.length);
   });
 
-  it('the reparse path is not reached from here — a schema failure is not retried by U2', async () => {
+  it('a schema failure still gets its own single reparse retry, and U2 does not multiply it', async () => {
     // The call SUCCEEDS and the output will not parse. That happens above this
     // wrapper and already has its own single retry with the error fed back to
-    // the model.
+    // the model — which V2 left exactly as it was; it only removed the
+    // TRANSPORT classes from that retry.
     const calls: string[] = [];
     const unparseable: LlmClient = async () => {
       calls.push('x');
