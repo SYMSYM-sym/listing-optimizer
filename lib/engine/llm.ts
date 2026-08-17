@@ -10,6 +10,7 @@ import { ZodError, type z } from 'zod';
 import { env } from '@/lib/env';
 import { logServer } from '@/lib/server/log';
 import { redactAndTruncate } from '@/lib/server/redact';
+import type { GenerationFailure } from '@/lib/types';
 
 /**
  * LLM boundary. The client is injectable (tests use a recorded-fixture mock).
@@ -308,6 +309,30 @@ export function upstreamFailureSummary(f: SafeErrorFields): string {
     return `Generation failed: the upstream model API returned an error${suffix}.`;
   }
   return `Generation failed: the upstream model API could not be reached${suffix}.`;
+}
+
+/**
+ * The response-body payload for a run whose generation failed upstream — the
+ * ONE place its shape is built.
+ *
+ * Both routes returned a hand-written copy of this object, and U1 added a THIRD
+ * reader (the results panel, which renders it). Three independent copies of a
+ * five-field contract is how a field silently stops being sent to the UI on one
+ * route only, so the two producers and the renderer now agree by construction.
+ *
+ * Optional fields are OMITTED rather than set to `undefined`, so a healthy
+ * response is byte-for-byte the object it was and `'generationFailure' in body`
+ * remains the exact test for "an upstream call failed".
+ */
+export function generationFailurePayload(f: SafeErrorFields | null): GenerationFailure | null {
+  if (!f) return null;
+  return {
+    class: f.error,
+    ...(f.status !== undefined ? { status: f.status } : {}),
+    ...(f.apiType ? { apiType: f.apiType } : {}),
+    ...(f.requestId ? { requestId: f.requestId } : {}),
+    summary: upstreamFailureSummary(f),
+  };
 }
 
 /**

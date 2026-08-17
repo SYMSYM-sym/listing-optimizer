@@ -4,8 +4,8 @@ import { optimize, type GroupName, ALL_GROUPS } from '@/lib/engine/optimize';
 import {
   anthropicClient,
   describeError,
+  generationFailurePayload,
   recordUpstreamFailures,
-  upstreamFailureSummary,
 } from '@/lib/engine/llm';
 import { ingestCompetitors } from '@/lib/ingest/competitors';
 import { detectCategory } from '@/lib/knowledge/detectCategory';
@@ -191,16 +191,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
     // Absent unless an upstream call failed — see the optimize route for why
     // the redacted `message` stays in the log rather than travelling here.
-    const upstream = generation.firstFailure();
-    const generationFailure = upstream
-      ? {
-          class: upstream.error,
-          ...(upstream.status !== undefined ? { status: upstream.status } : {}),
-          ...(upstream.apiType ? { apiType: upstream.apiType } : {}),
-          ...(upstream.requestId ? { requestId: upstream.requestId } : {}),
-          summary: upstreamFailureSummary(upstream),
-        }
-      : null;
+    const generationFailure = generationFailurePayload(generation.firstFailure());
 
     return NextResponse.json({
       optimized,

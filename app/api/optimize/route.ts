@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import {
   anthropicClient,
   describeError,
+  generationFailurePayload,
   recordUpstreamFailures,
-  upstreamFailureSummary,
 } from '@/lib/engine/llm';
 import { ingestCompetitors } from '@/lib/ingest/competitors';
 import { normalizePanelFacts } from '@/lib/knowledge/panelFacts';
@@ -123,16 +123,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     // included: a response body is held to a stricter standard than a server
     // log, and the summary plus the status/type/request id are everything an
     // operator can act on. The redacted message stays in the `llm.error` line.
-    const upstream = generation.firstFailure();
-    const generationFailure = upstream
-      ? {
-          class: upstream.error,
-          ...(upstream.status !== undefined ? { status: upstream.status } : {}),
-          ...(upstream.apiType ? { apiType: upstream.apiType } : {}),
-          ...(upstream.requestId ? { requestId: upstream.requestId } : {}),
-          summary: upstreamFailureSummary(upstream),
-        }
-      : null;
+    const generationFailure = generationFailurePayload(generation.firstFailure());
 
     return NextResponse.json({
       optimized,

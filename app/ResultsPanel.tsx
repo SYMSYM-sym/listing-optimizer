@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import rules from '@/knowledge/rules.json';
-import type { Audit, Failure, ListingSnapshot, OptimizedListing } from '@/lib/types';
+import type { Audit, Failure, GenerationFailure, ListingSnapshot, OptimizedListing } from '@/lib/types';
 import { toMarkdown } from '@/lib/export/markdown';
 import type { GroupName } from '@/lib/engine/optimize';
 import { toSellerCentralDescription } from '@/lib/export/descriptionHtml';
@@ -20,6 +20,82 @@ export interface ResultsModel {
   iterations?: number;
   snapshot?: ListingSnapshot;
   runId?: string | null;
+  /**
+   * U1 — the upstream generation failure this run hit, when it hit one.
+   *
+   * Carried from the `/api/optimize` (or `/api/regenerate`) response and
+   * rendered by `GenerationFailureBanner` ABOVE everything else. Absent/null on
+   * every healthy run and on a run replayed from History, which has no record
+   * of a transport failure to replay.
+   */
+  generationFailure?: GenerationFailure | null;
+}
+
+/**
+ * U1 — THE RUN DEGRADED BECAUSE THE UPSTREAM API DID, AND NOBODY WAS TOLD.
+ *
+ * The live outage: the credit balance hit zero, every generation group failed
+ * with a 400 `invalid_request_error`, every group degraded, and the gate — doing
+ * exactly its job on the empty surfaces that resulted — reported eleven blocking
+ * failures (A4, A9, C1, C2, C3, C15, C20, C23, C28, C29, GEN). The API response
+ * already carried `generationFailure`; nothing rendered it. What the operator
+ * saw was a results panel full of compliance failures, and the only two
+ * conclusions available from that screen were "this tool is broken" and "my
+ * listing is catastrophic". The true one — GENERATION NEVER RAN — was invisible.
+ *
+ * So it is stated here, first, before anything a reader could mistake for a
+ * judgement of their listing.
+ *
+ * WHAT THIS DELIBERATELY DOES NOT DO: it does not suppress, filter, collapse or
+ * grey out a single gate failure. Those failures are the honest output of a run
+ * in which the copy was never written, and hiding them would be mutating what
+ * the checker reported — the one thing this codebase never does. The banner
+ * adds a sentence of CONTEXT above them and changes nothing below it.
+ *
+ * It also decides nothing: `verified` is computed only in
+ * `lib/audit/buildAudit.ts`, from the gate, and no branch here is reachable
+ * from it. A degraded run is `verified:false` with or without this banner, and
+ * both export paths stay locked behind that verdict (the Ship Sheet omits its
+ * copy buttons and its clipboard script wholesale on an unverified run; the
+ * Markdown export leads with `NOT VERIFIED ... do not publish`; `export final`
+ * is `disabled`).
+ *
+ * The colour is AMBER, not the red the gate uses. Red on this screen means "a
+ * check failed on your listing". This is not that, and giving it the same
+ * colour would have been one more way to read it as one more compliance
+ * problem.
+ */
+export function GenerationFailureBanner({ failure }: { failure?: GenerationFailure | null }) {
+  if (!failure) return null;
+  const detail = [
+    `class ${failure.class}`,
+    failure.status !== undefined ? `HTTP ${failure.status}` : null,
+    failure.apiType ?? null,
+    failure.requestId ? `request ${failure.requestId}` : null,
+  ].filter((s): s is string => s !== null);
+  return (
+    <section
+      role="alert"
+      data-testid="generation-failure-banner"
+      className="rounded-xl border-2 border-amber-500 bg-amber-950/40 p-4 space-y-2"
+    >
+      <div className="text-sm font-semibold text-amber-200">
+        ⚠ Generation failed upstream — this run is incomplete
+      </div>
+      <div className="text-sm text-amber-100">{failure.summary}</div>
+      <div className="font-mono text-xs text-amber-300/90">{detail.join(' · ')}</div>
+      <div className="text-sm text-amber-100/90">
+        The copy for this run was never written, so the gate below graded empty and partial fields.{' '}
+        <strong className="text-amber-200">
+          The failures shown below are NOT a judgement of your listing.
+        </strong>{' '}
+        They are the honest result of a run whose generation did not happen — they are left visible
+        rather than hidden, because the checker&apos;s output is never edited. Nothing here is
+        exportable: the run is unverified, so the Ship Sheet and export-final stay locked. Re-run
+        once the upstream API is healthy.
+      </div>
+    </section>
+  );
 }
 
 /** Status colouring for the keyword table — the six C28 statuses. */
@@ -156,12 +232,19 @@ export function ResultsPanel({
         optimized: OptimizedListing;
         audit: Audit;
         detection: { packId: string; subcategories: string[] };
+        generationFailure?: GenerationFailure;
       };
       onUpdated({
         ...result,
         optimized: body.optimized,
         audit: body.audit,
         detection: body.detection,
+        // A regeneration that ALSO failed upstream replaces the notice; one
+        // that succeeded does NOT clear it, because it only rewrote ONE group.
+        // The other eight are still whatever the failed run left behind, and a
+        // banner that vanished the moment a single group came back would be
+        // telling the operator the run recovered when it did not.
+        generationFailure: body.generationFailure ?? result.generationFailure ?? null,
       });
     } catch (e) {
       setRegenError(e instanceof Error ? e.message : 'Regenerate failed');
@@ -188,6 +271,14 @@ export function ResultsPanel({
 
   return (
     <>
+      {/*
+        U1 — FIRST, above the verdict and above every failure. A reader who
+        stops after the top of the screen must still have been told that
+        generation failed upstream; one who reads on sees every gate failure,
+        unfiltered, exactly as the checker reported them.
+      */}
+      <GenerationFailureBanner failure={result.generationFailure} />
+
       <section
         className={`rounded-xl border p-4 flex flex-wrap items-center justify-between gap-3 ${verified ? 'border-emerald-800 bg-emerald-950/30' : 'border-red-900 bg-red-950/30'}`}
       >

@@ -213,7 +213,17 @@ export default function Home() {
         setError(`${e.code}: ${e.message}`);
         return;
       }
-      const r = (await optRes.json()) as ResultsModel & { iterations: number; runId?: string | null };
+      const r = (await optRes.json()) as ResultsModel & {
+        iterations: number;
+        runId?: string | null;
+        /**
+         * U1 — present ONLY when a call to the model API actually failed. The
+         * route already sent it; until now nothing carried it into the panel,
+         * so a run that degraded because the upstream API was down or unpaid
+         * rendered as a wall of gate failures with no statement of cause.
+         */
+        generationFailure?: ResultsModel['generationFailure'];
+      };
       setOptimizeState('done');
       setVerifyState(r.audit.verified ? 'done' : 'error');
       setAuditState('done');
@@ -225,6 +235,7 @@ export default function Home() {
         iterations: r.iterations,
         snapshot,
         runId: r.runId ?? null,
+        generationFailure: r.generationFailure ?? null,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unexpected failure');

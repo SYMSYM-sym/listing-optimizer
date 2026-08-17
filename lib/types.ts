@@ -1708,6 +1708,41 @@ export interface OptimizeResult {
   audit: Audit;
 }
 
+/**
+ * T1/U1 — THE UPSTREAM GENERATION FAILURE, as it travels to the operator.
+ *
+ * Present on an `/api/optimize` or `/api/regenerate` response ONLY when a call
+ * to the model API actually failed. It is the STATEMENT OF CAUSE for a run that
+ * came back degraded: without it the operator sees a wall of gate failures and
+ * reasonably concludes the tool is broken or the listing is catastrophic, when
+ * the truth is that generation never ran.
+ *
+ * It lives here rather than in `lib/engine/llm.ts` because the CLIENT renders
+ * it and that module is `server-only`. The engine owns how it is BUILT
+ * (`generationFailurePayload`); this is the shape both sides agree on.
+ *
+ * `message` is deliberately NOT a field. The redacted SDK message stays in the
+ * `llm.error` log line: a response body reaching a browser is held to a
+ * stricter standard than stdout, and `summary` plus status/type/request id are
+ * everything an operator can act on.
+ *
+ * IT DECIDES NOTHING. `verified` is computed only in `lib/audit/buildAudit.ts`,
+ * and the recorder that produces this rethrows unchanged — so this field can be
+ * added, rendered, or removed without moving a single verdict.
+ */
+export interface GenerationFailure {
+  /** Stable class label — `APIError`, `APIConnectionTimeoutError`, ... */
+  class: string;
+  /** HTTP status, when the failure was an API response. */
+  status?: number;
+  /** The API's own `error.type`, e.g. `authentication_error`. */
+  apiType?: string;
+  /** Anthropic's request id — opaque, non-sensitive, what support asks for. */
+  requestId?: string;
+  /** The operator-facing sentence, built from status and type only. */
+  summary: string;
+}
+
 /** Typed ingestion errors — surfaced to the UI, never opaque 500s. */
 export type IngestErrorCode =
   | 'INVALID_URL'
