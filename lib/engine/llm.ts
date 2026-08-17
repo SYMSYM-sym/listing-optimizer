@@ -32,7 +32,22 @@ let _anthropic: Anthropic | null = null;
 
 export function anthropicClient(): LlmClient {
   return async ({ system, user, maxTokens, groupName }) => {
-    _anthropic ??= new Anthropic({ apiKey: env.anthropicApiKey(), timeout: 90_000 });
+    // U2 — `maxRetries: 0` is DELIBERATE, and it is not "no retries".
+    //
+    // The SDK retries twice by default (`client.js`: `this.maxRetries =
+    // options.maxRetries ?? 2`), with its own exponential backoff and its own
+    // `retry-after` handling. Leaving that on underneath `withTransientRetry`
+    // would multiply, not add: 3 of our attempts x 3 of its own is up to NINE
+    // calls for one group and up to nine groups per run, with the SDK's sleeps
+    // invisible to the run deadline that the whole D5 budget is built on. A
+    // deadline that the retry layer honours and the transport ignores is not a
+    // deadline. So there is exactly ONE retry authority, it is the one that can
+    // see the deadline, and it is the one whose retries appear in our logs.
+    _anthropic ??= new Anthropic({
+      apiKey: env.anthropicApiKey(),
+      timeout: 90_000,
+      maxRetries: 0,
+    });
     const started = Date.now();
     // Claude Sonnet 5 enables adaptive thinking by default; with modest
     // max_tokens that can consume the whole budget and return zero text.
@@ -309,6 +324,261 @@ export function upstreamFailureSummary(f: SafeErrorFields): string {
     return `Generation failed: the upstream model API returned an error${suffix}.`;
   }
   return `Generation failed: the upstream model API could not be reached${suffix}.`;
+}
+
+
+// ---------------------------------------------------------------------------
+// U2 — BOUNDED RETRY FOR TRANSIENT UPSTREAM FAILURES
+// ---------------------------------------------------------------------------
+
+/**
+ * WHY THIS EXISTS.
+ *
+ * Before this, ANY error from the model API degraded the group after the
+ * boundary's single reparse retry, and every degraded group blocks via `GEN`,
+ * so one blip cost the whole run. That is the RIGHT answer for the outage
+ * `e885f23` was written for — a 400 for an exhausted credit balance, or a 401
+ * for a rejected key, will fail identically no matter how many times it is
+ * sent, and retrying only burns calls against an account that already cannot
+ * pay for them. It is the WRONG answer for a 429, a 529, a reset connection or
+ * a read timeout, every one of which is a statement about this MOMENT.
+ *
+ * So the split is by CLASS, using the taxonomy above rather than a second one:
+ *
+ *   RETRIED     `APIConnectionError` and `APIConnectionTimeoutError` (no
+ *               response at all), 408 request timeout, 409 lock timeout, 429
+ *               rate limit, and every 5xx — which is where 529 `overloaded_error`
+ *               lives. 408 and 409 are on this list because the SDK's own
+ *               policy retried them and this layer REPLACES that policy (see
+ *               `maxRetries: 0` in `anthropicClient`); dropping them would be a
+ *               regression introduced by taking ownership, not a decision.
+ *
+ *   NEVER       400, 401, 403 and 404 — named explicitly rather than left to
+ *               "4xx", so the billing 400 that caused the outage can never
+ *               become retryable by someone widening a range. `APIUserAbortError`
+ *               is never retried either: an abort is a DECISION, and the whole
+ *               point of aborting is that the work stops.
+ *
+ *   NOT SEEN    the reparse path. Schema and JSON failures happen AFTER the
+ *               call returned, above this wrapper, and already have their own
+ *               single retry with the validation error fed back to the model.
+ *               A different failure mode with a different remedy; it is not
+ *               reached from here and must not be.
+ *
+ * Anything that is not an SDK error at all — including the boundary's own
+ * "LLM returned no text content" — is NOT retried. Fails closed: an unknown
+ * class is treated as permanent.
+ */
+
+/** Total attempts INCLUDING the first. 3 = one call plus two retries. */
+export const TRANSIENT_MAX_ATTEMPTS = 3;
+/** First backoff; doubles per retry. */
+export const TRANSIENT_BASE_DELAY_MS = 500;
+/** Ceiling on any single wait, computed or advised. */
+export const TRANSIENT_MAX_DELAY_MS = 8_000;
+/** Jitter takes up to this fraction OFF the computed delay, never adds. */
+export const TRANSIENT_JITTER_FRACTION = 0.25;
+/**
+ * A `retry-after` longer than this is honoured by GIVING UP rather than by
+ * waiting: the server has said "come back much later than any run can wait",
+ * and retrying earlier than it asked would be worse than not retrying at all.
+ */
+export const TRANSIENT_MAX_RETRY_AFTER_MS = 30_000;
+
+/** Statuses that are decided, not momentary. Enumerated, never a range. */
+const NEVER_RETRY_STATUSES: ReadonlySet<number> = new Set([400, 401, 403, 404]);
+/** 4xx that ARE momentary — the SDK's own list, kept when we took its job. */
+const TRANSIENT_4XX_STATUSES: ReadonlySet<number> = new Set([408, 409, 429]);
+
+/**
+ * Is this failure worth sending again?
+ *
+ * Ordered most-derived first for the same reason `errorClass` is:
+ * `APIConnectionTimeoutError extends APIConnectionError extends APIError` and
+ * `APIUserAbortError extends APIError`, so a generic-first test would swallow
+ * the specific ones.
+ */
+export function isTransientUpstreamFailure(e: unknown): boolean {
+  // An abort is a decision. Checked BEFORE the connection classes purely for
+  // readability — it is their sibling, not their ancestor.
+  if (e instanceof APIUserAbortError) return false;
+  // Covers `APIConnectionTimeoutError`. Neither ever got a response, so there
+  // is no status to consult and no body to have been rejected.
+  if (e instanceof APIConnectionError) return true;
+  if (e instanceof APIError) {
+    const status = e.status;
+    if (typeof status !== 'number') return false;
+    if (NEVER_RETRY_STATUSES.has(status)) return false;
+    if (TRANSIENT_4XX_STATUSES.has(status)) return true;
+    return status >= 500;
+  }
+  return false;
+}
+
+/**
+ * The wait the SERVER asked for, in ms, or `null` if it asked for none.
+ *
+ * VERIFIED AGAINST THE INSTALLED SDK (0.110.0) rather than assumed. There is no
+ * `retryAfter` field on the error object: `APIError` carries
+ * `readonly headers: Headers | undefined` (`node_modules/@anthropic-ai/sdk/
+ * core/error.d.ts`), and the SDK's own `retryRequest` reads exactly two header
+ * names off it, in this order — `retry-after-ms` (milliseconds, non-standard
+ * but preferred when present) then `retry-after` (RFC 7231: delta-seconds OR an
+ * HTTP date). Both are read here, in the same order, with the same
+ * interpretations, so this layer waits what the SDK would have waited.
+ *
+ * `headers` is `undefined` on the connection and abort subclasses, which is
+ * consistent: they never received a response to carry headers.
+ */
+export function retryAfterMs(e: unknown, now: () => number): number | null {
+  if (!(e instanceof APIError)) return null;
+  const headers: Headers | undefined = e.headers;
+  if (!headers || typeof headers.get !== 'function') return null;
+  const ms = headers.get('retry-after-ms');
+  if (ms !== null) {
+    const parsed = Number.parseFloat(ms);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  const after = headers.get('retry-after');
+  if (after !== null) {
+    const seconds = Number.parseFloat(after);
+    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+    const at = Date.parse(after);
+    if (Number.isFinite(at)) return Math.max(0, at - now());
+  }
+  return null;
+}
+
+/**
+ * Exponential backoff with SUBTRACTIVE jitter.
+ *
+ * `attempt` is 1-based over RETRIES: 1 is the first retry. The delay is
+ * `base * 2^(attempt-1)`, clamped, then reduced by up to
+ * `TRANSIENT_JITTER_FRACTION` of itself — so it is bounded in
+ * `[0.75 * clamped, clamped]` and can never EXCEED the clamp. That matters:
+ * additive jitter on the last retry could push the wait past a deadline the
+ * caller had already checked.
+ *
+ * `random` is injected so the value is exact under test — a backoff test that
+ * calls `Math.random` is a flaky test.
+ */
+export function transientBackoffMs(attempt: number, random: () => number): number {
+  const clamped = Math.min(TRANSIENT_BASE_DELAY_MS * 2 ** (attempt - 1), TRANSIENT_MAX_DELAY_MS);
+  return Math.round(clamped * (1 - random() * TRANSIENT_JITTER_FRACTION));
+}
+
+export interface TransientRetryOptions {
+  /**
+   * D5 — the SAME absolute epoch-ms mark the repair loop is already checking
+   * (`/api/optimize` passes 80% of `maxDuration`). A retry that would land the
+   * run past it is not taken: the platform kills the function at `maxDuration`
+   * and a killed function answers 502, which loses the whole run — every
+   * generated surface AND every gate finding. A degraded group is a reportable
+   * `verified:false`; an overrun is nothing at all, so when the two conflict
+   * the deadline wins.
+   *
+   * Absent => no time limit, which is what the deterministic tests use.
+   */
+  deadline?: number;
+  /** Total attempts including the first. Defaults to `TRANSIENT_MAX_ATTEMPTS`. */
+  maxAttempts?: number;
+  /** Injected for tests. */
+  now?: () => number;
+  /** Injected for tests. */
+  random?: () => number;
+  /** Injected for tests, so a backoff test does not actually sleep. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+/**
+ * Wrap a client so a TRANSIENT failure is sent again, a permanent one is not,
+ * and neither can push the run past its deadline.
+ *
+ * COMPOSITION ORDER MATTERS, and the routes get it right deliberately:
+ * `recordUpstreamFailures(withTransientRetry(client))`. The recorder must sit
+ * OUTSIDE, so it only ever sees a failure that actually escaped. Inside-out
+ * would record the 429 that was then successfully retried, and the response
+ * would carry a `generationFailure` — and therefore U1's banner — for a run
+ * that completed perfectly. That is precisely the false "upstream failed"
+ * notice U1's absent-direction test exists to prevent.
+ *
+ * IT CHANGES NO VERDICT. On the exhausted path it rethrows the LAST error
+ * unchanged, so `classify`, the degrade routing, `GEN` and `verified` see
+ * exactly what they saw before. All it can do is turn some failures into
+ * successes; it can never turn a failure into a pass.
+ */
+export function withTransientRetry(inner: LlmClient, opts: TransientRetryOptions = {}): LlmClient {
+  const maxAttempts = Math.max(1, opts.maxAttempts ?? TRANSIENT_MAX_ATTEMPTS);
+  const now = opts.now ?? (() => Date.now());
+  const random = opts.random ?? Math.random;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  return async (req) => {
+    const group = req.groupName ?? 'unknown';
+    /**
+     * The longest attempt MEASURED so far, used to project how long the retry
+     * itself will take. The deadline has to cover the wait AND the call after
+     * it — sleeping until one millisecond before the mark and then starting a
+     * 60-second request is not respecting a deadline. Same projection the
+     * repair loop makes from its longest measured round (`lib/engine/repair.ts`).
+     */
+    let longestAttemptMs = 0;
+    for (let attempt = 1; ; attempt++) {
+      const startedAt = now();
+      try {
+        return await inner(req);
+      } catch (e) {
+        longestAttemptMs = Math.max(longestAttemptMs, now() - startedAt);
+        if (attempt >= maxAttempts) throw e;
+        if (!isTransientUpstreamFailure(e)) throw e;
+        const advised = retryAfterMs(e, now);
+        if (advised !== null && advised > TRANSIENT_MAX_RETRY_AFTER_MS) {
+          logServer('llm.retry_declined', {
+            group,
+            attempt,
+            reason: 'retry-after beyond ceiling',
+            retryAfterMs: advised,
+            ...describeError(e),
+          });
+          throw e;
+        }
+        // An advised wait is obeyed as given; only a COMPUTED one is clamped,
+        // because the clamp exists to bound our own guess, not the server's
+        // instruction.
+        const backoff = advised ?? transientBackoffMs(attempt, random);
+        if (
+          typeof opts.deadline === 'number' &&
+          now() + backoff + longestAttemptMs > opts.deadline
+        ) {
+          // D5 — stop rather than overrun. The group degrades, which is a
+          // complete and honest `verified:false`; overrunning is a 502.
+          logServer('llm.retry_deadline_stop', {
+            group,
+            attempt,
+            backoffMs: backoff,
+            projectedAttemptMs: longestAttemptMs,
+            remainingMs: opts.deadline - now(),
+            ...describeError(e),
+          });
+          throw e;
+        }
+        // Distinct from `llm.error` (which fires when a call fails and is NOT
+        // retried) and from `llm.group` (success). A call that was retried and
+        // recovered therefore writes `llm.retry` + `llm.group`, and a first-try
+        // success writes `llm.group` alone — the two are told apart in the log
+        // without counting absences, which is the defect `e885f23` closed.
+        logServer('llm.retry', {
+          group,
+          attempt,
+          nextAttempt: attempt + 1,
+          maxAttempts,
+          backoffMs: backoff,
+          ...(advised !== null ? { retryAfterMs: advised } : {}),
+          ...describeError(e),
+        });
+        await sleep(backoff);
+      }
+    }
+  };
 }
 
 /**

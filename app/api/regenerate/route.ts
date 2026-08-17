@@ -6,6 +6,7 @@ import {
   describeError,
   generationFailurePayload,
   recordUpstreamFailures,
+  withTransientRetry,
 } from '@/lib/engine/llm';
 import { ingestCompetitors } from '@/lib/ingest/competitors';
 import { detectCategory } from '@/lib/knowledge/detectCategory';
@@ -19,6 +20,15 @@ import { updateRun } from '@/lib/store/runs';
 import type { ListingSnapshot, OptimizedListing } from '@/lib/types';
 
 export const maxDuration = 300;
+
+/**
+ * D5 — the same share of `maxDuration` the optimize route reserves, for the
+ * same reason: the platform kills the function at `maxDuration` and a killed
+ * function answers 502, which loses the regeneration AND the audit it would
+ * have persisted. This route has no repair loop to stop, but U2's retry layer
+ * can now spend time on its own, so it needs the mark to check against.
+ */
+const RUN_BUDGET_FRACTION = 0.8;
 
 const GROUP_SET = new Set<string>(ALL_GROUPS);
 
@@ -104,6 +114,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     );
   }
   const group = body.group as GroupName;
+  const startedAt = Date.now();
+  const deadline = startedAt + maxDuration * 1000 * RUN_BUDGET_FRACTION;
   try {
     const detection = detectCategory(body.snapshot);
     // R45: the same per-run operator input the optimize/audit routes accept —
@@ -152,7 +164,14 @@ export async function POST(req: Request): Promise<NextResponse> {
     // first transport/API failure and rethrows unchanged, so the degrade path
     // and `verified` are untouched. A regeneration that comes back degraded is
     // exactly as opaque as a full run was, and gets exactly the same answer.
-    const generation = recordUpstreamFailures(anthropicClient());
+    // U2 — same policy and the same composition order as the optimize route:
+    // the retry layer INSIDE the recorder, so a transient failure that was
+    // retried and recovered never reaches the response as a
+    // `generationFailure`. A regenerate is one group, so a blip costing it is
+    // proportionally worse, not better.
+    const generation = recordUpstreamFailures(
+      withTransientRetry(anthropicClient(), { deadline }),
+    );
     const merged = await optimize(enriched, pack, generation.llm, {
       groups: [group],
       base: body.listing,

@@ -4,6 +4,7 @@ import {
   describeError,
   generationFailurePayload,
   recordUpstreamFailures,
+  withTransientRetry,
 } from '@/lib/engine/llm';
 import { ingestCompetitors } from '@/lib/ingest/competitors';
 import { normalizePanelFacts } from '@/lib/knowledge/panelFacts';
@@ -64,6 +65,11 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ code: 'BAD_REQUEST', message: 'Missing snapshot.' }, { status: 400 });
   }
   const startedAt = Date.now();
+  // D5 — ONE deadline for the run, read by everything that can spend time:
+  // the repair loop (which will not start a round it cannot finish) and the
+  // transient-retry layer (which will not take a retry that would land past
+  // it). Computed once here so the two can never disagree.
+  const deadline = startedAt + maxDuration * 1000 * RUN_BUDGET_FRACTION;
   try {
     // WS9 — competitor ingestion runs BEFORE generation and can never fail the
     // request: a rejected ASIN becomes a failed benchmark row.
@@ -75,7 +81,16 @@ export async function POST(req: Request): Promise<NextResponse> {
     // operator looking at a fully-degraded run is TOLD the upstream API
     // rejected the request, instead of being handed nine gate failures and left
     // to infer the cause from a log line that is not there.
-    const generation = recordUpstreamFailures(anthropicClient());
+    //
+    // U2 — the retry layer sits INSIDE the recorder, and that order is the
+    // whole point: the recorder must only ever see a failure that actually
+    // escaped. Inside-out would record a 429 that was then successfully
+    // retried, and the response would carry `generationFailure` — and so the
+    // operator would get U1's "generation failed upstream" banner on a run
+    // that completed perfectly.
+    const generation = recordUpstreamFailures(
+      withTransientRetry(anthropicClient(), { deadline }),
+    );
 
     const { optimized, audit, detection, iterations } = await runPipeline(
       body.snapshot,
@@ -91,7 +106,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         panelFacts: normalizePanelFacts(body.panelFacts),
         // D5 — measured from the moment the request arrived, so the ingestion
         // above is spent out of the same budget the repair loop is checking.
-        deadline: startedAt + maxDuration * 1000 * RUN_BUDGET_FRACTION,
+        deadline,
         ...(competitors ? { competitors } : {}),
       },
     );
