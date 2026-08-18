@@ -495,7 +495,11 @@ export function normalizeKeywords(rows: unknown): KeywordTerm[] {
       tier: r.tier as KeywordTier,
       status: String(r.status ?? '').trim() as KeywordStatus,
       // Derived downstream, never carried from the model - a volunteered list
-      // is dropped here rather than half-honoured (see the header note).
+      // is dropped here rather than half-honoured (see the header note). The
+      // same is true of `note` and `proposedStatus`, which are absent from this
+      // allowlist for the same reason: they are the DERIVATION'S record of what
+      // it changed, and a model that could write them could tell C28's
+      // `minNegatives` floor that its own rows had been corrected.
       surfaces: [],
       why: String(r.why ?? '').trim(),
     };

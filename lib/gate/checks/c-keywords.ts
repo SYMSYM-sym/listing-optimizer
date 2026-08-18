@@ -93,8 +93,15 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  * relaxed for any of it: the placement leg stays because a STORED or
  * hand-edited artifact never went through that derivation, and the negative /
  * backend-leak / candidate / captured-via / four-test / closed-world /
- * minNegatives / fail-closed legs are all untouched. What disappeared is a
+ * fail-closed legs are all untouched. What disappeared is a
  * class of failure, not a class of enforcement.
+ *
+ * ONE LEG WAS LATER RE-AIMED RATHER THAN RELAXED, AND IT IS `minNegatives`. It
+ * counted SURVIVING negatives, which meant a run could be failed for a
+ * reclassification the derivation had made correctly (H2, ASIN B00IO89MYA). It
+ * now counts what the model PROPOSED and enforces the anti-gaming property on a
+ * leg of its own — see THE FLOOR at the bottom of this file, which is where the
+ * whole argument and its residue are written down.
  *
  * THE FOUR-TEST SCREEN (K4), reusing the gate's OWN lexicons. A term the
  * compliance pack already bans can never be `placed` or `backend`, whatever
@@ -174,6 +181,8 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  *      row, because the row IS recorded on the negative list — which is exactly
  *      what `minNegatives` counts, and exactly what its own failure text asks
  *      for ("the banned vocabulary and every rival brand name belong on it").
+ *      A deferred row also still SURVIVES as `negative`, so it satisfies the
+ *      no-surviving-exclusion leg H2 added at the bottom of this file as well.
  *
  * CLOSED WORLD, BOTH DIRECTIONS. A declared surface outside the pack's
  * vocabulary is a failure, and a surface IN the pack's vocabulary that this
@@ -722,20 +731,92 @@ export function c28KeywordPlacement(
     }
   }
 
-  // THE FLOOR COUNTS ONLY SURVIVING NEGATIVES. `negatives` was incremented in
-  // the loop above, over the FINAL artifact — so a row the derivation
-  // reclassified (the subject product's own brand can never be a rival, see
-  // lib/engine/keywordPlacement.ts) no longer carries `negative` here and is
-  // not counted. A run whose only negatives were self-references therefore
-  // FAILS this floor rather than satisfying it with its own name.
+  // =========================================================================
+  // THE FLOOR (H2) — IT COUNTS WHAT THE MODEL PROPOSED, AND THE ANTI-GAMING
+  // PROPERTY IS ENFORCED BY NAME RATHER THAN BY ARITHMETIC.
+  // =========================================================================
+  //
+  // THE LIVE DEFECT. Production, ASIN B00IO89MYA, one failure and the run ended
+  // `verified:false`:
+  //
+  //   C28 | keywords | 2 negative term(s)
+  //
+  // `minNegatives` is 3 and the model had supplied THREE exclusions. The floor
+  // counted 2 because `deriveKeywordPlacement` had reclassified one of them out
+  // of `negative` — correctly, for one of the reasons that boundary exists: the
+  // term was the subject product's OWN BRAND (`ownBrandIdentity`) or a PROPERTY
+  // the ingested snapshot's structured attributes declare about it
+  // (`productPropertyIdentity`). So the run failed for CODE'S OWN CORRECTION.
+  // Nothing the model could write in a repair round addresses that failure
+  // honestly: the only move the message asks for is "record another negative",
+  // i.e. invent a rival brand to pad the list. It is the same incoherence the
+  // own-brand and product-property defects were — a rule asserting something
+  // about the MODEL'S EFFORT while measuring the artifact AFTER the engine
+  // legitimately edited it.
+  //
+  // (The third reclassification cause named in the report — a compliance-lexicon
+  // term DEFERRED to the check that owns it — never cost the floor anything:
+  // THE DEFERENCE keeps the row saying `negative` and `negatives` is
+  // incremented before it, bound 4 above. `tests/complianceNegatives.deference.test.ts`
+  // asserts that, and the H2 test file re-asserts it beside the other two.)
+  //
+  // SO THE FLOOR COUNTS PROPOSALS. `proposedNegatives` is the surviving
+  // `negative` rows PLUS the rows the derivation reclassified OUT of `negative`
+  // — recorded on `proposedStatus` by `lib/engine/keywordPlacement.ts`, which is
+  // the only writer of that field (the LLM boundary schema does not declare it
+  // and `normalizeKeywords` drops it, so a run cannot mark its own rows
+  // corrected). That is what the floor's own failure text has always asked for:
+  // that the REFERENCE RECORD the exclusions, which a reclassified row still
+  // does — it is in the artifact, with the correction on `note`, visible on the
+  // ship sheet.
+  //
+  // AND THE ANTI-GAMING PROPERTY SURVIVES, BECAUSE IT IS NOW ITS OWN LEG. The
+  // own-brand fix established, with a test pinning it, that a reference whose
+  // negatives are ALL self-references must NOT clear the floor. Counting
+  // proposals would have re-opened exactly that, so it is closed directly: a
+  // reference that records exclusions but has NOT ONE SURVIVING `negative` row
+  // fails, whatever its row count. That is strictly more legible than the old
+  // emergent behaviour — the failure now NAMES the defect ("every exclusion you
+  // recorded names this product") instead of reporting a count the operator has
+  // to reverse-engineer — and it is what keeps the pinned tests green unedited.
+  //
+  // THE RESIDUE, STATED PLAINLY. A reference with one genuine rival plus
+  // self-reference padding can reach the count. That is a deliberate trade: the
+  // alternative is failing otherwise-clean runs for a correction the model was
+  // never told about, with no honest repair available, and every padded row
+  // carries its derivation note into the artifact and the ship sheet where an
+  // operator reads it. A count of rows was never going to be proof of effort;
+  // what it can be is proof that at least one real exclusion was made, and that
+  // is now enforced explicitly.
   const min = typeof kr.minNegatives === 'number' ? kr.minNegatives : 0;
-  if (negatives < min) {
+  const reclassifiedNegatives = terms.filter((raw) => {
+    const row = (raw ?? {}) as Partial<KeywordTerm>;
+    return (
+      str(row.proposedStatus).trim() === 'negative' && str(row.status).trim() !== 'negative'
+    );
+  }).length;
+  const proposedNegatives = negatives + reclassifiedNegatives;
+  if (proposedNegatives < min) {
     out.push(
       fail(
         CHECK_ID,
         'keywords',
-        `${negatives} negative term(s)`,
+        `${proposedNegatives} negative term(s)`,
         `The keyword reference must record at least ${min} negative terms — the banned vocabulary and every rival brand name belong on it, or the next copy cycle re-adds them`,
+      ),
+    );
+  }
+  // THE ANTI-GAMING LEG. Gated on `min > 0` because it is a property OF THE
+  // FLOOR: a pack that sets no floor is asking for no exclusions, and
+  // `minNegatives` is a REQUIRED_PACK_PIECES row, so emptying it fails at PACK
+  // rather than quietly here.
+  if (min > 0 && proposedNegatives > 0 && negatives === 0) {
+    out.push(
+      fail(
+        CHECK_ID,
+        'keywords',
+        `${proposedNegatives} negative term(s), none of them an exclusion`,
+        `Every term the reference records as negative names THIS product — its own brand, or a property its own structured attributes declare — so the reference excludes nothing. A negative is for a RIVAL brand or banned vocabulary; record at least one real exclusion (the corrections are on each row's note)`,
       ),
     );
   }

@@ -117,10 +117,12 @@ import type {
  * invisible ones included — `tests/keywordDerivation.ownBrand.test.ts` plants
  * one in each.
  *
- * THE FLOOR CANNOT BE GAMED. `minNegatives` is counted by C28 over the FINAL
- * artifact, so a reclassified row is no longer a negative when the floor is
- * measured: a run whose only negatives were self-references fails the floor
- * rather than satisfying it with its own name.
+ * THE FLOOR CANNOT BE GAMED — AND SINCE H2 IT SAYS SO DIRECTLY RATHER THAN BY
+ * ARITHMETIC. A reclassified row records the status the model PROPOSED on
+ * `proposedStatus`, and C28's `minNegatives` counts proposals; what stops a
+ * self-reference from BUYING the floor is a separate, explicit leg over there —
+ * a reference that records exclusions but has NO SURVIVING one fails. A run
+ * whose only negatives are self-references therefore still fails, by name.
  */
 
 /**
@@ -301,10 +303,11 @@ import type {
  *   4. NO SNAPSHOT => NO EXEMPTION, like every other identity source here.
  *
  * RECLASSIFIED, NOT DELETED, AND SAID OUT LOUD — the own-brand path exactly. The
- * row's real placement is derived from the finished copy like any other term's
- * and the correction is written onto `note`. And the floor still counts only
- * SURVIVING negatives, so a reference whose negatives were all self-descriptions
- * fails `minNegatives` rather than satisfying it with its own label.
+ * row's real placement is derived from the finished copy like any other term's,
+ * the correction is written onto `note`, and the status the model proposed is
+ * recorded on `proposedStatus`. A reference whose negatives were ALL
+ * self-descriptions still fails C28, on the explicit no-surviving-exclusion leg
+ * H2 added rather than on the floor's arithmetic — see that check's header.
  */
 
 /**
@@ -672,11 +675,22 @@ export function deriveKeywordPlacement(
       ? visibleHits.filter((n) => n.toLowerCase() !== BULLET_AGGREGATE)
       : visibleHits;
 
+    // THE STATUS THE MODEL PROPOSED, recorded on exactly the rows this function
+    // CHANGES. `note` says in prose what was corrected and why; this says it in
+    // a field code can read, which is what lets C28's `minNegatives` floor count
+    // the exclusions the MODEL PROPOSED rather than the residue left after this
+    // function edited them (H2 — see `lib/gate/checks/c-keywords.ts`). It is
+    // written here and nowhere else: the LLM boundary does not declare it and
+    // `normalizeKeywords` drops it, so no run can label its own rows corrected.
+    const proposed = (next: KeywordStatus): { proposedStatus?: KeywordStatus } =>
+      next === status ? {} : { proposedStatus: status };
+
     if (trimmed.length > 0) {
       return {
         ...row,
         status: 'placed' as KeywordStatus,
         surfaces: [...trimmed, ...backendHits],
+        ...proposed('placed'),
         ...(correction ? { note: correction } : {}),
       };
     }
@@ -685,6 +699,7 @@ export function deriveKeywordPlacement(
         ...row,
         status: 'backend' as KeywordStatus,
         surfaces: [...backendHits],
+        ...proposed('backend'),
         ...(correction ? { note: correction } : {}),
       };
     }
@@ -701,6 +716,7 @@ export function deriveKeywordPlacement(
       ...row,
       status: 'candidate' as KeywordStatus,
       surfaces: [],
+      ...proposed('candidate'),
       note: correction
         ? `${correction} The finished copy carries it on no surface the pack knows, so the row is` +
           ` recorded as candidate.`

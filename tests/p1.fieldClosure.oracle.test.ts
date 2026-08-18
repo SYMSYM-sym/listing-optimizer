@@ -311,6 +311,8 @@ for (const { schema, toListing } of GROUP_SCHEMAS) {
 const ENGINE_ADDED_OPTIONAL_PATHS = [
   // `lib/engine/keywordPlacement.ts` writes this only when derivation CHANGED a row.
   'keywords[].note',
+  // H2 — written by the same derivation, on the same rows, for C28's floor.
+  'keywords[].proposedStatus',
   // D1 — written only when a generation group failed to validate.
   'degradedGroups[]',
 ];
@@ -914,6 +916,8 @@ const GLOBAL_EXEMPT: Record<string, string> = {
   'keywords[].via': 'See keywords[].term — the reference is not published copy.',
   'keywords[].home': 'See keywords[].term — the reference is not published copy.',
   'keywords[].note': 'See keywords[].term — and this one is written by the derivation, not by the model.',
+  'keywords[].proposedStatus':
+    "The STATUS WORD the model proposed on a row the derivation corrected (`negative`, `captured-via`, ...) — a closed vocabulary the pack pins, not prose, and written by the derivation rather than by the model. C28's floor reads it; no content reader should.",
   'degradedGroups[]':
     'Code-written GENERATION GROUP NAMES, never copy. Gate check GEN turns every entry into a failure, so this field can never be a quiet skip.',
   state: 'A lifecycle enum the engine sets; not copy.',

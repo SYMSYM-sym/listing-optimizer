@@ -1351,6 +1351,29 @@ export interface KeywordTerm {
    * a correction is visible in the deliverable rather than a silent edit.
    */
   note?: string;
+  /**
+   * DERIVED. The status the MODEL PROPOSED, recorded by
+   * `lib/engine/keywordPlacement.ts` on exactly the rows whose status the
+   * derivation changed — so `proposedStatus !== status` wherever it is present,
+   * and it is absent everywhere else.
+   *
+   * WHY IT EXISTS (H2, live: ASIN B00IO89MYA, `C28 | keywords | 2 negative
+   * term(s)`). C28's `minNegatives` floor counted SURVIVING `negative` rows.
+   * The model proposed three exclusions, the derivation correctly reclassified
+   * one of them (it was the product's own brand / a property the ingested
+   * snapshot declares about itself), and the run was then failed for CODE'S OWN
+   * CORRECTION — a floor that claims to measure the model's exclusion work
+   * while measuring the residue left after the engine edited it. With this
+   * field the floor can count what the model PROPOSED and the anti-gaming
+   * property can be enforced directly instead of emerging from the arithmetic.
+   * See the floor in `lib/gate/checks/c-keywords.ts`.
+   *
+   * NEVER MODEL-SUPPLIED, exactly like `surfaces`. `keywordsGroupSchemaFor`
+   * does not declare it (so the boundary strips it) and `normalizeKeywords`
+   * builds each row from a fixed allowlist (so a volunteered one is dropped).
+   * A run cannot label its own rows as having been corrected.
+   */
+  proposedStatus?: KeywordStatus;
 }
 
 /** Element lifecycle: advances to 'verified' only when the gate is green. */
