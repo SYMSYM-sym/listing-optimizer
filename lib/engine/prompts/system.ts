@@ -134,11 +134,18 @@ No category compliance module is active. Write factual, everyday copy about what
    * the most actionable and the wrong one, because C4 measures the string AFTER
    * the disclaimer has been appended. See `descriptionBudget` in
    * `lib/gate/checks/c-length.ts`.
+   *
+   * IT IS `db.target`, NOT `db.budget`. `budget` is the exact count at which
+   * C4 starts failing; a later live run (B00IO89MYA) wrote 1861 against a
+   * correctly-stated 1842 and the appended disclaimer carried the field 19
+   * characters over the cap. `target` is that same arithmetic with a derived
+   * safety margin taken off, so an ordinary small overshoot still lands inside
+   * the limit. The margin is computed in `descriptionBudget` and nowhere else.
    */
   const db = descriptionBudget(pack);
   const disclaimerHeadroom = db.reserve > 0
-    ? `- Description: write ≤${db.budget} chars. The system then appends the verbatim compliance disclaimer (${db.reserve} chars) and the finished field must be ≤${db.max} chars, so ${db.budget} is your whole budget.`
-    : `- Description ≤${db.max} chars.`;
+    ? `- Description: write ≤${db.target} chars. The system then appends the verbatim compliance disclaimer (${db.reserve} chars) and the finished field must be ≤${db.max} chars, so ${db.target} is your whole budget.`
+    : `- Description ≤${db.target} chars.`;
 
   const dosePhrasing = (r.units?.perServingPhrases ?? []).length > 0
     ? `\n- Potency figures attach to the blend/formula, NEVER phrased ${(r.units.perServingPhrases).map((x) => `"${x}"`).join(' / ')}.`

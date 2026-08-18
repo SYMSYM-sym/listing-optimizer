@@ -19,9 +19,13 @@ export function descriptionPrompt(
   rules?: RuleSet,
   buyerBlock = '',
 ): string {
+  // `budget.target`, never `budget.budget`: the second is the exact character
+  // count at which C4 begins to fail, and a live run (B00IO89MYA) landed 19
+  // characters past it having been told it correctly. See
+  // `DESCRIPTION_MARGIN_FRACTION` in `lib/gate/checks/c-length.ts`.
   const headroom = budget.reserve > 0
-    ? `≤${budget.budget} chars of your own text (the system then appends the verbatim compliance disclaimer, ${budget.reserve} chars, and the finished field must be ≤${budget.max})`
-    : `≤${budget.max} chars`;
+    ? `≤${budget.target} chars of your own text (the system then appends the verbatim compliance disclaimer, ${budget.reserve} chars, and the finished field must be ≤${budget.max})`
+    : `≤${budget.target} chars`;
   const packLines = packRules.map((line) => `- ${line}\n`).join('');
   // C8 requires the canonical product name INSIDE the description. It is chosen
   // by the title group, so it is stated here rather than left to chance.

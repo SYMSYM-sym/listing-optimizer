@@ -151,9 +151,82 @@ export interface DescriptionBudget {
   max: number;
   /** Characters the engine appends afterwards (0 when the pack has no disclaimer). */
   reserve: number;
-  /** What the MODEL may write: `max - reserve`. Never below zero. */
+  /**
+   * The HARD ceiling on the model's own text: `max - reserve`. Never below
+   * zero. One character past this and the assembled field is over `max`, so it
+   * is a CLIFF rather than a target — nothing is told to aim at it any more.
+   */
   budget: number;
+  /** `budget - target` — the safety margin, DERIVED here and nowhere else. */
+  margin: number;
+  /**
+   * THE NUMBER EVERY PROMPT AND EVERY FIX LINE STATES: `budget - margin`.
+   * See `DESCRIPTION_MARGIN_FRACTION` for why a stated target below the cliff
+   * is the difference between a run that converges and one that does not.
+   */
+  target: number;
 }
+
+/**
+ * THE SAFETY MARGIN, and why it is a fraction rather than a fixed count.
+ *
+ * THE LIVE DEFECT (ASIN B00IO89MYA):
+ *
+ *   C4 | description | 2019 chars (1861 written + 158 appended)
+ *
+ * Every number in the system was already correct. `descriptionBudget` derived
+ * `max 2000`, `reserve 158`, `budget 1842`; the generation prompt and the C4
+ * repair line both stated 1842, from that one arithmetic (Q3). The model wrote
+ * 1861 — NINETEEN characters past a correctly-stated ceiling — and the
+ * disclaimer then carried the assembled field 19 characters past the hard cap.
+ * Nothing was miscomputed and nothing was mis-stated. The run failed because
+ * the number it was told to hit was the exact number at which failure begins,
+ * and a model asked for "≤1842 characters" lands near 1842 — sometimes on the
+ * wrong side of it. Nineteen characters, after the loop has spent its rounds,
+ * on copy that is otherwise fine.
+ *
+ * SO THE STATED TARGET MOVES DOWN AND THE CAP DOES NOT MOVE AT ALL. C4's
+ * trigger is untouched — empty, or assembled length over `rules.descriptionMax`
+ * — and `budget` still names the exact cliff. What changed is that no prompt
+ * and no fix line names the cliff: they name `target`, a derived margin below
+ * it, so an ordinary small overshoot of the STATED number still lands inside
+ * the ENFORCED one.
+ *
+ * WHY A FRACTION, AND WHY 6%, SIZED AGAINST BOTH OBSERVED OVERSHOOTS. There are
+ * two of them in the record, not one:
+ *
+ *   88 chars over a stated 1842  (4.78%) — CONFORMANCE-DEVIATIONS.md §13.2,
+ *                                          assessed at the time as "a model
+ *                                          overshoot, no change";
+ *   19 chars over a stated 1842  (1.03%) — the run above.
+ *
+ * A margin sized to the SECOND alone would have left the FIRST failing, and
+ * §13.2's own numbers say so — which is why that assessment is superseded here
+ * rather than quietly repeated. 6% of the writable budget is 111 characters on
+ * the supplements pack (1842 -> 1731): 1.26x the worst overshoot observed and
+ * 5.8x the most recent one.
+ *
+ * A FRACTION RATHER THAN A COUNT because a fixed character count would be a
+ * fourth hand-copied constant of exactly the kind this module exists to abolish,
+ * and it would scale wrongly against any other `descriptionMax`.
+ *
+ * WHY NOT MORE. The margin is paid for in description length on EVERY run, and
+ * the description is a real deliverable: it still has to cover what the product
+ * is, who it is for, how to use it, and quality and safety (see
+ * `descriptionPrompt`). At 6% the target keeps 94% of the writable budget and
+ * 87% of the hard cap — 1731 characters is still a full-length description.
+ * Trading a length failure for a thin-content one would be the same defect
+ * facing the other way. And the margin does not have to cover the tail on its
+ * own any more: an overshoot that DOES clear it now produces a repair line
+ * stating `target` — a number below the cliff — so the next round has room too,
+ * which is precisely what the pre-Q3 repair line did not have.
+ *
+ * APPLIED UNIFORMLY, INCLUDING WHEN `reserve` IS 0. Landing on a stated ceiling
+ * is a property of stating a ceiling to a model, not a property of the
+ * disclaimer: a pack with no compliance module has `budget === max` and the
+ * same failure mode one character past it.
+ */
+export const DESCRIPTION_MARGIN_FRACTION = 0.06;
 
 /**
  * THE ONE ARITHMETIC — the budget the generator actually controls.
@@ -188,7 +261,12 @@ export function descriptionBudget(pack: KnowledgePack): DescriptionBudget {
   const max = pack.rules.descriptionMax;
   const disclaimer = pack.compliancePack?.disclaimer ?? '';
   const reserve = disclaimer ? DISCLAIMER_APPEND_SEPARATOR.length + disclaimer.length : 0;
-  return { max, reserve, budget: Math.max(0, max - reserve) };
+  const budget = Math.max(0, max - reserve);
+  // The margin is DERIVED here, in the one place, exactly as `budget` is — the
+  // whole point of this function is that no prompt and no fix line ever carries
+  // a number of its own.
+  const margin = Math.ceil(budget * DESCRIPTION_MARGIN_FRACTION);
+  return { max, reserve, budget, margin, target: Math.max(0, budget - margin) };
 }
 
 export function c4DescriptionLength(l: OptimizedListing, pack: KnowledgePack): Failure[] {
@@ -197,7 +275,7 @@ export function c4DescriptionLength(l: OptimizedListing, pack: KnowledgePack): F
   if (!normalize(description)) {
     out.push(fail('C4', 'description', '(empty)', 'Description is empty — a blank surface can never be verified'));
   }
-  const { max, reserve, budget } = descriptionBudget(pack);
+  const { max, reserve, target } = descriptionBudget(pack);
   if (description.length > max) {
     // The context names BOTH halves when the disclaimer is really on the end,
     // so the number the model is shown is one it can reconcile with the text it
@@ -213,8 +291,8 @@ export function c4DescriptionLength(l: OptimizedListing, pack: KnowledgePack): F
         'description',
         context,
         appended
-          ? `Shorten the description you WRITE to ≤${budget} chars — the ${reserve}-char compliance disclaimer is appended afterwards by the system and counts toward the ≤${max} limit, so a rewrite aimed at ${max} fails again`
-          : `Shorten description to ≤${max} chars`,
+          ? `Shorten the description you WRITE to ≤${target} chars — the ${reserve}-char compliance disclaimer is appended afterwards by the system and counts toward the ≤${max} limit, so a rewrite aimed at ${max} fails again, and ${target} leaves room for the ordinary overshoot that produced this failure`
+          : `Shorten description to ≤${target} chars — the hard limit is ${max}, and ${target} leaves room for the ordinary overshoot that produced this failure`,
       ),
     );
   }
