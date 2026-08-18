@@ -561,13 +561,15 @@ export function fictionOver(surfaces: [string, string][], cp: CompliancePack, ch
  * Two placement rules, both structural, both in the pattern rather than prose:
  *   - a connector INSIDE a run is glued to the value word that FOLLOWS it, so a
  *     run can never begin or end on one ("fifty and" + a unit is not a figure);
- *   - a connector may LEAD a run only in front of a magnitude, and only a
- *     magnitude the caller does not ALSO append as a unit. "A hundred" is one
+ *   - a connector may LEAD a run only in front of a magnitude that does not
+ *     OPEN one of the unit tokens the caller appends. "A hundred" is one
  *     hundred; "a Billion CFU" is the UNIT reading the digit scan gives
  *     "1 Billion CFU", and taking `billion` as a MAGNITUDE there would report
  *     1,000,000,000 against a canonical "1 Billion CFU" and fail truthful copy.
  *     That exclusion is why `unitTokens` is a parameter: every caller passes
- *     the token list its own pattern appends after the run.
+ *     the token list its own pattern appends after the run. Z3 — the test is a
+ *     whole-word PREFIX one, so a pack that ships only the compound unit
+ *     `<magnitude> <unit>` and not the bare magnitude behaves identically.
  *
  * The trailing quantifier is LAZY on purpose. The callers append
  * `[\s-]+(?:<unit alternation>)` to this source, and the unit alternation is
@@ -593,11 +595,25 @@ export function spelledOutRunSource(
     ? `(?:(?:${connectors})[\\s-]+)?(?:${anyWord})`
     : `(?:${anyWord})`;
   // "A hundred" — an inert lead supplies the implicit one, but only in front of
-  // a magnitude that is not itself one of THIS caller's unit tokens.
-  const appended = new Set((unitTokens ?? []).map((t) => t.trim().toLowerCase()));
-  const leadMagnitudes = alternationSource(
-    magnitudeWords.filter((w) => !appended.has(w.trim().toLowerCase())),
-  );
+  // a magnitude that does not OPEN one of THIS caller's unit tokens.
+  //
+  // Z3 — the test is "opens a unit token", not "IS a unit token". The shipped
+  // pack happens to declare BOTH the compound `<magnitude> <unit>` and the bare
+  // magnitude, and an exact-match exclusion was therefore correct only by that
+  // accident: a pack that declared only the compound would have left the bare
+  // magnitude leadable, so `"A <magnitude> <unit>"` would compose the magnitude
+  // as a VALUE (a thousandfold reading of the same string the digit scan reads
+  // as one) while `"One <magnitude> <unit>"` read it as the unit. A whole-word
+  // prefix test removes the dependency on that pack accident, and it is a pure
+  // NARROWING — it can only withdraw a reading, never manufacture one.
+  const appended = (unitTokens ?? [])
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean);
+  const opensUnitToken = (word: string): boolean => {
+    const w = word.trim().toLowerCase();
+    return w.length > 0 && appended.some((t) => t === w || t.startsWith(`${w} `));
+  };
+  const leadMagnitudes = alternationSource(magnitudeWords.filter((w) => !opensUnitToken(w)));
   const lead =
     connectors && leadMagnitudes
       ? `(?:${cardinals})|(?:${connectors})[\\s-]+(?:${leadMagnitudes})`
@@ -919,15 +935,57 @@ function isAttributed(text: string, index: number, units: UnitRules): boolean {
 }
 
 /**
+ * Z1 — NON-TERMINAL JOINER GLYPHS: the punctuation English writes INSTEAD of a
+ * joining word INSIDE a phrase, rather than to end one. `&` is the single
+ * commonest written form of "and" in listing copy, `+` and `/` are the next
+ * two, and `normalize` decodes `&amp;` into `&` before any of this runs.
+ *
+ * This list is ORTHOGRAPHY, not domain vocabulary, which is why it lives here
+ * beside the `[\s\-]` separator class and the dash fold in `normalize` rather
+ * than in the pack: the pack's job is WORDS (`spelledOutNumbers.connectors`),
+ * and a glyph list a pack could forget would be a guard that fails open. The
+ * compatibility twins are included because `foldCompatibility` deliberately
+ * refuses any fold whose result is not alphanumeric, so a fullwidth ampersand
+ * survives `normalize` intact.
+ *
+ * What is NOT here is the whole point: `.` `,` `;` `:` `!` `?` brackets, quotes
+ * and line breaks are CLAUSE BOUNDARIES and still end the neighbourhood, so
+ * `"Ten Billion CFU. Fifty Billion CFU per serving"` still reads two complete
+ * figures instead of refusing one.
+ */
+const JOINER_GLYPHS = new Set([
+  '&', '\uff06', // ampersand — "and"
+  '+', '\uff0b', '\ufe62', // plus
+  '/', '\uff0f', '\u2044', '\u2215', // solidus, fraction slash, division slash
+]);
+
+const isJoinerGlyph = (ch: string): boolean => JOINER_GLYPHS.has(ch);
+
+/** True when a whole token is nothing but joiner glyphs and separators. */
+const isJoinerRun = (token: string): boolean =>
+  token.length > 0 && [...token].every((ch) => isJoinerGlyph(ch) || /[\s\-]/.test(ch));
+
+/**
  * The token immediately in FRONT of `index`, skipping only run separators
  * (spaces and hyphens). `null` at the start of the text and at any clause
  * punctuation — a bracket, comma, colon or full stop ENDS the neighbourhood, so
  * nothing here ever reaches across one.
+ *
+ * Z1 — a JOINER GLYPH is not clause punctuation and is therefore returned AS A
+ * TOKEN (a maximal run of them, so `"& /"` is one token) instead of ending the
+ * walk. Each caller then decides what to do with it: `isAttributed` rejects it
+ * exactly as it rejected the `null` before, because a glyph carries no letter;
+ * `hasUnreadFigureBefore` treats it as a GAP inside a numeral.
  */
 function previousToken(text: string, index: number): { token: string; start: number } | null {
   let i = index - 1;
   while (i >= 0 && /[\s\-]/.test(text[i]!)) i--;
   if (i < 0) return null;
+  if (isJoinerGlyph(text[i]!)) {
+    const end = i + 1;
+    while (i >= 0 && (isJoinerGlyph(text[i]!) || /[\s\-]/.test(text[i]!))) i--;
+    return { token: text.slice(i + 1, end), start: i + 1 };
+  }
   if (!/[A-Za-z0-9']/.test(text[i]!)) return null; // clause punctuation / bracket
   const end = i + 1;
   while (i >= 0 && /[A-Za-z0-9']/.test(text[i]!)) i--;
@@ -954,12 +1012,13 @@ function previousToken(text: string, index: number): { token: string; start: num
  *     digit run that the match did NOT consume → fragment
  *     (`"Hundred Fifty Billion CFU"`: a magnitude cannot lead, so the reader
  *     would otherwise start at `Fifty`);
- *   - the token in front is a FUNCTION word (`nonAttributingWords` — structural
- *     English plus every token the pack declares as a unit, dosage form, per-
- *     dose phrase, potency verb or supply cue) and the token before THAT is a
- *     value word or digits → fragment. This is the `and` case, and it does not
- *     consult the connector list, so it catches `and`, `plus`, `or` and
- *     anything else of that shape whether or not the pack declares it.
+ *   - the token in front is a GAP (`isNumeralGap`: a function word, a joiner
+ *     GLYPH such as `&` `+` `/`, or a one-letter token such as `n`) and the
+ *     token before THAT is a value word or digits → fragment. This is the `and`
+ *     case, and it consults no connector list, so it catches `and`, `plus`,
+ *     `or` and anything else of that shape whether or not the pack declares it;
+ *     Z1 added the glyph and one-letter shapes, which made the guard
+ *     orthography-independent as well as vocabulary-independent.
  *
  * AND WHY IT STOPS THERE. A CONTENT word in front of the run ENDS the numeral
  * to its left: in `"Ten Strains Fifty Billion CFU"` the `Ten` belongs to
@@ -972,15 +1031,24 @@ function previousToken(text: string, index: number): { token: string; start: num
  *
  * THE BEHAVIOUR ON A HIT IS TO REFUSE TO MEASURE, not to fail closed. A
  * failure here would be an assertion about a figure the reader has just said it
- * cannot read, and the shapes that reach this guard include lawful copy
- * (`"Ten Billion and Fifty Billion CFU"` is ambiguous prose, not a lie), so
- * emitting one would be over-blocking — which this project treats as exactly as
- * severe as a bypass. Refusing is strictly safer than the alternative it
- * replaces: it can never affirm a false figure as truthful and it can never
- * report a true one as false. What it costs is COVERAGE, and that cost is
- * bounded and stated in CONFORMANCE-DEVIATIONS.md item 2.4.8 — C24 still
- * DETECTS the same string in a dosage attribute, and Y2 gave C10/A5 the same
- * detection on customer copy, because detection needs no composed value.
+ * cannot read, and the shapes that reach this guard include lawful copy: a
+ * TRUTHFUL `"Now One Hundred & Fifty Billion CFU."` against a canonical
+ * `150 Billion CFU` is refused by this guard, and a fail-closed guard would
+ * report that truthful sentence as a compliance failure. That is over-blocking,
+ * which this project treats as exactly as severe as a bypass.
+ *
+ * WHAT REFUSING IS VERIFIED TO DO, stated no wider than the tests. On the
+ * strings the Y1 and Z1 batteries name, a refused run produces NO reading, so
+ * nothing downstream compares a fragment against the canonical fact; the
+ * truthful forms of those same sentences stay silent; and the golden fixture
+ * still produces zero gate failures. (`tests/complianceCompletions.test.ts`,
+ * `Y1 (d)` and `Z1 (a)`/`Z1 (b)`/`Z1 (f)`.) It is deliberately NOT recorded here
+ * as a claim that no figure can ever be mis-measured — Z1 was found by
+ * adversarial review after Y1 shipped precisely such a claim, and this file no
+ * longer makes one. What refusing costs is COVERAGE, bounded and stated in
+ * CONFORMANCE-DEVIATIONS.md items 2.4.8/2.4.9 — C24 still DETECTS the same
+ * string in a dosage attribute, and Y2 gave C10/A5 the same detection on
+ * customer copy, because detection needs no composed value.
  */
 function hasUnreadFigureBefore(
   text: string,
@@ -993,11 +1061,43 @@ function hasUnreadFigureBefore(
   const first = previousToken(text, index);
   if (!first) return false;
   if (isValue(first.token)) return true;
-  // A content word terminates the numeral in front of it; only a function word
-  // can be the gap INSIDE one.
-  if (!nonAttributingWords(units).has(first.token.toLowerCase())) return false;
+  // A content word terminates the numeral in front of it; only a GAP can sit
+  // INSIDE one.
+  if (!isNumeralGap(first.token, units)) return false;
   const second = previousToken(text, first.start);
   return second !== null && isValue(second.token);
+}
+
+/**
+ * Z1 — A GAP: a token that can sit INSIDE a numeral without ending it. Three
+ * shapes, and each is a form of the SAME thing — a joiner that carries no value
+ * of its own:
+ *
+ *   - a FUNCTION word (`nonAttributingWords`: structural English plus every
+ *     token the pack declares as a unit, dosage form, per-dose phrase, potency
+ *     verb or supply cue) — "one hundred AND fifty";
+ *   - a JOINER GLYPH run — "one hundred & fifty", "+", "/", and `&amp;` which
+ *     `normalize` has already decoded into `&`;
+ *   - a token carrying exactly ONE letter — "one hundred n fifty",
+ *     "one hundred 'n' fifty". A one-letter token cannot be the content word
+ *     that OWNS the numeral to its left, and this file already says so:
+ *     `isAttributed` refuses to attribute a figure to one. The two now agree.
+ *
+ * Everything else TERMINATES: a content word of two letters or more ("Ten
+ * Strains Fifty Billion CFU" — the `Ten` belongs to `Strains`), and any other
+ * punctuation, which `previousToken` never returns at all.
+ *
+ * THE COST OF BEING WRONG HERE IS ONE-SIDED, which is why the class can be
+ * drawn generously. A gap only ever leads to a REFUSAL — no reading, and so no
+ * failure. Mis-classifying a real terminator as a gap loses coverage; it can
+ * never manufacture a failure against lawful copy. Mis-classifying a gap as a
+ * terminator is the defect Z1 found: the reader composes a FRAGMENT and affirms
+ * it as agreeing with the canonical fact.
+ */
+function isNumeralGap(token: string, units: UnitRules): boolean {
+  if (isJoinerRun(token)) return true;
+  if (token.replace(/[^A-Za-z]/g, '').length === 1) return true;
+  return nonAttributingWords(units).has(token.toLowerCase());
 }
 
 /**

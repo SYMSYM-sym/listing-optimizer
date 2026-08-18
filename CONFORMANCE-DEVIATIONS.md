@@ -489,7 +489,7 @@ It is deliberately **three lists**, and the split is the false-positive control:
 | --- | --- | --- |
 | `cardinals` | one … ninety | a match must **begin** with one of these |
 | `magnitudes` | hundred … trillion | may only appear **after** a cardinal |
-| `connectors` (Y1) | the inert words — `and`, `a`, `an` | never begins or ends a run on its own; may sit **between** two value words, or lead one in front of a magnitude that is not also a unit here, where it supplies the implicit one (`"a hundred"` = 100) |
+| `connectors` (Y1) | the inert words — `and`, `a`, `an` | does not begin or end a run on its own; may sit **between** two value words, or lead one in front of a magnitude that OPENS no unit token here (Z3 (b)), where it supplies the implicit one (`"a hundred"` = 100). Pinned by *"Y1 (d)"* and *"Z3 (b): an inert lead is still allowed in front of a magnitude that opens no unit token"* |
 
 so a value that merely names its unit — `"Billion CFU"`, and `"a Billion CFU"` —
 is not read as a figure. Each word carries its **value** (`{"fifty": 50}`, `{"billion": 1e9}`)
@@ -698,10 +698,12 @@ ingredient** purely because the amount was spelled out — the digit form of the
 identical label passed. That is over-blocking, which this project treats as
 exactly as severe as a bypass, and N3 would have made it more likely by
 legitimising word-form figures elsewhere. The stripper now uses the same shared
-`spelledOutRunSource`. It is a **tolerance** widener: stripping more can never
-manufacture a bypass, because a "name" consisting only of an amount yields no
-name words and is skipped — exactly as the digit form already was. Both
-directions are tested (*"N3: a SPELLED-OUT amount is stripped from the name…"*
+`spelledOutRunSource`. It is a **tolerance** widener: a "name" consisting only
+of an amount yields no name words and is skipped, exactly as the digit form
+already was, so the widening does not create an undetected ingredient in the
+cases tested. (Z2 — this used to read *"stripping more can never manufacture a
+bypass"*; the reasoning is unchanged but the unbounded form is not, and what is
+verified is the two named tests below.) Both directions are tested (*"N3: a SPELLED-OUT amount is stripped from the name…"*
 and *"N3: stripping the amount does NOT hide a genuinely undeclared
 ingredient"*).
 
@@ -756,8 +758,11 @@ the same clause, and the negation context still applies.
   failures with the same fix text** as its digit twin.
 - *"Y2: the TRUE word-form figure is caught too — the attachment is the
   objection, not the number"* — `"Delivers Fifty Billion CFU per serving"` with
-  a canonical 50: C12 is silent, C10 is not. That is the case C12 can never
-  cover, and the reason the extension is worth its false-positive surface.
+  a canonical 50: C12 is silent, C10 is not. C12 reports only DISAGREEMENT with
+  the canonical fact, so it has nothing to say about a figure that agrees with
+  it — which is the case this test pins and the reason the extension is worth
+  its false-positive surface. (Z2 — this used to read *"the case C12 can never
+  cover"*.)
 - *"Y2: A5 gets the same leg on A+ copy"*.
 - *"Y2: over-blocking — ordinary prose, and a potency NOT attached to a dose,
   still PASS"* — ten phrases including `"Fifty Billion CFU in every capsule of
@@ -842,7 +847,7 @@ Two placement rules, both structural and both in the pattern:
 
 | rule | effect |
 | --- | --- |
-| a connector inside a run is **glued to the value word after it** | a run can never begin or end on one — `"fifty and"` + a unit is not a figure |
+| a connector inside a run is **glued to the value word after it** | a run does not begin or end on one — `"fifty and"` + a unit is not a figure, pinned by *"Y1 (d): the refusal is vocabulary-INDEPENDENT — an unknown joiner is refused too"* (`"Fifty and Sixty mg"` → no reading) |
 | a connector may **lead** a run only in front of a magnitude, and only one the caller does not also append as a **unit** | `"A hundred"` is 100; `"a Billion CFU"` stays the UNIT reading the digit scan gives `"1 Billion CFU"`, so a truthful `1 Billion CFU` listing is not failed as 1,000,000,000 |
 
 and one composition rule, in `composeSpelledValue`: a connector is accepted only
@@ -874,19 +879,59 @@ search entirely.
 
 **THE CHOSEN BEHAVIOUR ON A HIT IS TO REFUSE TO MEASURE, NOT TO FAIL CLOSED —
 and the defence.** Failing closed would mean emitting a compliance failure about
-a figure the reader has just said it cannot read. The shapes that reach this
-guard include lawful copy — `"Ten Billion CFU and Fifty Billion CFU"` is a list,
-`"Ten Billion and Fifty Billion CFU"` is ambiguous prose rather than a lie — so a
-failure there is over-blocking, which this project treats as exactly as severe as
-a bypass, and it would be an over-block the operator cannot act on because the
-message could not name a correct figure. Refusing is strictly safer than the
-behaviour it replaces on **both** axes: it can never affirm a false figure as
-truthful, and it can never report a true one as false. What it costs is
-**coverage**, and that cost is bounded and deliberately covered elsewhere rather
-than assumed away: C24 still DETECTS the same string in a dosage attribute, and
-Y2 (2.4.6) gave C10/A5 the same detection on customer copy — because detection
-needs no composed value. This is the same division of labour that already makes
-C24 exist separately from C12.
+a figure the reader has just said it cannot read, and it would be an over-block
+the operator cannot act on, because the message could not name a correct figure.
+
+**CORRECTED (Z2, adversarial review).** This paragraph used to defend that with
+`"Ten Billion CFU and Fifty Billion CFU"` as an example of *lawful copy a
+fail-closed guard would wrongly fail*. **That example was wrong**, and the
+reviewer ran it: under the shipped pack that input produces **two C12 failures**
+— `Potency 'Ten Billion CFU' disagrees with canonical facts.potency
+'50 Billion CFU'` plus `Two different potency figures in one surface — internal
+conflict`. It is a list of two COMPLETE figures, so the fragment guard never
+sees it at all; it demonstrated nothing about refusal. Its companion
+`"Ten Billion and Fifty Billion CFU"` fails too (one failure, on the composed
+`Ten Billion`). Both are struck.
+
+**The replacement, which has actually been run.** The lawful copy that reaches
+the guard is the **truthful form of the very sentence the guard refuses**:
+
+```
+bullets[0]    = "Now One Hundred & Fifty Billion CFU."
+facts.potency = "150 Billion CFU"
+=> C12 silent on that bullet (the reader refuses; no reading, no failure)
+```
+
+The copy is true, the reader cannot compose it, and a fail-closed guard would
+report that true sentence as a compliance failure. That is over-blocking, which
+this project treats as exactly as severe as a bypass. Pinned by
+*"Z1 (b): the truthful forms of the same five sentences still PASS"*.
+
+**What refusing is verified to do — no absolute.** On the strings the Y1 and Z1
+batteries name, a refused run yields NO reading, so no fragment is compared
+against the canonical fact; the truthful forms of those same sentences stay
+silent; and the golden fixture still produces zero gate failures
+(*"Y1 (d)"*, *"Z1 (a)"*, *"Z1 (b)"*, *"Z1 (f)"*).
+
+**CORRECTED (Z2, adversarial review).** This paragraph used to say refusing
+*"can never affirm a false figure as truthful, and can never report a true one
+as false"*. **That was FALSE as written, and Z1 (2.4.9) disproves it**:
+`"Now One Hundred & Fifty Billion CFU."` against a canonical `50 Billion CFU`
+composed the sub-run to 50 and affirmed a threefold overstatement as agreeing
+with the facts — through the guard this sentence said could never do that. The
+claim was forward-looking and unbounded; the mechanism it described (the guard)
+was itself the thing that could fail. It is replaced by the paragraph above,
+which names tests instead. **This is the third consecutive round in which a
+forward-looking absolute in this record has been falsified** (2.4.6's "an untrue
+word-form per-serving figure is now caught by C12", then this one), so the rule
+this file now follows is: state what a NAMED test pins, and let the residue be
+residue.
+
+What refusing costs is **coverage**, and that cost is bounded and deliberately
+covered elsewhere rather than assumed away: C24 still DETECTS the same string in
+a dosage attribute, and Y2 (2.4.6) gave C10/A5 the same detection on customer
+copy — because detection needs no composed value. This is the same division of
+labour that already makes C24 exist separately from C12.
 
 **Both directions, by test name** (`tests/complianceCompletions.test.ts`, under
 `Y1 — connectors, and the fragment the reader refuses (C12)`):
@@ -926,6 +971,168 @@ pack vocabulary — which is a pack change, not a gate change.
 `rules.attributeGuard.spelledOutNumbers.connectors` (+ its
 `_spelledOutNumbersComment`) in `knowledge/rules.json`, and the `Y1:` cases in
 `tests/complianceCompletions.test.ts`.
+
+#### 2.4.9 Z1 — CLOSED CLASS: the guard was vocabulary-independent but not ORTHOGRAPHY-independent
+
+**THE DEFECT, as an adversarial reviewer proved it through the real `runGate`,
+after Y1 shipped.**
+
+```
+description   = "Now One Hundred & Fifty Billion CFU."
+facts.potency = "50 Billion CFU"
+=> ZERO gate failures — and NOT by refusal
+```
+
+The reader composed the sub-run `"Fifty Billion CFU"` to **50** and the check
+affirmed a threefold overstatement as agreeing with the facts: the same
+MIS-MEASUREMENT Y1 existed to close, through the same guard, one round later.
+Four more forms were confirmed — `+`, `/`, `"100 & Fifty Billion CFU"` and
+`"One Hundred n Fifty Billion CFU"` — and all five were reachable from the
+description, the bullets, the title and the Q&A.
+
+**WHY Y1's GUARD DID NOT FIRE.** `previousToken` skipped only `[\s\-]` and
+returned `null` on any other character outside `[A-Za-z0-9']`. `&`, `+` and `/`
+therefore read as **clause punctuation that ends the neighbourhood**, so
+`hasUnreadFigureBefore` concluded there was nothing unread in front of `Fifty`
+and the fragment guard never ran. The guard was vocabulary-independent exactly as
+designed and as tested — the Y1 battery emptied the connector list and asserted
+`plus` and `or` — but every one of those cases was a WORD. Nobody tested the
+same joiner written as a glyph, and `&` is the single commonest written form of
+"and" in Amazon listing copy; `normalize` even decodes `&amp;` into `&` before
+the guard runs. The en/em/non-breaking DASH class had been handled (`normalize`
+folds it, so `"One Hundred — Fifty"` correctly reads 150); the joiner-GLYPH class
+was missed. `n` slipped through a different door: a one-letter token is not a
+function word, so the guard treated it as a CONTENT word that owns the numeral to
+its left — while `isAttributed`, ten lines above it in the same file, already
+refused to attribute a figure to a one-letter token. The two disagreed.
+
+**THE RULE, and where the line is drawn.** A **JOINER** — a glyph, or a token
+carrying a single letter, that stands in for a joining WORD inside a phrase — is
+a **GAP**: it does not end the neighbourhood, so the fragment guard sees the
+value word behind it and the reader **refuses**. A **CLAUSE BOUNDARY** — `.` `,`
+`;` `:` `!` `?` brackets, quotes — still ends it.
+
+| shape | example | behaviour |
+| --- | --- | --- |
+| joiner glyph | `"One Hundred & Fifty Billion CFU"`, `+`, `/`, `&amp;`, fullwidth `＆` | GAP → refused, no reading |
+| one-letter token | `"One Hundred n Fifty Billion CFU"`, `"One Hundred 'n' Fifty…"` | GAP → refused |
+| function word (Y1) | `"One Hundred and Fifty Billion CFU"` | GAP → composed WHOLE (150) when the pack declares the connector, refused when it does not |
+| content word | `"Ten Strains & Fifty Billion CFU"` | TERMINATES → `Fifty` is complete, read as 50 |
+| clause boundary | `"Ten Billion CFU. Fifty Billion CFU"`, `", Fifty…"`, `"(Fifty…)"` | ENDS the neighbourhood → both figures read, exactly as before |
+| line break | `"One Hundred\nFifty Billion CFU"` | `normalize` collapses whitespace, so this is a SEPARATOR: the run is read WHOLE (150), never as the fragment 50 |
+
+**WHY REFUSE RATHER THAN COMPOSE.** `&` is genuinely ambiguous — it may mean
+"and" (one figure, 150) or a list separator (two figures, 100 and 50) — and `/`
+does not mean "and" at all. Composing any value would be an invention, and
+composing the wrong one would be the Z1 defect again with a different number. The
+reader refuses, and what the tests pin is the thing that matters: **none of the
+five composes 50**.
+
+**WHY THIS IS ENGINE DATA AND NOT PACK DATA.** The glyph class is
+**orthography**, not domain vocabulary — it lives beside the `[\s\-]` separator
+class in `previousToken` and the dash fold in `normalize`, both of which are
+already engine-side, and it names no unit, ingredient or category word, so
+`tests/category.literals.test.ts` stays green. The pack keeps what the pack is
+for: **words** (`spelledOutNumbers.connectors`). Putting the glyphs in the pack
+would make a compliance guard that a pack could silently forget — a widener
+where this needs a fail-closed default.
+
+**THE COST OF DRAWING THE LINE WRONGLY IS ONE-SIDED**, which is why the class can
+be drawn generously. A gap only ever produces a REFUSAL, and a refusal emits no
+failure. Mis-classifying a real boundary as a joiner loses coverage; it cannot
+manufacture a failure against lawful copy. Mis-classifying a joiner as a boundary
+is this defect.
+
+**Both directions, by test name** (`tests/complianceCompletions.test.ts`, under
+`Z1 — joiner glyphs are a GAP inside a numeral, not a clause boundary (C12)`):
+
+| letter | test | what it pins |
+| --- | --- | --- |
+| (a) | *"Z1 (a): all five PROVEN bypasses now resolve to NOTHING — none composes 50"* | the outcome is REFUSE, asserted on the reader, and `50` asserted absent |
+| (a) | *"Z1 (a): through the WHOLE gate, against a contradicting canonical, on every surface"* | all five × description / bullets / title / Q&A: no potency reading, and no gate failure that cites `facts.potency '50 Billion CFU'` |
+| (a) | *"Z1 (a): the pre-Z1 behaviour is pinned as GONE — the fragment guard, asserted directly"* | eight strings including `"'n'"`, `"&/"` and a fullwidth `＆`, each `[]` where the pre-Z1 answer was `[{ value: 50 }]` |
+| (a) | *"Z1 (a): the refusal is VOCABULARY-independent — it holds with the connector list emptied"* | the Y1 property, re-asserted for the glyph class |
+| (b) | *"Z1 (b): the truthful forms of the same five sentences still PASS"* | the over-block direction, at three different canonical figures |
+| (b) | *"Z1 (b): a joiner glyph beside a COMPLETE figure is still read and still measured"* | `"Ten Strains & Fifty Billion CFU"` = 50, `"Ten Billion CFU & Fifty Billion CFU"` = 10 and 50, and an overstatement beside a strain count still reported |
+| (c) | *"Z1 (c): genuine clause boundaries still end the neighbourhood — 50 is still read"* | thirteen inputs across `.` `,` `;` `:` `!` `?` brackets and quotes |
+| (c) | *"Z1 (c): a line break inside a run is a separator, and the run is read WHOLE — never as 50"* | the one item on the boundary list that `normalize` has already turned into a space |
+| (c) | *"Z1 (c): and those clause-boundary readings behave through C12 exactly as they did"* | the boundary cases are still MEASURED, not refused |
+| (d) | *"Z1 (d): `&amp;` behaves identically to a literal `&` once `normalize` has decoded it"* | asserted as equality of the readings AND of the C12 output |
+| (e) | *"Z1 (e): the lawful-prose battery still passes on every surface"* | the reviewer's ten sentences plus five written with glyph joiners, against C12, C10 and A5 |
+| (f) | *"Z1 (f): the golden fixture is untouched — still ZERO gate failures"* | plus C12/C10/A5 individually silent |
+| (f) | *"Z1 (f): an emptied vocabulary still restores EXACT digit-only behaviour"* | two emptyings; digit failures asserted **equal** to those under the full pack |
+
+**What is verified, stated precisely and no wider.** The five named strings
+produce no reading under the shipped pack, on four surfaces, and no gate failure
+citing the canonical fact; their truthful forms stay silent; the thirteen named
+clause-boundary inputs still read the figures they read before; `&amp;` and `&`
+behave identically; the golden fixture is still at zero. **This is not a claim
+that the joiner class is complete.** A glyph nobody has thought of would behave
+as a boundary and could hide a fragment again — that residue is the same shape as
+the one Y1 left and Z1 found, it is stated here rather than argued away, and the
+way to shrink it is another adversarial round.
+
+**A future change to Z1 must also change:** `JOINER_GLYPHS`, `isJoinerGlyph`,
+`isJoinerRun`, `previousToken`, `isNumeralGap` and `hasUnreadFigureBefore` in
+`lib/gate/checks/shared.ts`, and the `Z1` cases in
+`tests/complianceCompletions.test.ts`.
+
+#### 2.4.10 Z3 — two smaller items from the same review: a missing unit, and an assumption about pack shape
+
+**(a) `million cfu` was not a pack unit token — ADDED.** `"Two Hundred Thousand
+Million CFU"` and its digit twin `"200,000 Million CFU"` both shipped silently.
+Digit/word parity, so this was a **pack-DATA gap, not an engine regression**. The
+exotic string was not the worst of it: a canonical `facts.potency` of
+`"500 Million CFU"` parsed to **nothing**, which switched the potency comparison
+**off for the whole listing** — the same failure mode N3's own header warns about
+for word-form facts.
+
+**DECIDED: add the COMPOUND `million cfu` to `units.dimensions.potency` and to
+the `cfu` family; do NOT add the bare magnitude `million`.** The bare word is
+ordinary listing prose, and adding it was measured, not guessed: with `million`
+declared as a unit token, `"Two Million Happy Customers"` and `"Over One Million
+Servings Sold"` are read as potency figures and **fail C12** against
+`facts.potency`. The compound cannot do that, because `million` must be followed
+by `cfu` to match at all. Pinned in both directions by *"Z3 (a): the gap is
+closed in BOTH scripts, and the two agree"*, *"Z3 (a): a million-scale canonical
+FACT is now readable, so the potency leg is armed at all"* and *"Z3 (a): the
+OVER-BLOCK direction — ordinary `million` prose is untouched"*, the last of which
+also asserts the pack contains `million cfu` and does **not** contain `million`.
+
+The bare `billion` stays, because it is how probiotic copy actually writes the
+hero figure. The asymmetry is deliberate and is recorded here rather than
+smoothed over: `"Two Billion Happy Customers"` would be read as a potency figure
+today, and that is a pre-existing bound of declaring a bare magnitude as a unit,
+not something Z3 introduced.
+
+**The family bound, stated.** Family membership makes two figures COMPARABLE; it
+does not SCALE them. A listing that restates its hero figure across magnitudes
+(`"50 Billion CFU"` and `"50,000 Million CFU"`) is reported as a disagreement.
+That is the same bound the family already carried for `cfu` against
+`billion cfu`, it is now noted in `_familiesComment` in `knowledge/rules.json`,
+and closing it would mean giving units a scale — a larger change than this item
+justifies.
+
+**(b) The `unitTokens` lead-exclusion assumed a pack shape — CLOSED rather than
+recorded.** `spelledOutRunSource` refuses to let an inert word lead a run in
+front of a magnitude that the caller also appends as a unit, so `"a Billion CFU"`
+stays the UNIT reading the digit scan gives `"1 Billion CFU"` instead of
+composing 1,000,000,000. That comparison was an **exact match**, and it was safe
+only because the shipped pack happens to declare the bare `billion` alongside the
+compound `billion cfu`. For a pack whose only potency unit was the compound,
+`billion` would have stayed leadable and `"A Billion CFU"` would have composed a
+thousandfold reading of a string the digit scan reads as 1.
+
+Not a live defect — but the fix is one line and is a pure **narrowing** (it can
+only withdraw a reading, never manufacture one), so it is closed rather than
+merely recorded: the test is now a whole-word **prefix** match, so a magnitude
+that OPENS any appended unit token cannot lead. Adding `million cfu` in (a) made
+this load-bearing immediately: without it, `"A Million CFU"` would have composed
+1,000,000 while `"One Million CFU"` read 1 `million cfu`, from the same pack.
+Pinned by *"Z3 (b): a compound-only pack reads the same figures as the shipped
+one"* and *"Z3 (b): an inert lead is still allowed in front of a magnitude that
+opens no unit token"*; the shipped pack's own shape is stated by *"Z3 (b): the
+shipped pack does ship the bare magnitude — the assumption, stated"*.
 
 ### 2.5 Unchanged: the WS5.5 panel confirmation
 
@@ -1776,8 +1983,12 @@ array proved to be a gate-scanned lexicon, because one of that array's own
 elements satisfies (1) (this is what makes `naturalStates[9] = "post-menopause"`
 legal without a hand-written row); or (3) it is a `prohibited{Content,Marketing}`
 pattern LABEL that its OWN regex matches, i.e. an example of the thing it names.
-A guidance array can never qualify: no sentence of guidance equals a lexicon
-entry, so `promptRules.compliance` stays fully scanned at any length.
+No guidance array in the shipped packs qualifies — a sentence of guidance is not
+a lexicon entry and satisfies none of (1)-(3) — so `promptRules.compliance`
+stays fully scanned at any length. That is a property of the three exemption
+tests plus the shipped pack data, verified by the canary rather than asserted
+about all possible packs. (Z2 — this used to read *"A guidance array can never
+qualify"*.)
 
 Exemption (3) paid for itself on the first run: the label `"discount claim"` sat
 on the `\d{1,3}% off` pattern, which does not match it — the word `discount` is
@@ -1837,7 +2048,8 @@ not have read that file.
 
 A live run of ASIN **B00EEEITVA** ended `verified:false` on a single **C4**
 failure (one of six runs in the batch; the other five verified clean, and the
-same ASIN verified on its other run). C4 routes correctly and always has —
+same ASIN verified on its other run). C4 routing was re-read and is correct on
+every path the routing tests exercise —
 `description` has owned a row in `FIELD_TO_GROUP` since the table existed — so
 the loop regenerated the right group every round and still could not converge.
 
@@ -1908,7 +2120,12 @@ malformation and bought no signal.
 
 ## 13. ROUND R — a third instance of one coherence class, and two overstated claims.
 
-### 13.1 ARCHITECTURE CHANGE — a PROPERTY OF THE PRODUCT can never be a rival-exclusion term.
+### 13.1 ARCHITECTURE CHANGE — a PROPERTY OF THE PRODUCT is not carried as a rival-exclusion term.
+
+*(Z2 — this heading used to read "can never be a rival-exclusion term". It is a
+RULE the derivation applies, and what is verified is the derivation's behaviour
+on the cases in `tests/keywordDerivation.productProperty.test.ts` and
+`tests/keywordDerivation.ownBrand.test.ts`, not an unbounded property.)*
 
 **The live defect.** Three of nine production runs, two ASINs, neither able to
 converge:

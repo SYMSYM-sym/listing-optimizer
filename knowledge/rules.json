@@ -524,10 +524,11 @@
     ]
   },
   "units": {
-    "_comment": "Unit lexicon for the gate (C10/C12/A5) and the deterministic facts producer. PACK DATA — lib/gate and lib/engine hold no unit literals. Order inside each list is irrelevant; the gate compiles longest-first alternations.",
+    "_comment": "Unit lexicon for the gate (C10/C12/A5) and the deterministic facts producer. PACK DATA — lib/gate and lib/engine hold no unit literals. Order inside each list is irrelevant; the gate compiles longest-first alternations. Z3 - 'million cfu' is the COMPOUND only. The bare magnitude 'million' is deliberately NOT a unit token: 'Two Million Happy Customers' and 'Over One Million Servings Sold' are ordinary listing prose, and declaring the bare word would read them as potency figures and fail them against facts.potency (both directions pinned in tests/complianceCompletions.test.ts, Z3 (a)). The compound carries no such risk because 'million' must be followed by 'cfu' to match. Adding it closes a real hole rather than a cosmetic one: before it a canonical facts.potency of '500 Million CFU' parsed to NOTHING, which switched the whole potency comparison OFF for that listing, and '200,000 Million CFU' / 'Two Hundred Thousand Million CFU' shipped silently in both scripts. The bare 'billion' stays because it is how probiotic copy actually writes the hero figure.",
     "dimensions": {
       "potency": [
         "billion cfu",
+        "million cfu",
         "billion",
         "mcg",
         "cfu",
@@ -552,12 +553,13 @@
         "days"
       ]
     },
-    "_familiesComment": "Units that are the SAME physical dimension and must be compared with each other (first entry is the canonical family name).",
+    "_familiesComment": "Units that are the SAME physical dimension and must be compared with each other (first entry is the canonical family name). Membership makes two figures COMPARABLE; it does not SCALE them, so a listing that restates its hero figure in a different magnitude ('50 Billion CFU' and '50,000 Million CFU') is reported as a disagreement. That is the same pre-existing bound the family already carries for 'cfu' against 'billion cfu' and is recorded in CONFORMANCE-DEVIATIONS.md 2.4.8.",
     "families": [
       [
         "cfu",
         "billion",
-        "billion cfu"
+        "billion cfu",
+        "million cfu"
       ]
     ],
     "perServingPhrases": [

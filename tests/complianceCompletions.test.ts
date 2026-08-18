@@ -15,7 +15,12 @@ import {
   c27OutputHygiene,
   type GateContext,
 } from '@/lib/gate/checks';
-import { extractUnitNumbers, spelledOutFigureReader } from '@/lib/gate/checks/shared';
+import {
+  extractUnitNumbers,
+  spelledOutFigureReader,
+  type SpelledOutFigureReader,
+} from '@/lib/gate/checks/shared';
+import { normalize } from '@/lib/gate/util';
 import { runGate } from '@/lib/gate/runGate';
 import { mapProduct } from '@/lib/ingest/providers/rainforest';
 import { toSnapshot } from '@/lib/ingest/toSnapshot';
@@ -1055,6 +1060,446 @@ describe('Y2 — C10/A5 potency PHRASING reads the spelled-out figure', () => {
 
   it('Y2: the golden fixture is untouched — still ZERO gate failures', () => {
     expect(runGate(clean, pack, ctx).failures).toEqual([]);
+  });
+});
+
+
+// ===========================================================================
+// Z1 — the JOINER GLYPH: orthography, not vocabulary
+// ===========================================================================
+
+/**
+ * ============================================================================
+ * Z1 — A SECOND PROVEN BYPASS OF THE SAME GUARD, FOUND BY ADVERSARIAL REVIEW
+ * AFTER Y1 SHIPPED.
+ * ============================================================================
+ *
+ * WHAT WAS BROKEN. `"Now One Hundred & Fifty Billion CFU."` in the description,
+ * against a canonical `facts.potency` of `"50 Billion CFU"`, produced ZERO gate
+ * failures — and, exactly as in Y1, not by refusal: the reader composed the
+ * SUB-RUN `"Fifty Billion CFU"` to 50 and affirmed a threefold overstatement as
+ * agreeing with the facts. `+`, `/`, `"100 & Fifty Billion CFU"` and
+ * `"One Hundred n Fifty Billion CFU"` did the same, from the description, the
+ * bullets, the title and the Q&A alike.
+ *
+ * WHY Y1's GUARD DID NOT FIRE. Y1 made the guard vocabulary-independent but not
+ * ORTHOGRAPHY-independent. `previousToken` skipped only `[\s\-]` and returned
+ * `null` on any other non-word character, so `&`, `+` and `/` read as clause
+ * PUNCTUATION that ends the neighbourhood, and the fragment guard concluded
+ * there was nothing unread in front of `Fifty`. `&` is the commonest written
+ * form of "and" in Amazon copy and `normalize` even decodes `&amp;` into it.
+ * `n` slipped through a different door: a one-letter token is not a function
+ * word, so the guard treated it as a CONTENT word that owns the numeral to its
+ * left — while `isAttributed`, ten lines above, already refused to attribute a
+ * figure to a one-letter token. The two disagreed.
+ *
+ * THE RULE, and the line it draws. A JOINER — a glyph or a one-letter token
+ * that stands in for a joining WORD inside a phrase — is a GAP: it does not end
+ * the neighbourhood, so the fragment guard sees the value word behind it and
+ * the reader REFUSES. A CLAUSE BOUNDARY — `.` `,` `;` `:` `!` `?` brackets,
+ * quotes, line breaks — still ends it, so ordinary copy that states two
+ * complete figures in two clauses is still read.
+ *
+ * The cost of drawing that line wrongly is ONE-SIDED, which is why it can be
+ * drawn generously: a gap only ever produces a REFUSAL, and a refusal emits no
+ * failure. Calling a real boundary a joiner loses coverage; it cannot fail
+ * lawful copy. Calling a joiner a boundary is this defect.
+ */
+describe('Z1 — joiner glyphs are a GAP inside a numeral, not a clause boundary (C12)', () => {
+  /** The five forms the reviewer proved, and the value each must NEVER produce. */
+  const bypasses: string[] = [
+    'Now One Hundred & Fifty Billion CFU.',
+    'Now One Hundred + Fifty Billion CFU.',
+    'Now One Hundred / Fifty Billion CFU.',
+    'Now 100 & Fifty Billion CFU.',
+    'Now One Hundred n Fifty Billion CFU.',
+  ];
+
+  const reader = (): SpelledOutFigureReader =>
+    spelledOutFigureReader(pack.rules.units, pack.rules.attributeGuard)!;
+
+  // (a) --------------------------------------------------------------------
+  /**
+   * WHICH OUTCOME, ASSERTED. The answer is REFUSE, not detect: the reader
+   * cannot tell whether `&` means "and" (150) or a list separator (100 and 50),
+   * and `/` does not mean "and" at all, so composing ANY value would be an
+   * invention. What the assertion pins is the thing that actually matters —
+   * none of the five composes 50, so none can be affirmed as agreeing with a
+   * canonical fact that says 50.
+   */
+  it('Z1 (a): all five PROVEN bypasses now resolve to NOTHING — none composes 50', () => {
+    const r = reader();
+    for (const copy of bypasses) {
+      expect(r.read(copy), copy).toEqual([]);
+      expect(r.read(copy).map((n) => n.value), copy).not.toContain(50);
+    }
+  });
+
+  it('Z1 (a): through the WHOLE gate, against a contradicting canonical, on every surface', () => {
+    expect(clean.facts.potency).toBe('50 Billion CFU');
+    const surfaces: [string, (l: OptimizedListing, copy: string) => void][] = [
+      ['description', (l, copy) => { l.description = `<p>${copy}</p>`; }],
+      ['bullets', (l, copy) => { l.bullets[0] = copy; }],
+      ['title', (l, copy) => { l.title = copy; }],
+      ['qa', (l, copy) => { l.qa[0]!.a = copy; }],
+    ];
+    for (const copy of bypasses) {
+      for (const [name, place] of surfaces) {
+        const l = mut((x) => place(x, copy));
+        const potency = c12FactConsistency(l, pack).filter((f) => f.fix.includes('facts.potency'));
+        // REFUSED: no potency reading at all, and above all no reading of 50
+        // silently affirmed as agreeing with the canonical figure.
+        expect(potency, `${name}: ${copy}`).toEqual([]);
+        // and the gate never asserts the fragment as a fact either
+        expect(
+          runGate(l, pack, ctx).failures.some((f) => f.fix.includes("facts.potency '50 Billion CFU'")),
+          `${name}: ${copy}`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('Z1 (a): the pre-Z1 behaviour is pinned as GONE — the fragment guard, asserted directly', () => {
+    const r = reader();
+    // Before Z1 each of these read `[{ value: 50 }]`. The three glyph forms and
+    // the letter form are all refused for the same reason: a value word sits
+    // unread in front of the run.
+    for (const text of [
+      'One Hundred & Fifty Billion CFU',
+      'One Hundred + Fifty Billion CFU',
+      'One Hundred / Fifty Billion CFU',
+      '100 & Fifty Billion CFU',
+      'One Hundred n Fifty Billion CFU',
+      "One Hundred 'n' Fifty Billion CFU",
+      'One Hundred &/ Fifty Billion CFU',
+      'One Hundred ＆ Fifty Billion CFU',
+    ]) {
+      expect(r.read(text), text).toEqual([]);
+    }
+  });
+
+  it('Z1 (a): the refusal is VOCABULARY-independent — it holds with the connector list emptied', () => {
+    const kit = clonePack();
+    delete kit.rules.attributeGuard!.spelledOutNumbers!.connectors;
+    const r = spelledOutFigureReader(kit.rules.units, kit.rules.attributeGuard)!;
+    for (const copy of bypasses) expect(r.read(copy), copy).toEqual([]);
+  });
+
+  // (b) --------------------------------------------------------------------
+  /**
+   * THE OVER-BLOCK DIRECTION. The same five sentences are TRUTHFUL when the
+   * canonical fact is the figure they state, and a guard that fails truthful
+   * copy is exactly as bad as one that misses a lie. Refusal emits no failure,
+   * so what is asserted here is that nothing new fires.
+   */
+  it('Z1 (b): the truthful forms of the same five sentences still PASS', () => {
+    for (const copy of bypasses) {
+      for (const potency of ['150 Billion CFU', '100 Billion CFU', '50 Billion CFU']) {
+        const l = mut((x) => {
+          x.facts.potency = potency;
+          x.bullets[0] = copy;
+        });
+        expect(
+          c12FactConsistency(l, pack).filter((f) => f.field === 'bullets[0]'),
+          `${copy} @ ${potency}`,
+        ).toEqual([]);
+      }
+    }
+  });
+
+  it('Z1 (b): a joiner glyph beside a COMPLETE figure is still read and still measured', () => {
+    const r = reader();
+    // "Strains" owns the "Ten", so the numeral to the left is complete and the
+    // reading of "Fifty" is not a fragment — the glyph changes nothing.
+    expect(r.read('Ten Strains & Fifty Billion CFU').map((n) => n.value)).toEqual([50]);
+    expect(r.read('Ten Strains + Fifty Billion CFU').map((n) => n.value)).toEqual([50]);
+    expect(r.read('Prebiotic & Fifty Billion CFU').map((n) => n.value)).toEqual([50]);
+    expect(r.read('Ten Billion CFU & Fifty Billion CFU').map((n) => n.value)).toEqual([10, 50]);
+    // and the coverage that costs nothing is still armed
+    const l = mut((x) => {
+      x.bullets[0] = 'Ten Strains & Ninety Billion CFU';
+    });
+    expect(c12FactConsistency(l, pack).filter((f) => f.field === 'bullets[0]')).toHaveLength(1);
+  });
+
+  // (c) --------------------------------------------------------------------
+  /**
+   * THE LINE ITSELF. A genuine clause boundary must STILL end the
+   * neighbourhood, or ordinary copy that states two complete figures starts
+   * refusing legitimately-readable ones.
+   */
+  it('Z1 (c): genuine clause boundaries still end the neighbourhood — 50 is still read', () => {
+    const r = reader();
+    for (const [text, values] of [
+      ['Ten Billion CFU. Fifty Billion CFU per serving', [10, 50]],
+      ['Ten Billion CFU, Fifty Billion CFU', [10, 50]],
+      ['Ten Strains, Fifty Billion CFU', [50]],
+      ['Ten Strains; Fifty Billion CFU', [50]],
+      ['Ten Strains: Fifty Billion CFU', [50]],
+      ['Ten Strains! Fifty Billion CFU', [50]],
+      ['Ten Strains? Fifty Billion CFU', [50]],
+      ['(Fifty Billion CFU)', [50]],
+      ['Ten Strains (Fifty Billion CFU)', [50]],
+      ['One Hundred. Fifty Billion CFU', [50]],
+      ['One Hundred, Fifty Billion CFU', [50]],
+      ['"Fifty Billion CFU"', [50]],
+      ['Ten Strains\nFifty Billion CFU', [50]],
+      ['Ten Billion CFU.\nFifty Billion CFU', [10, 50]],
+    ] as [string, number[]][]) {
+      expect(r.read(text).map((n) => n.value), text).toEqual(values);
+    }
+  });
+
+  /**
+   * A LINE BREAK is the one item on the boundary list that is a SEPARATOR here
+   * rather than a boundary, and deliberately so: `normalize` collapses every
+   * whitespace run to a single space before any check reads the text, so by the
+   * time this reader runs a newline IS a space. `"One Hundred\nFifty Billion
+   * CFU"` therefore reads as the ONE figure it states — 150, the whole run,
+   * exactly as `"One Hundred Fifty Billion CFU"` does. That is the safe
+   * direction and the opposite of the Z1 defect: the figure is read WHOLE, and
+   * the fragment 50 is never produced.
+   */
+  it('Z1 (c): a line break inside a run is a separator, and the run is read WHOLE — never as 50', () => {
+    const r = reader();
+    expect(r.read('One Hundred\nFifty Billion CFU').map((n) => n.value)).toEqual([150]);
+    expect(r.read('One Hundred Fifty Billion CFU').map((n) => n.value)).toEqual([150]);
+    expect(normalize('One Hundred\nFifty Billion CFU')).toBe('One Hundred Fifty Billion CFU');
+  });
+
+  it('Z1 (c): and those clause-boundary readings behave through C12 exactly as they did', () => {
+    // A complete figure that contradicts the canonical fact is still reported —
+    // the boundary cases are measured, not refused.
+    for (const copy of ['Ten Strains, Ninety Billion CFU', 'Ten Strains. Ninety Billion CFU']) {
+      const l = mut((x) => {
+        x.bullets[0] = copy;
+      });
+      expect(
+        c12FactConsistency(l, pack).filter((f) => f.field === 'bullets[0]'),
+        copy,
+      ).toHaveLength(1);
+    }
+  });
+
+  // (d) --------------------------------------------------------------------
+  it('Z1 (d): `&amp;` behaves identically to a literal `&` once `normalize` has decoded it', () => {
+    const r = reader();
+    const entity = 'Now One Hundred &amp; Fifty Billion CFU.';
+    const literal = 'Now One Hundred & Fifty Billion CFU.';
+    expect(normalize(entity)).toBe(literal);
+    expect(r.read(normalize(entity))).toEqual(r.read(literal));
+    expect(r.read(normalize(entity))).toEqual([]);
+    // ...and through the gate, on the surface the reviewer used
+    const asEntity = mut((x) => {
+      x.description = `<p>${entity}</p>`;
+    });
+    const asLiteral = mut((x) => {
+      x.description = `<p>${literal}</p>`;
+    });
+    expect(c12FactConsistency(asEntity, pack)).toEqual(c12FactConsistency(asLiteral, pack));
+    expect(c12FactConsistency(asEntity, pack).filter((f) => f.fix.includes('facts.potency'))).toEqual([]);
+  });
+
+  // (e) --------------------------------------------------------------------
+  it('Z1 (e): the lawful-prose battery still passes on every surface', () => {
+    for (const value of [
+      'one and a half servings',
+      'a hundred percent plant based',
+      'take one and then another',
+      'two and three',
+      'a one-time purchase',
+      'a billion tiny helpers',
+      'one and done',
+      'a two-month supply',
+      'an all-in-one formula',
+      'over a hundred five-star reviews',
+      // the same battery with the joiner written as a glyph
+      'a one-time purchase & a one-month supply',
+      'One softgel morning & night',
+      'Ten strains + a prebiotic blend',
+      'Gluten free / dairy free',
+      'Vitamin C & D',
+    ]) {
+      const l = mut((x) => {
+        x.bullets[0] = value;
+        x.description = `<p>${value}</p>`;
+      });
+      expect(c12FactConsistency(l, pack), value).toEqual([]);
+      expect(c10PotencyPhrasing(l, pack), value).toEqual([]);
+      expect(a5AplusPotencyPhrasing(l, pack), value).toEqual([]);
+    }
+  });
+
+  // (f) --------------------------------------------------------------------
+  it('Z1 (f): the golden fixture is untouched — still ZERO gate failures', () => {
+    expect(runGate(clean, pack, ctx).failures).toEqual([]);
+    expect(c12FactConsistency(clean, pack)).toEqual([]);
+    expect(c10PotencyPhrasing(clean, pack)).toEqual([]);
+    expect(a5AplusPotencyPhrasing(clean, pack)).toEqual([]);
+  });
+
+  it('Z1 (f): an emptied vocabulary still restores EXACT digit-only behaviour', () => {
+    const digits = mut((x) => {
+      x.bullets[0] = 'Delivers 150 Billion CFU per serving';
+    });
+    const glyph = mut((x) => {
+      x.bullets[0] = 'Delivers One Hundred & Fifty Billion CFU per serving';
+    });
+    for (const kit of [
+      (() => {
+        const k = clonePack();
+        delete k.rules.attributeGuard!.spelledOutNumbers;
+        return k;
+      })(),
+      (() => {
+        const k = clonePack();
+        delete k.rules.attributeGuard;
+        return k;
+      })(),
+    ]) {
+      expect(spelledOutFigureReader(kit.rules.units, kit.rules.attributeGuard)).toBeNull();
+      expect(c12FactConsistency(glyph, kit)).toEqual([]);
+      expect(c12FactConsistency(digits, kit)).toEqual(c12FactConsistency(digits, pack));
+      expect(c12FactConsistency(digits, kit).length).toBeGreaterThan(0);
+      expect(c12FactConsistency(clean, kit)).toEqual([]);
+    }
+  });
+});
+
+// ===========================================================================
+// Z3 — pack-data gaps: the `million` unit, and the lead-magnitude exclusion
+// ===========================================================================
+
+/**
+ * Z3 (a) — `million cfu` was not a pack unit token, so `"200,000 Million CFU"`
+ * and `"Two Hundred Thousand Million CFU"` both shipped silently. That is a
+ * pack-DATA gap with digit/word parity, not an engine regression, and the worst
+ * of it was not the exotic string: a canonical `facts.potency` of
+ * `"500 Million CFU"` parsed to NOTHING, which switched the potency comparison
+ * OFF for the whole listing — the same failure mode N3's header warns about.
+ *
+ * DECIDED: add the COMPOUND `million cfu`, and NOT the bare magnitude
+ * `million`. The bare word is ordinary listing prose ("Two Million Happy
+ * Customers"), and declaring it would read those as potency figures and fail
+ * them; the compound cannot, because `million` must be followed by `cfu` to
+ * match at all. Both directions are asserted below.
+ */
+describe('Z3 (a) — `million cfu` is a pack unit token; bare `million` deliberately is not', () => {
+  it('Z3 (a): the gap is closed in BOTH scripts, and the two agree', () => {
+    const r = spelledOutFigureReader(pack.rules.units, pack.rules.attributeGuard)!;
+    const words = r.read('Two Hundred Thousand Million CFU');
+    const digits = extractUnitNumbers('200,000 Million CFU', pack.rules.units);
+    expect(words).toHaveLength(1);
+    expect(digits).toHaveLength(1);
+    expect(words[0]!.value).toBe(200000);
+    expect(words[0]!.unit).toBe(digits[0]!.unit);
+    expect(words[0]!.value).toBe(digits[0]!.value);
+    for (const copy of ['Two Hundred Thousand Million CFU', '200,000 Million CFU', '500 Million CFU']) {
+      const l = mut((x) => {
+        x.bullets[0] = copy;
+      });
+      expect(
+        c12FactConsistency(l, pack).filter((f) => f.field === 'bullets[0]'),
+        copy,
+      ).toHaveLength(1);
+    }
+  });
+
+  it('Z3 (a): a million-scale canonical FACT is now readable, so the potency leg is armed at all', () => {
+    const l = mut((x) => {
+      x.facts.potency = '500 Million CFU';
+      x.bullets[0] = 'Delivers 500 Million CFU in every blend';
+      x.description = '<p>Delivers 500 Million CFU in every blend.</p>';
+    });
+    // the truthful restatement in the same magnitude is silent...
+    expect(c12FactConsistency(l, pack).filter((f) => f.field === 'bullets[0]')).toEqual([]);
+    // ...and an overstatement against that canonical is now REPORTED, where
+    // before the whole comparison was switched off by an unreadable fact.
+    const lying = mut((x) => {
+      x.facts.potency = '500 Million CFU';
+      x.bullets[0] = 'Delivers 900 Million CFU in every blend';
+    });
+    expect(
+      c12FactConsistency(lying, pack).filter((f) => f.field === 'bullets[0]'),
+    ).toHaveLength(1);
+  });
+
+  it('Z3 (a): the OVER-BLOCK direction — ordinary `million` prose is untouched', () => {
+    for (const value of [
+      'Two Million Happy Customers',
+      'Over One Million Servings Sold',
+      'Trusted by millions',
+      'a million tiny helpers',
+      'One in a million formula',
+      'Millions of five-star moments',
+    ]) {
+      const l = mut((x) => {
+        x.bullets[0] = value;
+        x.description = `<p>${value}</p>`;
+      });
+      expect(c12FactConsistency(l, pack), value).toEqual([]);
+      expect(c10PotencyPhrasing(l, pack), value).toEqual([]);
+    }
+    // the reason it is safe, asserted directly: the bare magnitude is NOT a unit
+    expect(pack.rules.units!.dimensions!.potency).toContain('million cfu');
+    expect(pack.rules.units!.dimensions!.potency).not.toContain('million');
+  });
+});
+
+/**
+ * Z3 (b) — the lead-magnitude exclusion (`spelledOutRunSource`) used to compare
+ * a magnitude word against the caller's unit tokens by EXACT match. That was
+ * safe only because the shipped pack happens to declare the bare `billion`
+ * alongside the compound `billion cfu`. A pack that declared only the compound
+ * would have left `billion` leadable, and `"A Billion CFU"` would have composed
+ * 1,000,000,000 against a digit scan that reads the same string as 1.
+ *
+ * Not a live defect, so the fix is the cheap one: the test is now a whole-word
+ * PREFIX match, which is a pure narrowing, and this pins that the behaviour no
+ * longer depends on the pack shape.
+ */
+describe('Z3 (b) — the lead-magnitude exclusion no longer depends on the pack shipping a bare magnitude', () => {
+  const compoundOnly = (): KnowledgePack => {
+    const k = clonePack();
+    k.rules.units!.dimensions!.potency = ['billion cfu', 'cfu'];
+    k.rules.units!.families = [['cfu', 'billion cfu']];
+    return k;
+  };
+
+  it('Z3 (b): the shipped pack does ship the bare magnitude — the assumption, stated', () => {
+    expect(pack.rules.units!.dimensions!.potency).toContain('billion');
+    expect(pack.rules.units!.dimensions!.potency).toContain('billion cfu');
+  });
+
+  it('Z3 (b): a compound-only pack reads the same figures as the shipped one', () => {
+    const shipped = spelledOutFigureReader(pack.rules.units, pack.rules.attributeGuard)!;
+    const narrow = spelledOutFigureReader(compoundOnly().rules.units, pack.rules.attributeGuard)!;
+    for (const text of [
+      'A Hundred Billion CFU',
+      'A Billion CFU',
+      'One Billion CFU',
+      'Fifty Billion CFU',
+      'One Hundred and Fifty Billion CFU',
+    ]) {
+      expect(narrow.read(text).map((n) => [n.value, n.unit]), text).toEqual(
+        shipped.read(text).map((n) => [n.value, n.unit]),
+      );
+    }
+    // the case the conditional named, pinned to the value the digit scan gives
+    expect(narrow.read('A Billion CFU')).toEqual([]);
+    expect(narrow.read('A Hundred Billion CFU').map((n) => n.value)).toEqual([100]);
+  });
+
+  it('Z3 (b): an inert lead is still allowed in front of a magnitude that opens no unit token', () => {
+    const r = spelledOutFigureReader(pack.rules.units, pack.rules.attributeGuard)!;
+    expect(r.read('A Hundred Billion CFU').map((n) => n.value)).toEqual([100]);
+    expect(r.read('A Thousand mg').map((n) => n.value)).toEqual([1000]);
+    // ...and NOT in front of one that does — `million` now opens `million cfu`,
+    // so "A Million CFU" is the UNIT reading the digit scan gives "1 Million CFU"
+    expect(r.read('A Million CFU')).toEqual([]);
+    expect(r.read('One Million CFU').map((n) => [n.value, n.unit])).toEqual(
+      extractUnitNumbers('1 Million CFU', pack.rules.units).map((n) => [n.value, n.unit]),
+    );
   });
 });
 
