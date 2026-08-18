@@ -441,7 +441,7 @@ tables of `tests/p1.fieldClosure.oracle.test.ts`.
 
 ---
 
-## 2. FLAGGED ADDITION — C24 now reads a SPELLED-OUT figure too. This is an intentional divergence from the kit.
+## 2. FLAGGED ADDITION — C24 **and C12** now read a SPELLED-OUT figure too. This is an intentional divergence from the kit.
 
 ### 2.1 What this entry used to say, and why it changed
 
@@ -491,7 +491,11 @@ It is deliberately **two lists**, and the split is the false-positive control:
 | `magnitudes` | hundred … trillion | may only appear **after** a cardinal |
 
 so a value that merely names its unit — `"Billion CFU"` — is not read as a
-figure. The other four bounds are structural and were already there:
+figure. Each word carries its **value** (`{"fifty": 50}`, `{"billion": 1e9}`)
+because N3 (item 2.4) *measures* the figure rather than merely detecting it; C24
+uses only the keys. One list, not a list plus a parallel table that can drift.
+
+The other four bounds are structural and were already there:
 
 1. **Scope.** The leg inherits the whole check's scope: attribute values only,
    and only where the attribute KEY matches the pack's dosage pattern. Ordinary
@@ -513,8 +517,9 @@ figure. The other four bounds are structural and were already there:
 `tests/complianceCompletions.test.ts`, all under `C24 dosage-attribute guard`:
 
 - *"N2 (was a recorded limitation): a SPELLED-OUT hero figure now FAILS, like the
-  digits"* — the exact string this entry used to pin as passing, plus the
-  explicit note that **C12 is unchanged** and still digit-anchored.
+  digits"* — the exact string this entry used to pin as passing, plus the note
+  that C12 **agrees** with that value (it resolves to the canonical 50), so only
+  C24 objects. That is the whole reason C24 exists separately from C12.
 - *"N2: every spelled-out shape of the hero figure fails"* — casing, hyphens,
   `Five Hundred mg`, `Twenty-five mg`, `Two Thousand IU`, `Ninety Billion`.
 - *"N2: ordinary number-word dose language still PASSES, in a dosage-KEYED
@@ -531,16 +536,199 @@ The old pinning test is **replaced, not deleted** — it now asserts the opposit
 behaviour under a name that says so, so the transition is legible in the diff
 rather than looking like a test that quietly disappeared.
 
-### 2.4 What is still NOT done, stated
+**Where the vocabulary becomes a pattern.** `spelledOutRunSource` and
+`heroUnitSource` in `lib/gate/checks/shared.ts` are the ONLY places the pack
+lists are compiled. `c24DosageAttributeGuard` calls both; N3's
+`spelledOutFigureReader` (same file) calls both; C26's amount stripper calls
+`spelledOutRunSource`. There is no second copy of the pattern to drift, which is
+the condition item 2.4 set on any future extension and the reason the C24 leg
+was refactored in the same commit that added the C12 one.
 
-**C12 is untouched and remains digit-anchored.** Its scan is a general
-unit-extraction pass over every customer surface, not a narrow attribute guard,
-so a number-word leg there is a materially larger change with a materially
-larger false-positive surface (ordinary copy legitimately says "one capsule",
-"a hundred servings sold"). C24 was closed because its scope is one pack-matched
-attribute key; C12's is the whole listing. Anyone extending C12 should treat
-that as its own flagged addition with its own battery, not as an obvious
-follow-on from this one.
+### 2.4 N3 — the C12 half, CLOSED as a flagged addition of its own
+
+**What 2.4 used to say.** *"C12 is untouched and remains digit-anchored."* It
+justified that on scope: C12's scan is a general unit-extraction pass over every
+customer surface, not a narrow attribute guard, so a number-word leg there was a
+materially larger change with a materially larger false-positive surface. It
+told anyone extending C12 to treat it as its own flagged addition with its own
+battery.
+
+**That has now been done, and the limitation no longer exists.** The hole it
+described was the worse of the two: C24's is a filter-fed attribute stating a
+number as a dose *even when the number is right*; C12's was a bullet or
+description reading **"Fifty Billion CFU per serving"** while the canonical
+potency was something else — an **overstated potency claim shipping in
+customer-facing copy**, which is the exact class C12 exists to prevent. A
+recorded limitation is not a licence to keep one; it is a promise to come back.
+
+**Status: CLOSED, as a FLAGGED ADDITION.** N3 is a second deliberate divergence
+beyond the source kit's behaviour, on top of N2, and this is the record of it.
+
+#### 2.4.1 The mechanism
+
+`c12FactConsistency` (`lib/gate/checks/c-quality.ts`) now passes a
+`spelledOutFigureReader` into `factConsistencyOver`. The reader is built from
+**the same pack lists, by the same compiler**, as C24's leg (2.3 above) — no
+second vocabulary, no second pattern. `extractUnitNumbers` takes it as an
+OPTIONAL third argument, so every other caller keeps the exact digit-anchored
+scan it had.
+
+The reader is applied to all three of C12's inputs, deliberately:
+
+| input | why |
+| --- | --- |
+| the surface being scanned | the figure being measured |
+| the ingredient breakdown (`declaredFigures`) | a one-sided reader would be **over-blocking** — an attributed word figure would be measured while the word-form declaration that licenses it stayed invisible |
+| `facts.potency` (`parsePotencyFact`) | a canonical fact written in words used to parse to nothing, which switched the potency comparison OFF for the entire listing |
+
+`facts.servingSize` is deliberately **not** read with it: every value extracted
+there lands in the COUNT allow-set regardless of dimension, so feeding it hero
+figures would widen what a count figure may claim.
+
+#### 2.4.2 The bounds, and the false-positive conditions — stated
+
+C12's scope is every customer surface, so ordinary supplement prose is the real
+risk. Five bounds, four inherited from N2 and one new:
+
+1. **A HERO UNIT IS STILL REQUIRED**, and the hero dimension is pack data
+   (`attributeGuard.unitDimensions` = `potency`). Count, day and dosage-form
+   figures stay **digit-only**. This is what makes `"one capsule daily"`,
+   `"two servings"`, `"thirty day supply"`, `"sixty capsules, one month
+   supply"`, `"ten strains"` and `"one hundred percent plant based"`
+   unmatchable however the number is written — and it is a *deliberate*
+   narrowing, not an oversight: the digit halves of `"90 Capsules per bottle"`
+   and `"a 30 day supply"` still fail, and a test asserts exactly that pair.
+2. **A CARDINAL MUST LEAD** — `"Billion CFU"` is not a figure.
+3. **THE SEPARATOR IS REQUIRED** and both sides are word-bounded.
+4. **THE VALUE COMPOSES AS THE DIGITS DO.** This is the new bound and the one
+   that decides whether the change is safe. `"Fifty Billion CFU"` is FIFTY of
+   the compound unit `billion cfu` — exactly what the digit scan reads out of
+   `"50 Billion CFU"` — **not** fifty thousand million. The run pattern is
+   therefore **lazy**, so the longest-first unit alternation wins the token
+   `billion`; a greedy run would swallow it as a MAGNITUDE and fail truthful
+   copy. (For C24, which only asks whether the value matches at all, greedy and
+   lazy accept precisely the same strings.)
+5. **ABSENT PACK DATA = EXACT PRIOR BEHAVIOUR** — see 2.4.4.
+
+**The conditions under which it CAN false-positive, written down rather than
+implied:**
+
+- **A hero-unit token used rhetorically.** This pack lists the bare magnitude
+  `billion` as a potency unit in its own right (so `"90 Billion"` is a figure),
+  which means `"six billion reasons to feel good"` reads as 6 CFU-family units
+  and is reported. **This is inherited, not introduced:** `"6 billion reasons"`
+  already failed the digit scan, and a test pins the two to behave identically.
+  The condition belongs to the pack's unit list; narrowing it is a pack change,
+  not a gate change.
+- **A word-form figure in the same unit family as `facts.potency` that is
+  genuinely different and genuinely not the product's potency** — for example a
+  competitor figure quoted in first-person copy. That is the same exposure the
+  digit scan has always had; the A+ `comparison.typical` column (the one place
+  a rival's figure legitimately lives) stays exempt, and a test asserts it.
+- **A pack whose `spelledOutNumbers` values are wrong.** The value now matters:
+  a mis-entered `{"fifty": 15}` would fail truthful copy. The words are asserted
+  against the digits in the battery, not merely listed.
+
+Not a false-positive risk, because the bounds forbid it: any sentence in which a
+number word is *not* joined to a hero unit — which is nearly all of them.
+
+#### 2.4.3 Both directions, by test name
+
+`tests/complianceCompletions.test.ts`, all under `C12 reads a SPELLED-OUT hero
+figure (N3)`:
+
+- *"N3 (was a recorded limitation): an overstated potency SPELLED OUT in a
+  bullet now FAILS"* — the exact string this entry used to pin as invisible.
+- *"N3: the word form and the digit form are reported identically"*.
+- *"N3: every surface C12 already reads is covered — description, A+ and
+  attributes"*, and *"N3: the A+ 'typical' column stays exempt"*.
+- *"N3: TRUTHFUL word-form copy PASSES — the compound unit is not read as a
+  magnitude"* — the guard on bound 4.
+- *"N3: magnitude composition matches the digit scan"* (`Five Hundred mg`
+  passes against a 500 mg fact, `Two Thousand mg` fails).
+- *"N3: ordinary supplement prose still PASSES on a customer surface"* — 26
+  lawful phrases, including every phrase named in bound 1.
+- *"N3: a cardinal must LEAD"*, *"N3: the leg requires a HERO unit — count and
+  day figures stay digit-only"* (both directions, word vs digit).
+- *"N3: an ATTRIBUTED word figure is exempt only when the breakdown declares
+  it"*.
+- *"N3: a rhetorical hero-unit token behaves exactly as the digit form already
+  did"* — the inherited condition above, pinned rather than left to be
+  rediscovered as a finding.
+- *"N3: the vocabulary is PACK DATA — emptying it restores the exact prior
+  scan, it does not disarm C12"* and *"N3: ONE vocabulary — the same pack lists
+  drive C24 and C12"*.
+- *"N3: the golden fixture is untouched — still ZERO gate failures"*.
+
+#### 2.4.4 Emptying the pack list NARROWS, it never disarms
+
+Asserted three ways in one test — vocabulary deleted, cardinals emptied, and the
+whole `attributeGuard` block deleted. In every case: the word form goes back to
+passing (**exactly** the pre-N3 behaviour), and the digit failures are asserted
+**equal to the digit failures under the full pack** — so C12 is narrowed to its
+port, never switched off. That is why `spelledOutNumbers` remains deliberately
+NOT a `REQUIRED_PACK_PIECES` row while `rules.attributeGuard` itself still is.
+
+#### 2.4.5 C26's amount stripper, extended in the same commit — the OTHER direction
+
+`c26ActiveIngredientSubset` strips `number + unit` out of an ingredient NAME
+before comparing names, because the amount is a property of the panel and the
+full label list routinely omits it. That stripper was digit-only, so
+`active_ingredients: "Probiotic Blend Fifty Billion CFU"` against
+`ingredients: "… Probiotic Blend …"` was reported as an **undeclared
+ingredient** purely because the amount was spelled out — the digit form of the
+identical label passed. That is over-blocking, which this project treats as
+exactly as severe as a bypass, and N3 would have made it more likely by
+legitimising word-form figures elsewhere. The stripper now uses the same shared
+`spelledOutRunSource`. It is a **tolerance** widener: stripping more can never
+manufacture a bypass, because a "name" consisting only of an amount yields no
+name words and is skipped — exactly as the digit form already was. Both
+directions are tested (*"N3: a SPELLED-OUT amount is stripped from the name…"*
+and *"N3: stripping the amount does NOT hide a genuinely undeclared
+ingredient"*).
+
+#### 2.4.6 What is still NOT done, stated — C10/A5 potency PHRASING
+
+**`potencyPhrasingOver` (C10 on customer copy, A5 on A+) remains
+digit-anchored.** `"Fifty Billion CFU per serving"` therefore still evades the
+*attachment* rule, even though N3 now measures the same string for truth.
+
+Why it was not extended in this commit, rather than left unmentioned:
+
+- **It is a different objection.** C10/A5 do not compare a figure against
+  anything — they object to attaching the hero potency to a single dose,
+  whatever the number is. Extending them creates NEW blocking behaviour on a
+  phrasing rule, which is a flagged addition in its own right and needs its own
+  both-direction battery; it is not a consequence of this one.
+- **The residue is bounded.** An *untrue* word-form per-serving figure is now
+  caught by C12; what still evades is a *true* figure attached to a dose in
+  words. The digit form of the identical sentence still fails.
+- **Structurally it is not free.** The two patterns are built inside
+  `compileUnits`, which is cached on a `UnitRules` object that holds no
+  pack-level guard data, so sharing the vocabulary there means changing the
+  cache key or exposing the alternation sources — a change to a hot path shared
+  by two checks, which is not something to fold into a commit whose point is to
+  be conservative about false positives.
+
+**A future change to this must also change:** the `perServingRe`/`deliversRe`
+construction in `compileUnits`, `potencyPhrasingOver`'s signature, both call
+sites (`c10PotencyPhrasing`, `a5AplusPotencyPhrasing`) and this entry.
+
+#### 2.4.7 The other figure-reading code, examined and declined
+
+| where | decision |
+| --- | --- |
+| `lib/engine/facts.ts` (`extractPotency`, count/day extraction) | **Declined.** It decides what the canonical facts ARE rather than measuring against them; a word-form leg there changes the yardstick, not the check, and it lives in `lib/engine`. `parsePotencyFact` already gives C12 the benefit when a fact arrives in words from anywhere else. |
+| `lib/audit/scoreAgainstPrinciples.ts` | **Declined.** Advisory scoring, not a verdict (`verified` is computed only in `lib/audit/buildAudit.ts`). It calls `extractUnitNumbers` without a reader, so it is byte-for-byte unchanged. |
+| `lib/gate/util.ts` timeframe-claim pattern | **No change needed** — it already reads number words (`in|within|after (\d+|a|an|one|two|…)`), so there is no script asymmetry to close. |
+| C23 (attribute completeness/enums), C31 (bullet format), C4 (length budgets) | **No figure semantics at all** — they count characters, match enums, or test structure. |
+
+**A future change to N3 must also change:** `spelledOutRunSource` /
+`heroUnitSource` / `spelledOutFigureReader` in `lib/gate/checks/shared.ts`, the
+N3 block in `c12FactConsistency`'s header, `AttributeGuardRules` in
+`lib/types.ts`, `rules.attributeGuard.spelledOutNumbers` (+ its `_comment`) in
+`knowledge/rules.json`, and the `N3:` cases in
+`tests/complianceCompletions.test.ts`.
 
 ### 2.5 Unchanged: the WS5.5 panel confirmation
 
@@ -688,7 +876,8 @@ buys a nicer table at the cost of the audit trail.
   hold a certificate
 - kit `C32` (ASCII + AI-tells) → app **`C27`**
 - kit `C24` (dosage-attribute guard) → app **`C24`** — same number, same check,
-  same digit-anchored limitation (item 2)
+  but **not the same value shape**: this app reads a spelled-out figure as well
+  as a digit one, and so does `C12` (item 2, N2/N3)
 
 Anyone reading a kit check number against this repository should use this table
 first.

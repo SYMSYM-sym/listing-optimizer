@@ -417,14 +417,15 @@ export interface AttributeGuardRules {
   /** Which `units.dimensions` keys supply the guarded unit tokens. */
   unitDimensions: string[];
   /**
-   * N2 — the SPELLED-OUT number vocabulary, a FLAGGED DIVERGENCE from the
+   * N2/N3 — the SPELLED-OUT number vocabulary, a FLAGGED DIVERGENCE from the
    * harness kit (see CONFORMANCE-DEVIATIONS.md item 2).
    *
    * The kit's `checkC24` value shape is digit-anchored, so `"50 Billion CFU"`
    * in a dosage-keyed attribute fails and `"Fifty Billion CFU"` passes. The
    * figure is the same assertion in either script, and the attribute is
    * filter-fed either way, so this app now reads both — deliberately, and
-   * recorded, rather than silently.
+   * recorded, rather than silently. N3 extends the SAME lists to C12, whose
+   * digit-anchored scan let the same figure through in customer copy.
    *
    * TWO lists, not one, and the split is the false-positive control:
    *   `cardinals`   — the counting words (one … ninety). A match must BEGIN
@@ -433,14 +434,22 @@ export interface AttributeGuardRules {
    *                   appear AFTER a cardinal, so a bare unit-declaring value
    *                   like "Billion CFU" is not read as a figure.
    *
-   * ABSENT OR EMPTY = EXACT KIT PARITY. The leg is a WIDENER, so emptying it
-   * cannot disarm C24 — it only narrows the check back to the digit-anchored
-   * port. That is why it is deliberately NOT a `REQUIRED_PACK_PIECES` row, on
-   * the same reasoning that excludes `diseaseActionVerbRoots`.
+   * Each word carries its VALUE, because C12 does not merely detect a figure —
+   * it MEASURES one against the canonical facts, so "Fifty Billion CFU" has to
+   * resolve to the same number "50 Billion CFU" does or truthful copy would be
+   * failed. C24 uses only the keys. Keeping the value beside the word is what
+   * makes the two checks share one list instead of a list plus a parallel
+   * table that can drift out of step with it.
+   *
+   * ABSENT OR EMPTY = EXACT KIT PARITY. The leg is a WIDENER on both checks, so
+   * emptying it cannot disarm either — it only narrows them back to the
+   * digit-anchored port. That is why it is deliberately NOT a
+   * `REQUIRED_PACK_PIECES` row, on the same reasoning that excludes
+   * `diseaseActionVerbRoots`.
    */
   spelledOutNumbers?: {
-    cardinals: string[];
-    magnitudes?: string[];
+    cardinals: Record<string, number>;
+    magnitudes?: Record<string, number>;
   };
 }
 

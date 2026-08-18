@@ -6,6 +6,7 @@ import { optimize } from '@/lib/engine/optimize';
 import { normalizeListingTypography, toAsciiTypography } from '@/lib/engine/typography';
 import { buildShipSheet } from '@/lib/export/shipSheet';
 import {
+  c12FactConsistency,
   c17Style,
   c24DosageAttributeGuard,
   c26ActiveIngredientSubset,
@@ -138,8 +139,11 @@ describe('C24 dosage-attribute guard (AM-1)', () => {
     expect(wordFailures).toHaveLength(1);
     expect(wordFailures[0]!.field).toBe('attributes.maximum_dosage');
     expect(idsOf(words)).toContain('C24');
-    // C12 is UNCHANGED and still digit-anchored — this widened C24 only, and
-    // saying so here keeps the two facts from being confused later.
+    // C12 reads the same vocabulary now (N3, below), and it AGREES with this
+    // value: "Fifty Billion CFU" resolves to the same number as the canonical
+    // "50 Billion CFU", so the fact-consistency check is silent and only C24
+    // objects — which is the whole point of C24 existing separately.
+    expect(clean.facts.potency).toBe('50 Billion CFU');
     expect(idsOf(words)).not.toContain('C12');
   });
 
@@ -246,7 +250,7 @@ describe('C24 dosage-attribute guard (AM-1)', () => {
 
   it('N2: emptying just the cardinals is the same as removing the block', () => {
     const kit = clonePack();
-    kit.rules.attributeGuard!.spelledOutNumbers = { cardinals: [], magnitudes: ['billion'] };
+    kit.rules.attributeGuard!.spelledOutNumbers = { cardinals: {}, magnitudes: { billion: 1e9 } };
     const words = mut((x) => {
       x.attributes.maximum_dosage = 'Fifty Billion CFU';
     });
@@ -281,6 +285,322 @@ describe('C24 dosage-attribute guard (AM-1)', () => {
 });
 
 // ===========================================================================
+// C12 — the SPELLED-OUT hero figure (N3)
+// ===========================================================================
+
+/**
+ * ============================================================================
+ * N3 — C12 IS NO LONGER DIGIT-ANCHORED. This closes the limitation N2 recorded.
+ * ============================================================================
+ *
+ * WHAT THE RECORD USED TO SAY. CONFORMANCE-DEVIATIONS.md item 2.4 closed the
+ * C24 half and stated plainly that "C12 is untouched and remains
+ * digit-anchored", because C12's scope is the whole listing rather than one
+ * pack-matched attribute key. The consequence was concrete and worse than the
+ * one N2 fixed: a bullet or description reading "Fifty Billion CFU per serving"
+ * against a different canonical potency was invisible to the gate — an
+ * OVERSTATED POTENCY CLAIM shipping in customer-facing copy, which is the exact
+ * class C12 exists to prevent.
+ *
+ * WHAT CHANGED. C12 now reads the SAME pack vocabulary C24 reads
+ * (`rules.attributeGuard.spelledOutNumbers`), compiled by the SAME function
+ * (`spelledOutRunSource` / `spelledOutFigureReader` in `lib/gate/checks/shared.ts`).
+ * One vocabulary, one compiler, two callers — there is no second copy to drift.
+ *
+ * THE RISK IS OVER-BLOCKING, and it is larger here than it was for C24 because
+ * ordinary supplement prose is full of number words. The bounds asserted below:
+ * a HERO (potency) unit is still required, so count/day/serving language can
+ * never match; a cardinal must lead; the separator is required; and the VALUE
+ * is composed exactly as the digit scan composes it, so TRUTHFUL word-form copy
+ * passes.
+ */
+describe('C12 reads a SPELLED-OUT hero figure (N3)', () => {
+  const wrongPotencyWords = 'Ninety Billion CFU per serving of live cultures';
+  const wrongPotencyDigits = '90 Billion CFU per serving of live cultures';
+
+  it('N3 (was a recorded limitation): an overstated potency SPELLED OUT in a bullet now FAILS', () => {
+    expect(clean.facts.potency).toBe('50 Billion CFU');
+    const words = mut((x) => {
+      x.bullets[0] = wrongPotencyWords;
+    });
+    const failures = c12FactConsistency(words, pack);
+    expect(failures.map((f) => f.field)).toContain('bullets[0]');
+    expect(failures.some((f) => /Ninety Billion CFU/i.test(f.context))).toBe(true);
+    expect(idsOf(words)).toContain('C12');
+  });
+
+  it('N3: the word form and the digit form are reported identically', () => {
+    const words = mut((x) => {
+      x.bullets[0] = wrongPotencyWords;
+    });
+    const digits = mut((x) => {
+      x.bullets[0] = wrongPotencyDigits;
+    });
+    const w = c12FactConsistency(words, pack).filter((f) => f.field === 'bullets[0]');
+    const d = c12FactConsistency(digits, pack).filter((f) => f.field === 'bullets[0]');
+    expect(w).toHaveLength(1);
+    expect(d).toHaveLength(1);
+    expect(w[0]!.checkId).toBe(d[0]!.checkId);
+    // same objection, same canonical fact cited — only the quoted figure
+    // differs, because each message quotes the text it actually read.
+    expect(w[0]!.fix.replace(/'Ninety Billion CFU'/i, "'90 Billion CFU'")).toBe(d[0]!.fix);
+    expect(d[0]!.fix).toContain("facts.potency '50 Billion CFU'");
+  });
+
+  it('N3: every surface C12 already reads is covered — description, A+ and attributes', () => {
+    const cases: [string, (l: OptimizedListing) => void][] = [
+      ['description', (x) => { x.description = `<p>${wrongPotencyWords}</p>`; }],
+      ['aplus.modules[hero].body', (x) => { x.aplusContent!.modules[1]!.body = wrongPotencyWords; }],
+      ['attributes.product_benefit', (x) => { x.attributes.product_benefit = wrongPotencyWords; }],
+      ['qa[0].a', (x) => { x.qa[0]!.a = wrongPotencyWords; }],
+    ];
+    for (const [field, mutate] of cases) {
+      const l = mut(mutate);
+      expect(c12FactConsistency(l, pack).map((f) => f.field), field).toContain(field);
+    }
+  });
+
+  it('N3: the A+ "typical" column stays exempt — those figures are not ours', () => {
+    const l = mut((x) => {
+      x.aplusContent!.comparison!.rows[0]!.typical = wrongPotencyWords;
+    });
+    expect(c12FactConsistency(l, pack)).toEqual([]);
+  });
+
+  /**
+   * THE VALUE MUST COMPOSE EXACTLY AS THE DIGITS DO. "Fifty Billion CFU" is
+   * FIFTY of the compound unit "Billion CFU", not fifty thousand million of
+   * them — the same reading the digit scan gives "50 Billion CFU". A greedy
+   * word run would swallow "Billion" as a MAGNITUDE, report 50,000,000,000 and
+   * fail this truthful bullet. This test is the guard on that.
+   */
+  it('N3: TRUTHFUL word-form copy PASSES — the compound unit is not read as a magnitude', () => {
+    for (const value of [
+      'Fifty Billion CFU per serving',
+      'fifty billion cfu per serving',
+      'Fifty-Billion CFU blend',
+      'A Fifty Billion CFU blend of ten strains',
+    ]) {
+      const l = mut((x) => {
+        x.bullets[0] = value;
+      });
+      expect(c12FactConsistency(l, pack), value).toEqual([]);
+    }
+  });
+
+  it('N3: magnitude composition matches the digit scan', () => {
+    const truthful = mut((x) => {
+      x.facts.potency = '500 mg';
+      x.bullets[0] = 'Five Hundred mg of the botanical blend';
+    });
+    expect(c12FactConsistency(truthful, pack)).toEqual([]);
+    const overstated = mut((x) => {
+      x.facts.potency = '500 mg';
+      x.bullets[0] = 'Two Thousand mg of the botanical blend';
+    });
+    const failures = c12FactConsistency(overstated, pack).filter((f) => f.field === 'bullets[0]');
+    expect(failures).toHaveLength(1);
+    expect(failures[0]!.context).toMatch(/Two Thousand mg/i);
+  });
+
+  /**
+   * THE OTHER DIRECTION, and the one that decides whether this was worth doing.
+   * Over-blocking is treated in this project as exactly as severe as a bypass,
+   * and C12's scope is every customer surface, so ordinary supplement prose is
+   * the real risk. None of these may fail.
+   */
+  it('N3: ordinary supplement prose still PASSES on a customer surface', () => {
+    for (const value of [
+      'one capsule daily',
+      'One Capsule Daily',
+      'two servings',
+      'Two servings per day',
+      'thirty day supply',
+      'Thirty Day Supply',
+      'take one to two capsules',
+      'Take one to two capsules with water',
+      'sixty capsules, one month supply',
+      'one a day',
+      'One a day, every day',
+      'one hundred percent plant based',
+      'One Hundred Percent Plant Based',
+      'ten strains',
+      'Ten strains of live cultures',
+      'a one-time purchase',
+      'A one-time purchase, no subscription needed',
+      'first-time customers',
+      'For first-time customers and long-time users alike',
+      'Twenty four hours of digestive comfort',
+      'Do not exceed two capsules in twenty four hours',
+      'One softgel in the morning and one in the evening',
+      'Ten gummies per pouch',
+      'Three tablets, two times a day',
+      'Sixty vegetable capsules provide a two month supply',
+      'Fifty percent more than the previous size',
+    ]) {
+      const l = mut((x) => {
+        x.bullets[0] = value;
+        x.description = `<p>${value}</p>`;
+      });
+      expect(c12FactConsistency(l, pack), value).toEqual([]);
+    }
+  });
+
+  it('N3: a cardinal must LEAD — a value that merely names its unit is not a figure', () => {
+    for (const value of [
+      'Billion CFU',
+      'Billion CFU per serving',
+      'Million CFU',
+      'Measured in Billion CFU',
+      'CFU per serving',
+    ]) {
+      const l = mut((x) => {
+        x.bullets[0] = value;
+      });
+      expect(c12FactConsistency(l, pack), value).toEqual([]);
+    }
+  });
+
+  /**
+   * THE BOUND THAT KEEPS IT NARROW. The word leg is restricted to the pack's
+   * HERO dimension, so a count or a day figure written in words is deliberately
+   * NOT read — which is exactly why "thirty day supply" and "sixty capsules"
+   * above cannot fail. The digit halves of the same two sentences still fail,
+   * which is what makes this a deliberate narrowing rather than an accident.
+   */
+  it('N3: the leg requires a HERO unit — count and day figures stay digit-only', () => {
+    expect(pack.rules.attributeGuard!.unitDimensions).toEqual(['potency']);
+    expect(clean.facts.unitCount).toBe(60);
+    expect(clean.facts.daySupply).toBe(60);
+    for (const [words, digits] of [
+      ['Ninety Capsules per bottle', '90 Capsules per bottle'],
+      ['A thirty day supply in every bottle', 'A 30 day supply in every bottle'],
+    ]) {
+      const wordListing = mut((x) => {
+        x.bullets[0] = words!;
+      });
+      const digitListing = mut((x) => {
+        x.bullets[0] = digits!;
+      });
+      expect(
+        c12FactConsistency(wordListing, pack).filter((f) => f.field === 'bullets[0]'),
+        words,
+      ).toEqual([]);
+      expect(
+        c12FactConsistency(digitListing, pack).filter((f) => f.field === 'bullets[0]').length,
+        digits,
+      ).toBe(1);
+    }
+  });
+
+  /**
+   * The ingredient breakdown is read with the SAME reader as the copy it
+   * exempts. A one-sided reader would be over-blocking: an attributed word-form
+   * figure would be measured while the word-form declaration that licenses it
+   * stayed invisible.
+   */
+  it('N3: an ATTRIBUTED word figure is exempt only when the breakdown declares it', () => {
+    const undeclared = mut((x) => {
+      x.bullets[0] = 'Bifidobacterium Ten Billion CFU supports regularity';
+    });
+    expect(
+      c12FactConsistency(undeclared, pack).filter((f) => f.field === 'bullets[0]'),
+    ).toHaveLength(1);
+    const declaredInWords = mut((x) => {
+      x.bullets[0] = 'Bifidobacterium Ten Billion CFU supports regularity';
+      x.attributes.active_ingredients = `${x.attributes.active_ingredients}; Bifidobacterium Ten Billion CFU`;
+    });
+    expect(
+      c12FactConsistency(declaredInWords, pack).filter((f) => f.field === 'bullets[0]'),
+    ).toEqual([]);
+  });
+
+  /**
+   * THE PACK-EMPTYING ASSERTION. The reader is a WIDENER: with no vocabulary
+   * the check is byte-for-byte the digit-anchored scan it was before N3 — the
+   * word form goes back to passing and every digit figure is still caught. It
+   * cannot be used to DISARM C12, which is why it is deliberately not a
+   * manifest piece.
+   */
+  it('N3: the vocabulary is PACK DATA — emptying it restores the exact prior scan, it does not disarm C12', () => {
+    const words = mut((x) => {
+      x.bullets[0] = wrongPotencyWords;
+    });
+    const digits = mut((x) => {
+      x.bullets[0] = wrongPotencyDigits;
+    });
+    for (const kit of [
+      (() => {
+        const k = clonePack();
+        delete k.rules.attributeGuard!.spelledOutNumbers;
+        return k;
+      })(),
+      (() => {
+        const k = clonePack();
+        k.rules.attributeGuard!.spelledOutNumbers = { cardinals: {}, magnitudes: { billion: 1e9 } };
+        return k;
+      })(),
+      (() => {
+        const k = clonePack();
+        delete k.rules.attributeGuard;
+        return k;
+      })(),
+    ]) {
+      // the word form passes again — the pre-N3 behaviour, exactly
+      expect(c12FactConsistency(words, kit)).toEqual([]);
+      // ...and the digit leg is UNTOUCHED: C12 is narrowed, never disarmed
+      expect(c12FactConsistency(digits, kit)).toEqual(c12FactConsistency(digits, pack));
+      expect(c12FactConsistency(digits, kit).length).toBeGreaterThan(0);
+      // the golden fixture still passes C12 under the narrowed pack
+      expect(c12FactConsistency(clean, kit)).toEqual([]);
+    }
+  });
+
+  it('N3: ONE vocabulary — the same pack lists drive C24 and C12', () => {
+    const kit = clonePack();
+    delete kit.rules.attributeGuard!.spelledOutNumbers;
+    const attributeValue = mut((x) => {
+      x.attributes.maximum_dosage = 'Fifty Billion CFU';
+    });
+    const copy = mut((x) => {
+      x.bullets[0] = wrongPotencyWords;
+    });
+    // full pack: both checks read the words
+    expect(c24DosageAttributeGuard(attributeValue, pack)).toHaveLength(1);
+    expect(c12FactConsistency(copy, pack).length).toBeGreaterThan(0);
+    // emptied: BOTH fall back together, which is what "one source" means
+    expect(c24DosageAttributeGuard(attributeValue, kit)).toEqual([]);
+    expect(c12FactConsistency(copy, kit)).toEqual([]);
+  });
+
+  /**
+   * A STATED, INHERITED CONDITION — not a new one. The pack lists a bare
+   * magnitude token as a hero unit in its own right, so rhetorical copy that
+   * borrows it ("six billion reasons") reads as a figure. That was ALREADY true
+   * of the digit scan; the word leg inherits it rather than introducing it, and
+   * the two are asserted to behave identically so the property stays visible.
+   * CONFORMANCE-DEVIATIONS.md item 2 records it as a false-positive condition.
+   */
+  it('N3: a rhetorical hero-unit token behaves exactly as the digit form already did', () => {
+    const words = mut((x) => {
+      x.bullets[0] = 'Six billion reasons to feel good every day';
+    });
+    const digits = mut((x) => {
+      x.bullets[0] = '6 billion reasons to feel good every day';
+    });
+    const w = c12FactConsistency(words, pack).filter((f) => f.field === 'bullets[0]');
+    const d = c12FactConsistency(digits, pack).filter((f) => f.field === 'bullets[0]');
+    expect(w).toHaveLength(1);
+    expect(d).toHaveLength(1);
+  });
+
+  it('N3: the golden fixture is untouched — still ZERO gate failures', () => {
+    expect(c12FactConsistency(clean, pack)).toEqual([]);
+    expect(runGate(clean, pack, ctx).failures).toEqual([]);
+  });
+});
+
+// ===========================================================================
 // C26 — active_ingredients ⊆ ingredients
 // ===========================================================================
 
@@ -288,6 +608,35 @@ describe('C26 active ingredients are a subset of the full label list', () => {
   it('PASSES the compliant fixture', () => {
     expect(c26ActiveIngredientSubset(clean, pack)).toEqual([]);
     expect(idsOf(clean)).not.toContain('C26');
+  });
+
+  /**
+   * N3 — the amount stripper reads WORDS as well as digits, through the same
+   * shared vocabulary. Without this the identical label failed or passed purely
+   * on which script its amount was written in, which is over-blocking: the
+   * amount is a property of the panel, never part of the ingredient's NAME.
+   */
+  it('N3: a SPELLED-OUT amount is stripped from the name, exactly like a digit amount', () => {
+    const words = mut((x) => {
+      x.attributes.active_ingredients = 'Probiotic Blend Fifty Billion CFU';
+      x.attributes.ingredients = 'Vegetable Cellulose Capsule; Rice Flour; Probiotic Blend';
+    });
+    const digits = mut((x) => {
+      x.attributes.active_ingredients = 'Probiotic Blend 50 Billion CFU';
+      x.attributes.ingredients = 'Vegetable Cellulose Capsule; Rice Flour; Probiotic Blend';
+    });
+    expect(c26ActiveIngredientSubset(digits, pack)).toEqual([]);
+    expect(c26ActiveIngredientSubset(words, pack)).toEqual([]);
+  });
+
+  it('N3: stripping the amount does NOT hide a genuinely undeclared ingredient', () => {
+    const l = mut((x) => {
+      x.attributes.active_ingredients = 'Ashwagandha Root Five Hundred mg';
+      x.attributes.ingredients = 'Vegetable Cellulose Capsule; Rice Flour; Probiotic Blend';
+    });
+    const failures = c26ActiveIngredientSubset(l, pack);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]!.context).toContain('Ashwagandha');
   });
 
   it('PASSES across case, punctuation, ordering and amount differences', () => {

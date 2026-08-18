@@ -1,6 +1,6 @@
 import type { AttributeField, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { presentAllergens } from './c-quality';
-import { fail } from './shared';
+import { fail, heroUnitSource, spelledOutRunSource } from './shared';
 
 /**
  * C23 — ATTRIBUTE DISCIPLINE (pack-driven; the schema is
@@ -214,10 +214,8 @@ export function c24DosageAttributeGuard(l: OptimizedListing, pack: KnowledgePack
   const guard = pack.rules?.attributeGuard;
   const keyPattern = guard?.keyPattern?.trim();
   if (!keyPattern) return [];
-  const units = (guard?.unitDimensions ?? []).flatMap(
-    (dim) => pack.rules?.units?.dimensions?.[dim] ?? [],
-  );
-  const unitSource = alternation(units);
+  // The hero-unit alternation is built by the SAME shared function C12 uses.
+  const unitSource = heroUnitSource(pack.rules?.units, guard);
   if (!unitSource) return [];
   let keyRe: RegExp;
   try {
@@ -228,17 +226,13 @@ export function c24DosageAttributeGuard(l: OptimizedListing, pack: KnowledgePack
   // number (with separators) followed by a hero unit — the kit's value shape.
   const valueRes: RegExp[] = [new RegExp(`\\d[\\d,.]*\\s*(?:${unitSource})\\b`, 'i')];
   // N2 — the same shape written in words. Pack data; nothing below names a
-  // number word. See the header for the five bounds that keep it narrow.
-  const cardinalSource = alternation(guard?.spelledOutNumbers?.cardinals ?? []);
-  if (cardinalSource) {
-    const magnitudeSource = alternation(guard?.spelledOutNumbers?.magnitudes ?? []);
-    const anyWord = magnitudeSource ? `${cardinalSource}|${magnitudeSource}` : cardinalSource;
-    valueRes.push(
-      new RegExp(
-        `\\b(?:${cardinalSource})(?:[\\s-]+(?:${anyWord}))*[\\s-]+(?:${unitSource})\\b`,
-        'i',
-      ),
-    );
+  // number word. See the header for the five bounds that keep it narrow. The
+  // run pattern is compiled by `spelledOutRunSource` in `./shared`, which is
+  // the SINGLE place the pack vocabulary becomes a pattern — C12 reads the
+  // same lists through the same function (CONFORMANCE-DEVIATIONS.md item 2).
+  const runSource = spelledOutRunSource(guard?.spelledOutNumbers);
+  if (runSource) {
+    valueRes.push(new RegExp(`\\b(?:${runSource})[\\s-]+(?:${unitSource})\\b`, 'i'));
   }
   const out: Failure[] = [];
   for (const [key, value] of Object.entries(l.attributes ?? {})) {
@@ -290,11 +284,31 @@ function nameWords(token: string, amountRe: RegExp | null): string[] {
   ];
 }
 
-/** `number + pack unit` sequences, longest unit first. Null when the pack declares none. */
+/**
+ * `number + pack unit` sequences, longest unit first. Null when the pack
+ * declares none.
+ *
+ * N3 — the SPELLED-OUT form is stripped too, through the same shared compiler
+ * (`spelledOutRunSource`) and the same pack lists C24 and C12 read. This leg is
+ * a TOLERANCE widener, the opposite direction from the other two: an amount
+ * left standing in an active's name becomes a required NAME WORD, so
+ * `active_ingredients: "Probiotic Blend Fifty Billion CFU"` against
+ * `ingredients: "... Probiotic Blend ..."` was reported as an undeclared
+ * ingredient purely because the amount was written in words — the digit form of
+ * the identical label passed. That is over-blocking, which this project treats
+ * as exactly as severe as a bypass, and it would have become MORE likely once
+ * C12 started accepting word-form figures elsewhere. Stripping more can never
+ * manufacture a bypass here: a "name" made only of an amount yields no name
+ * words at all and is skipped, exactly as the digit form already is.
+ */
 function amountPattern(pack: KnowledgePack): RegExp | null {
   const units = Object.values(pack.rules?.units?.dimensions ?? {}).flat();
   const source = alternation(units);
-  return source ? new RegExp(`\\d[\\d,.]*\\s*(?:${source})\\b`, 'gi') : null;
+  if (!source) return null;
+  const digits = `\\d[\\d,.]*\\s*(?:${source})\\b`;
+  const runSource = spelledOutRunSource(pack.rules?.attributeGuard?.spelledOutNumbers);
+  if (!runSource) return new RegExp(digits, 'gi');
+  return new RegExp(`${digits}|\\b(?:${runSource})[\\s-]+(?:${source})\\b`, 'gi');
 }
 
 /** Split a multivalue attribute into its declared entries. */

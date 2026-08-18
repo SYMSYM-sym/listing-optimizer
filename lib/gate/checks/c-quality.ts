@@ -8,6 +8,7 @@ import {
   factConsistencyOver,
   fictionOver,
   potencyPhrasingOver,
+  spelledOutFigureReader,
 } from './shared';
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -185,6 +186,39 @@ export function c11FictionPhrases(l: OptimizedListing, pack: KnowledgePack): Fai
  * EVERY first-person surface: customer copy, A+ content and attribute values.
  * The scan stays unit-anchored, so bare numbers ("10 strains", "3774321") are
  * ignored; only figures carrying a pack unit are measured.
+ *
+ * ---------------------------------------------------------------------------
+ * N3 — FLAGGED DIVERGENCE FROM THE KIT: a SPELLED-OUT hero figure is read too.
+ * ---------------------------------------------------------------------------
+ * The kit's scan — and this port, until now — was DIGIT-anchored, so a bullet
+ * reading "Fifty Billion CFU per serving" against a different canonical potency
+ * was invisible: an overstated potency claim shipping in customer-facing copy,
+ * which is the exact class C12 exists to prevent. CONFORMANCE-DEVIATIONS.md
+ * item 2 recorded that as a remaining limitation when C24 was widened; it is
+ * now closed, as a flagged addition, and item 2 says so.
+ *
+ * The vocabulary is the SAME PACK DATA C24 uses
+ * (`rules.attributeGuard.spelledOutNumbers`) compiled by the SAME function
+ * (`spelledOutFigureReader` / `spelledOutRunSource` in `./shared`) — one source
+ * of truth, no second copy, and no number word anywhere in `lib/gate`.
+ *
+ * THE FALSE-POSITIVE CONTROL. C12's scope is the whole listing rather than one
+ * pack-matched attribute key, so ordinary supplement prose is the real risk:
+ *   1. A HERO UNIT IS STILL REQUIRED, and the hero dimension is pack data
+ *      (`attributeGuard.unitDimensions`, i.e. potency). "one capsule daily",
+ *      "two servings", "thirty day supply", "sixty capsules", "ten strains"
+ *      and "one hundred percent plant based" name a dosage form, a serving, a
+ *      day, a container count and no unit at all — none of them a hero unit —
+ *      so a bare number word can never trip this leg. Count and day figures
+ *      stay digit-only.
+ *   2. A CARDINAL MUST LEAD, so "Billion CFU" is not read as a figure.
+ *   3. THE SEPARATOR IS REQUIRED and both sides are word-bounded.
+ *   4. THE VALUE IS COMPOSED THE SAME WAY THE DIGITS ARE — "Fifty Billion CFU"
+ *      is fifty of the compound unit, exactly as "50 Billion CFU" is, so
+ *      TRUTHFUL word-form copy passes.
+ *   5. ABSENT PACK DATA = EXACT PRIOR BEHAVIOUR. The reader is a widener:
+ *      emptying the lists narrows C12 back to the digit-anchored scan, it
+ *      never disarms it.
  */
 export function c12FactConsistency(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const surfaces = [
@@ -201,5 +235,6 @@ export function c12FactConsistency(l: OptimizedListing, pack: KnowledgePack): Fa
     pack.rules.units,
     'C12',
     pack.compliancePack?.ingredientAttributeKeys,
+    spelledOutFigureReader(pack.rules.units, pack.rules.attributeGuard),
   );
 }

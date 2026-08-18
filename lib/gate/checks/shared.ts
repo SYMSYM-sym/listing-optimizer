@@ -1,5 +1,6 @@
 import type {
   AplusContent,
+  AttributeGuardRules,
   CompliancePack,
   Failure,
   OptimizedListing,
@@ -468,6 +469,169 @@ export function fictionOver(surfaces: [string, string][], cp: CompliancePack, ch
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// SPELLED-OUT figures — ONE vocabulary, shared by C24 and C12.
+//
+// The number words are PACK DATA (`rules.attributeGuard.spelledOutNumbers`),
+// so nothing below names a number word, a magnitude or a unit. Everything that
+// compiles that vocabulary into a pattern lives HERE and nowhere else: C24
+// (`c24DosageAttributeGuard`) and C12 (`factConsistencyOver`) both read it
+// through these two functions, so there is exactly one place a future change
+// has to be made. See CONFORMANCE-DEVIATIONS.md item 2.
+// ---------------------------------------------------------------------------
+
+/**
+ * The regex SOURCE for a run of number WORDS ("fifty", "twenty-five",
+ * "two thousand"). `null` when the pack ships no cardinals — the callers then
+ * keep their exact digit-anchored behaviour.
+ *
+ * TWO lists, and the split IS the false-positive control: a run must BEGIN
+ * with a cardinal, and a magnitude may only appear after one, so a string that
+ * merely names its unit ("Billion CFU") is never read as a figure.
+ *
+ * The trailing quantifier is LAZY on purpose. The callers append
+ * `[\s-]+(?:<unit alternation>)` to this source, and the unit alternation is
+ * longest-first, so "Fifty Billion CFU" must be read as the figure `fifty`
+ * carrying the compound unit `billion cfu` — exactly as the digit scan reads
+ * "50 Billion CFU". A greedy run would instead swallow "billion" as a
+ * MAGNITUDE and report 50,000,000,000 CFU, which would fail truthful copy.
+ * (For C24, which only asks whether the value matches at all, greedy and lazy
+ * accept precisely the same strings; the split only matters to C12.)
+ */
+export function spelledOutRunSource(
+  vocabulary: AttributeGuardRules['spelledOutNumbers'] | undefined,
+): string | null {
+  const cardinals = alternationSource(Object.keys(vocabulary?.cardinals ?? {}));
+  if (!cardinals) return null;
+  const magnitudes = alternationSource(Object.keys(vocabulary?.magnitudes ?? {}));
+  const anyWord = magnitudes ? `${cardinals}|${magnitudes}` : cardinals;
+  return `(?:${cardinals})(?:[\\s-]+(?:${anyWord}))*?`;
+}
+
+/**
+ * The HERO unit alternation — the tokens of every `units.dimensions` list the
+ * pack's attribute guard names (`unitDimensions`, i.e. the potency dimension on
+ * the shipped packs). Empty string when the pack names none.
+ *
+ * This is the bound that keeps the word leg narrow on BOTH checks: a number
+ * word can only be read as a figure when it is joined to one of these, so
+ * "one capsule daily", "two servings", "sixty capsules" and "thirty day
+ * supply" name a dosage form, a serving, a container count and a day — none of
+ * them a hero unit — and cannot match however the number is written.
+ */
+export function heroUnitSource(
+  units: UnitRules | undefined,
+  guard: AttributeGuardRules | undefined,
+): string {
+  const tokens = (guard?.unitDimensions ?? []).flatMap(
+    (dimension) => units?.dimensions?.[dimension] ?? [],
+  );
+  return alternationSource(tokens);
+}
+
+/** Reads word-form hero figures out of a text. */
+export interface SpelledOutFigureReader {
+  read(text: string): UnitNumber[];
+}
+
+/**
+ * Compose the numeric VALUE of a number-word run, or `null` when the run does
+ * not compose into one. Ordinary English composition: cardinals add, `hundred`
+ * multiplies what is in hand, the larger magnitudes close a group off.
+ *
+ * A magnitude that follows no cardinal returns `null` rather than a value —
+ * the pattern already refuses to start a run on one, and this keeps the two
+ * halves from disagreeing if the pattern is ever loosened.
+ */
+function composeSpelledValue(
+  run: string,
+  cardinals: Map<string, number>,
+  magnitudes: Map<string, number>,
+): number | null {
+  let total = 0;
+  let current = 0;
+  let sawWord = false;
+  for (const token of run.toLowerCase().split(/[\s-]+/)) {
+    if (!token) continue;
+    const cardinal = cardinals.get(token);
+    if (cardinal !== undefined) {
+      current += cardinal;
+      sawWord = true;
+      continue;
+    }
+    const magnitude = magnitudes.get(token);
+    if (magnitude === undefined || current === 0) return null;
+    if (magnitude >= 1000) {
+      total += current * magnitude;
+      current = 0;
+    } else {
+      current *= magnitude;
+    }
+    sawWord = true;
+  }
+  const value = total + current;
+  return sawWord && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/** Pack tokens -> a value map, ignoring anything that is not a real number. */
+function valueMap(entries: Record<string, number> | undefined): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const [word, value] of Object.entries(entries ?? {})) {
+    const key = word.trim().toLowerCase();
+    if (key && typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      out.set(key, value);
+    }
+  }
+  return out;
+}
+
+/**
+ * Build the word-form figure reader for a pack, or `null` when the pack ships
+ * no vocabulary / no hero unit. `null` is the DIGIT-ANCHORED behaviour: every
+ * caller treats an absent reader as "scan digits only", so emptying the pack
+ * lists is a narrowing back to kit parity and can never disarm a check.
+ */
+export function spelledOutFigureReader(
+  units: UnitRules | undefined,
+  guard: AttributeGuardRules | undefined,
+): SpelledOutFigureReader | null {
+  if (!units) return null;
+  const runSource = spelledOutRunSource(guard?.spelledOutNumbers);
+  if (!runSource) return null;
+  const unitSource = heroUnitSource(units, guard);
+  if (!unitSource) return null;
+  const cardinals = valueMap(guard?.spelledOutNumbers?.cardinals);
+  if (cardinals.size === 0) return null;
+  const magnitudes = valueMap(guard?.spelledOutNumbers?.magnitudes);
+  // The separator is REQUIRED and both sides are word-bounded, so "ten
+  // gummies" can never be read as "ten g".
+  const re = new RegExp(`\\b(${runSource})[\\s-]+(${unitSource})\\b`, 'gi');
+  const { dimensionOf } = compileUnits(units);
+  return {
+    read(text: string): UnitNumber[] {
+      const out: UnitNumber[] = [];
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        if (m[0].length === 0) {
+          re.lastIndex += 1;
+          continue;
+        }
+        const runText = m[1];
+        const unitStr = m[2];
+        if (!runText || !unitStr) continue;
+        const value = composeSpelledValue(runText, cardinals, magnitudes);
+        if (value === null) continue;
+        const unit = unitStr.toLowerCase().replace(/\s+/g, ' ');
+        const dimension = dimensionOf.get(unit);
+        if (!dimension) continue;
+        out.push({ value, unit, dimension, raw: m[0], index: m.index });
+      }
+      return out;
+    },
+  };
+}
+
 export interface UnitNumber {
   value: number;
   unit: string;
@@ -476,7 +640,11 @@ export interface UnitNumber {
   index: number;
 }
 
-export function extractUnitNumbers(text: string, units: UnitRules): UnitNumber[] {
+export function extractUnitNumbers(
+  text: string,
+  units: UnitRules,
+  spelledOut?: SpelledOutFigureReader | null,
+): UnitNumber[] {
   const { unitRe, dimensionOf } = compileUnits(units);
   const out: UnitNumber[] = [];
   unitRe.lastIndex = 0;
@@ -495,6 +663,13 @@ export function extractUnitNumbers(text: string, units: UnitRules): UnitNumber[]
       raw: m[0],
       index: m.index,
     });
+  }
+  // N3 — the same figures written in WORDS. Absent a reader (no pack
+  // vocabulary, or a caller that deliberately does not pass one) this is a
+  // no-op and the function is exactly the digit-anchored scan it always was.
+  if (spelledOut) {
+    out.push(...spelledOut.read(text));
+    out.sort((a, b) => a.index - b.index);
   }
   return out;
 }
@@ -605,17 +780,30 @@ export function declaredFigures(
   l: OptimizedListing,
   keys: string[] | undefined,
   units: UnitRules,
+  spelledOut?: SpelledOutFigureReader | null,
 ): UnitNumber[] | null {
   const list = arr<string>(keys).map((k) => String(k ?? '').trim()).filter(Boolean);
   if (list.length === 0) return null;
   const attrs = l.attributes ?? {};
   const text = list.map((k) => normalize(attrs[k] ?? '')).join(' ; ');
-  return extractUnitNumbers(text, units);
+  // N3: the breakdown is read with the SAME reader as the copy it exempts. A
+  // one-sided reader would be over-blocking — a word-form figure in the copy
+  // would be measured while the word-form declaration that licenses it stayed
+  // invisible.
+  return extractUnitNumbers(text, units, spelledOut);
 }
 
-function parsePotencyFact(potency: string | undefined, units: UnitRules): UnitNumber | null {
+function parsePotencyFact(
+  potency: string | undefined,
+  units: UnitRules,
+  spelledOut?: SpelledOutFigureReader | null,
+): UnitNumber | null {
   if (!potency) return null;
-  const nums = extractUnitNumbers(potency, units).filter((n) => n.dimension === 'potency');
+  // N3: same reader again. A canonical fact written in words used to parse to
+  // nothing, which switched the potency comparison OFF for the whole listing.
+  const nums = extractUnitNumbers(potency, units, spelledOut).filter(
+    (n) => n.dimension === 'potency',
+  );
   return nums[0] ?? null;
 }
 
@@ -625,10 +813,11 @@ export function factConsistencyOver(
   units: UnitRules,
   checkId: string,
   ingredientAttributeKeys?: string[],
+  spelledOut?: SpelledOutFigureReader | null,
 ): Failure[] {
   const { familyOf } = compileUnits(units);
   const family = (unit: string): string => familyOf.get(unit) ?? unit;
-  const declared = declaredFigures(l, ingredientAttributeKeys, units);
+  const declared = declaredFigures(l, ingredientAttributeKeys, units, spelledOut);
   /**
    * An attributed figure is EXEMPT only when it is genuinely declared: the same
    * number, in the same unit family, in one of the ingredient attributes. When
@@ -640,7 +829,7 @@ export function factConsistencyOver(
     declared.some((d) => d.value === n.value && family(d.unit) === family(n.unit));
   const out: Failure[] = [];
   const facts = l.facts ?? {};
-  const potencyFact = parsePotencyFact(facts.potency, units);
+  const potencyFact = parsePotencyFact(facts.potency, units, spelledOut);
   /**
    * The canonical COUNT facts that are actually DEFINED.
    *
@@ -665,6 +854,10 @@ export function factConsistencyOver(
    */
   const canonicalCounts = new Set<number>(
     [facts.unitCount, facts.servings, facts.daySupply,
+      // Deliberately NOT read with the word reader: every value extracted here
+      // lands in the COUNT allow-set regardless of its dimension, so feeding it
+      // hero (potency) figures would widen what a count figure may claim. The
+      // word leg is a hero-unit leg; it has no business in the count set.
       ...(facts.servingSize ? extractUnitNumbers(facts.servingSize, units).map((n) => n.value) : []),
     ].filter((n): n is number => typeof n === 'number'),
   );
@@ -689,7 +882,7 @@ export function factConsistencyOver(
 
   for (const [field, textRaw] of surfaces) {
     const text = normalize(textRaw);
-    const nums = extractUnitNumbers(text, units);
+    const nums = extractUnitNumbers(text, units, spelledOut);
 
     if (potencyFact) {
       const sameUnit = nums.filter(
