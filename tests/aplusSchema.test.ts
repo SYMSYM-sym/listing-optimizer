@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { aplusGroupSchema } from '@/lib/engine/schemas';
+import { aplusPrompt } from '@/lib/engine/prompts/aplus';
+import { loadPack } from '@/lib/knowledge/loadPack';
 
 const baseFaq = [
   { q: 'How many CFU?', a: 'A 50 Billion CFU blend of 10 strains.', claimBearing: false },
@@ -91,5 +93,84 @@ describe('aplusGroupSchema headline requirement', () => {
       faq: baseFaq,
     });
     expect(result.success).toBe(true);
+  });
+});
+
+// ===========================================================================
+// AC-G4(b) — AM-10c's m7-CLOSE module: the SCOPE, pinned
+// ===========================================================================
+
+/**
+ * AM-10c specifies A+ as m1–m5 + an m7-close + FAQ. The shipped scope is five
+ * required ids, 5–7 modules, comparison and FAQ — no close module is required
+ * and none is checked. That is a DELIBERATE scope call, argued in
+ * `CONFORMANCE-DEVIATIONS.md` §16.3: an obligation without a check is prose, a
+ * close module's natural content is the prohibited-marketing family C19/A8 ban,
+ * and the close's job is already done by two blocks the schema DOES check.
+ *
+ * These cases pin the scope so a future reversal has to change them on purpose,
+ * and so the record's claims about the shipped bounds stay true.
+ */
+describe('AC-G4(b) — the A+ scope AM-10c is measured against', () => {
+  const pack = loadPack('supplements');
+
+  it('the pack requires exactly the five ids, and no close among them', () => {
+    expect(pack.rules.aplusModuleIds).toEqual([
+      'brand-story',
+      'hero',
+      'ingredients',
+      'how-to-use',
+      'who-its-for',
+    ]);
+  });
+
+  it('the 5–7 range leaves the close OPTIONAL — a sixth module is accepted', () => {
+    const withClose = [
+      ...modulesWith(),
+      {
+        id: 'close',
+        headline: 'In Short',
+        body: 'A shelf-stable daily probiotic built around a documented strain blend and a simple routine.',
+        claimBearing: false,
+      },
+    ];
+    expect(
+      aplusGroupSchema.safeParse({ modules: withClose, comparison: baseComparison, faq: baseFaq }).success,
+    ).toBe(true);
+  });
+
+  it('...and its ABSENCE is accepted too — five modules validate', () => {
+    expect(
+      aplusGroupSchema.safeParse({ modules: modulesWith(), comparison: baseComparison, faq: baseFaq }).success,
+    ).toBe(true);
+  });
+
+  it('the two blocks that DO the close\'s job are the ones the schema checks', () => {
+    // Fewer than three comparison rows, and fewer than five FAQ pairs, both fail
+    // — which is the argument in §16.3 stated as a test: the checked blocks
+    // carry differentiation and objection handling.
+    expect(
+      aplusGroupSchema.safeParse({
+        modules: modulesWith(),
+        comparison: { rows: baseComparison.rows.slice(0, 2) },
+        faq: baseFaq,
+      }).success,
+    ).toBe(false);
+    expect(
+      aplusGroupSchema.safeParse({
+        modules: modulesWith(),
+        comparison: baseComparison,
+        faq: baseFaq.slice(0, 4),
+      }).success,
+    ).toBe(false);
+  });
+
+  it('the prompt renders the required ids FROM the pack list — adding a close id is a data edit', () => {
+    const text = aplusPrompt(
+      { title: 'A probiotic', bullets: [], description: '', attributes: {} } as never,
+      pack,
+    );
+    for (const id of pack.rules.aplusModuleIds) expect(text).toContain(id);
+    expect(text).toContain('5–7 modules');
   });
 });

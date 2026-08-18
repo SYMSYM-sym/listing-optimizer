@@ -39,7 +39,10 @@ describe('supplements pack population', () => {
   const pack = loadPack('supplements');
   it('wires all compiled JSON artifacts', () => {
     expect(pack.compliancePack).not.toBeNull();
-    expect(pack.attributeSchema.length).toBe(39); // 35 generated + 4 operator-owned (WS2)
+    // 34 generated + 6 operator-owned. AC-G4(a) added `launch_date` and
+    // corrected this comment: the split was written as "35 + 4" and was "34 + 5".
+    expect(pack.attributeSchema.filter((f) => f.source === 'operator')).toHaveLength(6);
+    expect(pack.attributeSchema.length).toBe(40);
     expect(pack.principles.length).toBe(16);
   });
   it('diseaseNounsBySubcategory keys match subcategoryKeywords keys', () => {

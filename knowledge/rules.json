@@ -463,11 +463,23 @@
         "ranking claim"
       ],
       [
-        "\\b\\d(?:\\.\\d)?\\s*[- ]?star\\b",
+        "\\b\\d(?:\\.\\d)?\\s*[- ]?stars?\\b",
+        "star-rating claim"
+      ],
+      [
+        "\\b{{numberWord}}[\\s-]?stars?\\s+(?:rating|ratings|rated|review|reviews|average)\\b",
+        "star-rating claim"
+      ],
+      [
+        "\\brated\\s+{{numberWord}}[\\s-]?stars?\\b",
         "star-rating claim"
       ],
       [
         "\\b[\\d,]+\\+?\\s*(?:customer\\s+)?reviews\\b",
+        "review-count claim"
+      ],
+      [
+        "\\b{{numberWord}}\\+?\\s*(?:customer\\s+)?reviews\\b",
         "review-count claim"
       ],
       [
@@ -505,8 +517,21 @@
       [
         "\\bclinically\\s+studied\\b",
         "study-endorsement claim"
+      ],
+      [
+        "\\bamazon(?:'s|s)?\\s+choice\\b",
+        "marketplace badge claim"
+      ],
+      [
+        "\\beditor(?:'s|s)?\\s+choice\\b",
+        "award/ranking claim"
+      ],
+      [
+        "\\b(?:prime\\s+day|lightning\\s+deal|deal\\s+of\\s+the\\s+day)\\b",
+        "promotional-event claim"
       ]
     ],
+    "_ratingBadgeNote": "AC-G1 - three claims an independent acceptance audit ran through real runGate and got ZERO failures on. (1) PLURAL star ratings: the pattern was `star\\b`, so 'Rated 4.8 star' failed and 'Rated 4.8 stars' shipped. Now `stars?`. (2) WORD-FORM ratings and review counts: 'Over 4000 five star reviews' and 'Over four thousand five star reviews' matched neither the digit star pattern nor the digit review-count pattern, because 'star reviews' is not 'reviews' and 'four thousand' is not `[\\d,]+`. The word-form leg reuses the pack's EXISTING number vocabulary through the `{{numberWord}}` macro (attributeGuard.spelledOutNumbers, compiled by spelledOutRunSource and substituted by prohibitedMarketingPatterns in lib/gate/checks/shared.ts) rather than forking an alternation of number words into this list. (3) MARKETPLACE BADGES: 'Amazon's Choice' matched no pattern and was in no ban list. Its siblings were checked too and most were ALREADY covered - 'Best Seller badge' by `best[- ]?sell(?:er|ing)`, '#1 New Release' by `#\\s?1` - so only the genuinely uncovered ones were added: the Amazon badge, 'Editor's Choice', and the three Amazon deal-event names. OVER-BLOCKING IS THE CONSTRAINT HERE, because 'star' and 'review' are ordinary words in lawful supplement copy. That is why the word-form star pattern is CONTEXT-ANCHORED on both sides ('rated <word> stars' / '<word> star review|rating|average') instead of matching a bare '<word> star': 'five star anise' is an ingredient, 'star ingredient' and 'the star of the formula' are ordinary prose, and 'our review process', 'peer-reviewed research', 'third-party reviewed' and 'reviewed by a nutritionist' contain no count at all. tests/prohibitedMarketing.badges.gate.test.ts pins BOTH directions through runGate, on the supplements AND the cosmetics pack - these patterns live in rules.json, which every category pack shares, so cosmetics needed no separate edit. NOT a REQUIRED_PACK_PIECE beyond the row that already exists: `rules.prohibitedMarketing.patterns` is already listed, and the number vocabulary the macro reads is deliberately not (emptying it withdraws the word leg and restores exact digit-anchored behaviour - a narrowing, never a bypass).",
     "_studyEndorsementNote": "The label above used to carry its own rationale inline: 'borderline: legitimate when substantiated, banned here because Amazon treats unsubstantiated clinical framing as a prohibited claim'. Every prohibited-marketing LABEL is rendered verbatim into the generation prompt, so that sentence put an abnormality marker AND a therapeutic verb inside an instruction the model paraphrases (tests/promptHygiene.test.ts). The rationale is unchanged and lives here; the label is the short name.",
     "surfaces": [
       "title",

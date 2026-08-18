@@ -405,6 +405,17 @@
       "pendingTemplateConfirm": true
     },
     {
+      "field": "launch_date",
+      "label": "Launch Date",
+      "filterFacet": false,
+      "required": false,
+      "valueType": "string",
+      "example": "[LAUNCH-DATE]",
+      "source": "operator",
+      "note": "Operator-owned. WS2.1 named a launch date alongside price/GTIN/SKU and the schema had no field for it. It is an OFFER fact, not a product-copy fact: the date the seller wants the ASIN to become buyable is held in the seller account, the app cannot read it from a detail page, and a date this tool invented would be a wrong date on a live listing for exactly the reason an invented price is. Same treatment as the other four operator fields in consequence: withheld from the attributes prompt, deleted from generated output if the model volunteers one, and exempt from C23 completeness — so adding it can never fail a run that would otherwise pass.",
+      "pendingTemplateConfirm": true
+    },
+    {
       "field": "condition_type",
       "label": "Condition",
       "filterFacet": false,

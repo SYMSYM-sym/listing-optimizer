@@ -42,7 +42,8 @@ agency template's competitor name survives.
 (`aspect`, `shots[]`, `onScreenText[]`, `notes`); `video` is registered in
 `knowledge/rules.json` → `keywordRules.visibleSurfaces` so the vocabulary stays
 pack-driven. `tests/keywordPlacement.surfaces.test.ts` holds every leg in both
-directions — **12 of its 18 cases** fail against the pre-fix reader.
+directions — **12 of the 18 cases the fix shipped** fail against the pre-fix
+reader.
 
 > **CORRECTED (M2, re-measured).** This said **14**. Reconstructing the pre-fix
 > reader on the current tree — `aplusText` stops reading `bannerAltText`, and
@@ -51,6 +52,13 @@ directions — **12 of its 18 cases** fail against the pre-fix reader.
 > tree that no longer exists in isolation (items 6, 7 and 10 have since added
 > legs to C28), so the honest record is the number a reader can reproduce today
 > by the method just stated, not a number nobody can check.
+>
+> **RE-MEASURED AGAIN (AC-G3).** §1.4 added six cases to that file, so it now
+> holds **24**, and the same method now gives **13 failed, 11 passed of 24**.
+> Five of the six new cases exercise `images`, which F1 did not change, and pass
+> either way; the sixth asserts the pack vocabulary contains `video` and is
+> therefore one more case the reconstruction fails. The F1-era number is
+> unchanged and is stated as such above.
 
 **The record is corrected here rather than in the old commit message**, which is
 immutable. The lesson is kept deliberately: *a coverage claim belongs in a test,
@@ -438,6 +446,76 @@ tables of `tests/p1.fieldClosure.oracle.test.ts`.
 > shape as every other defect in this record. §12.1 derives the enrolment from
 > the codebase instead, and the derivation immediately found three readers the
 > hand list had missed.
+
+### 1.4 AM-10d IS SUPERSEDED BY F1 — recorded here, because it was superseded in code and nowhere else.
+
+**THE AMENDMENT.** The game plan's **AM-10d** rules on where keyword placement
+is measured, and it excludes the visual surfaces:
+
+> **AM-10d** — image/video ALT text is **NOT** a keyword-placement surface.
+
+**THE SHIPPED BEHAVIOUR CONTRADICTS IT.** `knowledge/rules.json` →
+`keywordRules.visibleSurfaces` lists `images` and `video`, so C28 resolves both
+(`keywordSurfaceText` in `lib/gate/checks/c-keywords.ts` reads every image
+slot's `purpose`/`spec`/`notes`/`altText`, and every string field of the video
+brief), and a keyword row may be **declared placed** on either of them.
+
+**THE TWO HALVES ARRIVED SEPARATELY, and the record should not blur them.**
+`images` has been in `visibleSurfaces` since WS3 itself (commit `12c2e6a`, the
+commit that created C28) — so half of AM-10d was contradicted the day the check
+was written, silently. `video` was added by commit **`47b5f1e` (finding F1)**,
+and that is the commit that makes the contradiction deliberate and reasoned.
+
+**WHY IT WAS SUPERSEDED, AND BY WHAT.** By **commit `47b5f1e` (finding F1)**,
+whose subject is recorded in §1 above — not by drift and not by a
+reinterpretation. AM-10d's exclusion is a rule about *credit*: an ALT string
+is not a place a term earns discoverability, so a listing should not be able to
+satisfy a placement obligation by writing the term into an ALT attribute. C28's
+surface vocabulary is not only a credit list, though — **it is also the corpus
+the `negative`, `candidate` and `captured-via` legs scan for ABSENCE**, and R50
+(the rule **AM-9** exists to guarantee) is enforced entirely through that
+corpus. Leaving `images` and `video` out of `visibleSurfaces` therefore did not
+merely withhold credit: it left a rival brand planted in an A+ `bannerAltText`
+or a `videoBrief.onScreenText` **unscanned**, producing zero gate failures and a
+`verified: true` run. That was proven live, and it is the bypass F1 closed.
+
+**THE DIRECTION IS THE POINT.** The widening is **safe-direction**: adding a
+surface to `visibleSurfaces` can only cause a term to be found in MORE places.
+For an absence leg (`negative`/`candidate`/`captured-via`) that is strictly more
+enforcement. For the `placed` leg it is not a loosening either — a `placed` row
+must declare its surfaces and the term must actually appear on each declared
+one, so admitting `images`/`video` to the vocabulary adds an obligation a row
+can fail, never a way to pass one it would otherwise fail. What AM-10d's
+underlying intent asks for — *an ALT string must not be how a term earns its
+placement* — is a **generation** rule, and it lives in the placement doctrine
+the prompt renders, not in the check's absence corpus. Nothing in the shipped
+prompt directs the model to place a term in ALT text.
+
+**THE COST, STATED.** A model that declares `placed` with `images` as its only
+surface will pass C28, which is the residue of AM-10d that F1 did not preserve.
+That is accepted for the reason above (it costs the run nothing an operator
+cannot see in the artifact, whereas the alternative cost a live R50 bypass) and
+it is recorded here rather than left as a silent difference.
+
+**WHERE THE SUPERSESSION IS TESTED.** `tests/keywordPlacement.surfaces.test.ts`
+§ *"AC-G3 — AM-10d is superseded by F1, and the vocabulary says so"* (six cases,
+added here). It asserts that `visibleSurfaces` names **both** `images` and
+`video` and that both resolve; that a `negative` rival brand planted in an image
+`altText` FAILS C28 and drops `runGate` to `pass: false`; that lawful ALT copy in
+the very same field raises nothing and leaves the whole gate green; and — the
+honest half — that a `placed` row carried ONLY by an image ALT **passes**, which
+is the residue of AM-10d that F1 did not preserve, together with the row failing
+when the term is not actually there. The same file's F1-era cases cover the A+
+`bannerAltText` and all four video-brief fields in both directions, and the
+closed-world rule (`tests/keywordPlacement.gate.test.ts`) fails any pack surface
+the reader cannot resolve, so neither name can be removed from the vocabulary
+without a test changing.
+
+**A future change to this must also change:** `keywordRules.visibleSurfaces` in
+`knowledge/rules.json`, `keywordSurfaceText` in `lib/gate/checks/c-keywords.ts`,
+`tests/keywordPlacement.surfaces.test.ts`, and §1 above.
+
+---
 
 ---
 
@@ -1475,7 +1553,63 @@ supplement brands *are* single ordinary words — "NOW" is a shipping brand in
 this very category — and an automatic negative on the word "now" would fail
 lawful copy that never mentioned anybody. Since over-blocking is treated here as
 exactly as severe as a bypass, the one-word case is left to the model's
-`negative` row (which still works, and still fails from every surface).
+`negative` row.
+
+**CORRECTION (AC-G2) — the previous wording UNDERSTATED the residual.** This
+paragraph used to end: *"the one-word case is left to the model's `negative` row
+(which still works, and still fails from every surface)."* Every word of that is
+true and it is the wrong emphasis, because it reads as if the residual were "the
+model has to remember". **The model is not obliged to write `negative` at all,
+and nothing checks that it did.** An acceptance audit reproduced the larger
+case: a one-word rival labelled **`not-targeted`** — a status C28 deliberately
+does not scan — produces **zero** C28 failures and the brand ships in verified
+copy.
+
+**THE ESCAPE, STATED EXACTLY.** With competitors supplied and a one-word rival
+brand present in the copy, C28 raises nothing when the keyword row carries
+`not-targeted`, when it carries `placed` (the placement leg is *satisfied* by
+the term really being in the copy, and a brand name is in none of the lexicons
+the four-test screen reads), **or when there is no row at all**. The residual is
+therefore the RESOLVER bound (`MIN_BRAND_WORDS` in `lib/audit/rivalBrands.ts`),
+not the status word: the same `not-targeted` row on a MULTI-word rival brand
+still fails, through the automatic leg. What survives of the original sentence
+is narrower and is stated as such: *a `negative` row written on the one-word
+brand still fails, from every surface* — it is a route that works, not a
+guarantee that anything takes it.
+
+`tests/rivalBrands.gate.test.ts` §(d) pins all six of those statements, in both
+directions, including the bound's own justification (the "NOW" listing that must
+stay green).
+
+**THE BOUND STAYS — the merits, judged rather than assumed.** The obvious
+widening is to admit a one-word competitor brand when it is an exact whole-token
+match against an operator-supplied competitor's `brand_name` **and is not an
+ordinary English word by some pack-declared test**. The first half is fine — it
+is the same operator-supplied fact the multi-word leg already uses. **The second
+half is the problem, and it is not a problem of effort.** No pack declares an
+ordinary-word vocabulary, and one written for this purpose could not be
+complete: English is open, brand names are drawn from all of it, and the list
+would have to enumerate every ordinary word that any brand in any category might
+also be. **An incomplete list fails in the OVER-BLOCKING direction** — a
+one-word brand that IS an ordinary word but is missing from the list becomes an
+automatic negative, and every lawful use of that word in our own copy becomes a
+gate failure the operator cannot argue with. That is the "unwinnable run" defect
+bound 3 exists to prevent, arriving through a different door, and it would be
+introduced by a list whose incompleteness is guaranteed rather than accidental.
+A bypass that requires an operator to have supplied that exact competitor is a
+smaller harm than a wall that fires on ordinary prose, so the bound is kept.
+
+**What was considered and NOT done, so the next reader does not re-derive it.**
+A row-level leg (fail any keyword row whose term is an exact whole-string match
+of an ingested competitor's brand and whose status is not one of
+`negative`/`candidate`/`captured-via`) would close the audit's exact
+reproduction without touching the copy scan, and it carries no lawful-copy
+over-blocking risk because it can only fail a ROW. It is not implemented here
+because it closes only the sub-case where the model wrote a row naming the
+rival — the bare-brand-in-copy case above is untouched by it — and shipping a
+partial close under this section would invite exactly the "reads better than it
+is" error this correction exists to fix. It is recorded as available, not
+rejected on the merits.
 
 **If this is ever widened it must be a FLAGGED ADDITION, not a silent change:**
 recorded here, with both-direction tests, and with the disambiguating signal held
@@ -1491,7 +1625,7 @@ page the operator asked for, at run time, which is why
 `tests/category.literals.test.ts` stays green. A brand the reference already
 records as `negative` is reported once, by the row that owns it.
 
-Both directions in `tests/rivalBrands.gate.test.ts` (24 cases): the mislabelled
+Both directions in `tests/rivalBrands.gate.test.ts` (30 cases): the mislabelled
 `placed` rival passes with no competitors and FAILS with them, from eight
 surfaces including the invisible ones; and every bound above is asserted not to
 fire.
@@ -2614,3 +2748,166 @@ routes; `GenerationFailureBanner` and the regenerate merge (`app/ResultsPanel.ts
 the notice blocks in `lib/export/markdown.ts` and `lib/export/shipSheet.ts`; and
 `tests/generationFailure.scope.v1.test.ts` +
 `tests/reparseScope.deadline.v2v3.test.ts`.
+
+---
+
+## 16. ROUND AC — three unrecorded compliance misses, one understated residual, and two scope calls.
+
+An independent acceptance audit ran claims through the real `runGate` and found
+three that shipped with **zero** failures, found that §7.4 understated its own
+residual, and raised two amendments the record never resolved. §16.1–§16.4 are
+the scope calls and the corrections that do not already live in §1.4 (AM-10d)
+and §7.4 (the one-word rival escape).
+
+### 16.1 THREE PROHIBITED-MARKETING CLAIMS SHIPPED CLEAN — closed in PACK DATA.
+
+All three were **pack-data gaps, not engine defects**, and all three are closed
+in `knowledge/rules.json` → `prohibitedMarketing.patterns`, which every category
+pack shares:
+
+| the claim | why it shipped | what closed it |
+| --- | --- | --- |
+| `"Rated 4.8 stars by our customers"` | the pattern ended `star\b`, so only the SINGULAR spelling matched | `stars?` |
+| `"Over 4000 five star reviews"` / `"Over four thousand five star reviews"` | `star reviews` is not `reviews`, and `four thousand` is not `[\d,]+` | a context-anchored word-form rating pattern + a word-form review-count pattern |
+| `"Amazon's Choice for probiotics"` | no pattern, and not in `superlativeBans` | a marketplace-badge pattern, plus `Editor's Choice` and the three Amazon deal-event names |
+
+**THE NUMBER VOCABULARY IS REUSED, NOT FORKED.** The word-form patterns write
+`{{numberWord}}` where a spelled-out number belongs, and
+`prohibitedMarketingPatterns` (`lib/gate/checks/shared.ts`) substitutes the run
+compiled by `spelledOutRunSource` from `rules.attributeGuard.spelledOutNumbers`
+— the same vocabulary C24/C12/C10/A5 read (item 2). **The engine holds the token
+name, never a number word**, so `tests/category.literals.test.ts` is unaffected.
+C19 **and** A8 read the list through that one helper, so the A+ half of the same
+lexicon cannot fall behind.
+
+**OVER-BLOCKING WAS THE BINDING CONSTRAINT**, because `star` and `review` are
+ordinary words in lawful supplement copy. The word-form rating pattern is
+therefore **context-anchored on both sides** (`rated <word> stars` /
+`<word> star review|rating|average`) rather than matching a bare `<word> star`:
+`five star anise` is an ingredient, `star ingredient` and `the star of the
+formula` are prose, and `our review process` / `peer-reviewed research` /
+`third-party reviewed` carry no count at all. The sibling badge claims were
+checked before anything was added, and most were **already covered** —
+`Best Seller badge` by `best[- ]?sell(?:er|ing)`, `#1 New Release` by `#\s?1`,
+`top-rated` by the ranking pattern — so only the genuinely uncovered ones were
+added.
+
+**BOTH DIRECTIONS:** `tests/prohibitedMarketing.badges.gate.test.ts` (159
+cases) — the four reported strings on three surfaces, a 20-form matrix
+(singular/plural, spaced/hyphenated, digit/word), the 11-case badge family, the
+A8 half on A+ module bodies, a **32-string lawful battery on three surfaces
+plus all of it in one listing**, the cosmetics pack in both directions, and the
+disarmament assertions below. The golden fixture stays at **zero** gate failures
+and `tests/falsePositives.gate.test.ts` (206) is untouched and green.
+
+**`REQUIRED_PACK_PIECES`: no new row, deliberately.**
+`rules.prohibitedMarketing.patterns` is **already** a manifest row and these are
+entries in that list, so emptying it still fails the pack closed exactly as
+before. The vocabulary the macro reads
+(`rules.attributeGuard.spelledOutNumbers`) is **not** made a row, on the
+reasoning that list already carries for C24/C12/C10/A5: emptying it **restores
+exact digit-anchored behaviour** rather than disarming a check. That is asserted,
+not asserted-about — with the vocabulary emptied or deleted the three word-form
+patterns withdraw and every digit-anchored pattern in the same list keeps
+working.
+
+**COSMETICS NEEDED NO SECOND EDIT**, and that is a property of where the fix
+went: `prohibitedMarketing.patterns` lives in `knowledge/rules.json`, which every
+pack loads; only `superlativeBans` is per-category. The badge and rating claims
+were put in the shared file **for that reason** — putting them in
+`superlativeBans` would have forked the same rule into two compliance files and
+would additionally have enrolled them in the C28 deference set, which is a
+different rule with different consequences. `tests/prohibitedMarketing.badges.gate.test.ts`
+asserts the cosmetics pack in both directions so a future move cannot silently
+drop it.
+
+**A future change to this must also change:** `prohibitedMarketing.patterns` and
+`_ratingBadgeNote` in `knowledge/rules.json`, `prohibitedMarketingPatterns` /
+`NUMBER_WORD_MACRO` in `lib/gate/checks/shared.ts`, its two callers
+(`c19ProhibitedMarketing`, `a8AplusProhibitedMarketing`), and
+`tests/prohibitedMarketing.badges.gate.test.ts`.
+
+### 16.2 SCOPE CALL — WS2.1's launch-date field is ADDED, as an operator field.
+
+WS2.1 named a launch date alongside price / GTIN / SKU and
+`knowledge/attribute-schema.supplements.json` had **no field for it**. Added as
+`launch_date`, `source: "operator"`, with the same treatment as the other four:
+withheld from the attributes prompt, deleted from generated output if the model
+volunteers one, exempt from C23 completeness, `required: false`,
+`filterFacet: false`, `pendingTemplateConfirm: true` (it sits outside the 24-key
+confirmed census, like every other operator key except `standard_price`).
+
+**Why operator and not generated.** It is an **offer** fact, not a product-copy
+fact: the date a seller wants an ASIN to become buyable lives in the seller
+account and cannot be read from a detail page. A date this tool invented would
+be a wrong date on a live listing for exactly the reason an invented price is,
+and that is the rule `standard_price` already states.
+
+**It cannot fail a run that would otherwise pass** — operator fields are exempt
+from C23 by construction, which is what makes adding one safe.
+
+**A correction rides along.** `tests/knowledge.test.ts` asserted
+`attributeSchema.length === 39` with the comment *"35 generated + 4
+operator-owned"*. The split was **34 generated + 5 operator**; the count was
+right and the comment was wrong. It now asserts the operator subset by size as
+well as the total (34 + 6 = 40), so the two cannot disagree again.
+`tests/attributeSchema.test.ts` asserts the operator set by **equality**, so a
+seventh cannot be added without that line changing, and pins `launch_date`'s
+three properties directly.
+
+**Cosmetics is deliberately NOT changed.** That schema is a narrower pack — it
+ships four operator fields and no `standard_price` at all — and WS2.1 specified
+the supplements template. Adding a key to a schema this app has not confirmed
+against a shipped cosmetics listing would be inventing template surface, which
+is the failure `pendingTemplateConfirm` exists to flag rather than to license.
+
+### 16.3 SCOPE CALL — AM-10c's m7-CLOSE module is NOT made a required id.
+
+**THE AMENDMENT.** AM-10c specifies A+ as m1–m5 **+ an m7-close + FAQ**.
+`rules.aplusModuleIds` names five ids (`brand-story`, `hero`, `ingredients`,
+`how-to-use`, `who-its-for`), the prompt asks for **5–7 modules** and the group
+schema enforces `min(5).max(7)`. **No close module is required and none is
+checked.** That difference was unrecorded; it is recorded here.
+
+**THE DECISION: the current scope is right, and the close module stays
+optional.** Three reasons, in order of weight.
+
+1. **AN OBLIGATION WITHOUT A CHECK IS PROSE — this record's founding lesson
+   (§1).** Every other required A+ element in this app is required *because a
+   check can verify it*: A4 verifies the canonical name in the brand-story and
+   hero modules, A9 verifies an audience cue drawn from pack data, the schema
+   verifies comparison rows and FAQ count. "Close" is a **rhetorical function,
+   not a checkable property**. Requiring the id and nothing else buys exactly one
+   thing: the model emits `{"id": "close", …}` and every real question — does it
+   close anything? — is still unanswered, while the record would now claim
+   AM-10c was implemented.
+2. **THE DIRECTION OF RISK IS WRONG.** A close module's natural content is the
+   prohibited-marketing family: a CTA, urgency, a guarantee, a reassurance
+   promise. That is precisely what C19/A8 ban and what §16.1 just widened. Making
+   it **required** would push the generator toward the one content class most
+   likely to fail the gate, in exchange for a module nothing verifies.
+3. **THE CLOSE'S JOB IS ALREADY DONE BY TWO CHECKED BLOCKS.** The A+ payload is
+   not five modules — it is five modules **plus** `comparison` (≥3 rows, keys
+   fixed) **plus** a 5–10 pair `faq`. Differentiation and objection handling are
+   what a close does, and both blocks do it under deterministic checks (row
+   count, key names, FAQ bounds, `claimBearing`, and the A2/A8 content scans).
+
+**WHAT THIS COSTS, STATED.** A+ ships with no summarising module, and a model
+that wants one must use one of the two optional slots the 5–7 range already
+leaves open — nothing forbids a close, it is simply not compulsory.
+
+**IF THIS IS EVER REVERSED** it must arrive as a package: a new id in
+`rules.aplusModuleIds`, the skeleton and the "required module ids" line in
+`lib/engine/prompts/aplus.ts` (both render FROM that list, so they follow
+automatically), a cue in `rules.aplusModuleCues` plus an A-check that verifies
+something about the module's CONTENT, and the schema's `min(5)` raised in step.
+An id added without the check is the move this entry declines.
+
+### 16.4 NO VERDICT MOVES.
+
+`verified` is still computed only in `lib/audit/buildAudit.ts`, from the gate.
+§16.1 adds pattern rows and one macro substitution to a check that already ran;
+§16.2 adds an operator field that is exempt from the only check that could fail
+it; §16.3, §1.4 and the §7.4 correction are record entries and tests. The golden
+fixture keeps **zero** gate failures with nothing weakened, and
+`tests/falsePositives.gate.test.ts` (206) is green.

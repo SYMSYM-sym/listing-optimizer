@@ -1,5 +1,5 @@
 import type { CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
-import { CONCAT_MIN_TERM_LEN, disclaimerVariantsOf } from './shared';
+import { CONCAT_MIN_TERM_LEN, disclaimerVariantsOf, prohibitedMarketingPatterns } from './shared';
 import {
   normalize,
   obfuscationVariants,
@@ -352,7 +352,9 @@ export function c19ProhibitedMarketing(
 ): Failure[] {
   const cfg = pack.rules.prohibitedMarketing;
   const cp = pack.compliancePack;
-  const patterns = cfg?.patterns ?? [];
+  // Macro-expanded in ONE place so C19 and A8 enforce the identical lexicon
+  // (see `prohibitedMarketingPatterns` / `NUMBER_WORD_MACRO` in ./shared).
+  const patterns = prohibitedMarketingPatterns(pack);
   const superlatives = cp?.superlativeBans ?? [];
   if (patterns.length === 0 && superlatives.length === 0) return [];
 

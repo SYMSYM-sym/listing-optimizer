@@ -2,7 +2,14 @@ import type { Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { hasNegationContext, normalize } from '../util';
 import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
 import { allergenMentioned, presentAllergens } from './c-quality';
-import { aplusSurfaces, fail, fictionOver, potencyPhrasingOver, scanSurfacesForBanned } from './shared';
+import {
+  aplusSurfaces,
+  fail,
+  fictionOver,
+  potencyPhrasingOver,
+  prohibitedMarketingPatterns,
+  scanSurfacesForBanned,
+} from './shared';
 
 export function a1AplusDisclaimer(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const cp = pack.compliancePack;
@@ -106,7 +113,9 @@ export function a7AplusAllergen(l: OptimizedListing, pack: KnowledgePack): Failu
  * A8 — prohibited marketing on A+ surfaces.
  * The pattern lexicon is PACK DATA (`rules.prohibitedMarketing.patterns`) —
  * this module holds no literals, so the gate stays category-agnostic. C19
- * applies the same pack lexicon to every non-A+ surface.
+ * applies the same pack lexicon to every non-A+ surface, and BOTH read it
+ * through `prohibitedMarketingPatterns` so the word-form macro is expanded
+ * once, identically, for both checks.
  */
 /** Compiled pack patterns cached by source string (see C18/C19 for the rationale). */
 const APLUS_PATTERN_CACHE = new Map<string, RegExp>();
@@ -121,7 +130,7 @@ function aplusPatternRe(source: string): RegExp {
 }
 
 export function a8AplusProhibitedMarketing(l: OptimizedListing, pack: KnowledgePack): Failure[] {
-  const patterns = pack.rules.prohibitedMarketing?.patterns ?? [];
+  const patterns = prohibitedMarketingPatterns(pack);
   if (patterns.length === 0) return [];
   const out: Failure[] = [];
   for (const [field, textRaw] of aplusSurfaces(l.aplusContent)) {

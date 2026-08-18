@@ -3,6 +3,7 @@ import type {
   AttributeGuardRules,
   CompliancePack,
   Failure,
+  KnowledgePack,
   OptimizedListing,
   UnitRules,
 } from '@/lib/types';
@@ -619,6 +620,56 @@ export function spelledOutRunSource(
       ? `(?:${cardinals})|(?:${connectors})[\\s-]+(?:${leadMagnitudes})`
       : `(?:${cardinals})`;
   return `(?:${lead})(?:[\\s-]+${inner})*?`;
+}
+
+/**
+ * THE ONE STRUCTURAL MACRO a pack pattern may carry.
+ *
+ * `rules.prohibitedMarketing.patterns` are regex SOURCES written in pack data,
+ * and two of the marketing claims they must catch are written in words rather
+ * than digits ("four thousand reviews", "rated five stars"). The number
+ * vocabulary for that already exists — `rules.attributeGuard.spelledOutNumbers`,
+ * compiled by `spelledOutRunSource` and read by C24/C12/C10/A5. Re-typing an
+ * alternation of number words inside a marketing pattern would FORK that
+ * vocabulary: two lists to keep in step, and the fork would silently rot.
+ *
+ * So a pattern may write this token where a word-form number belongs, and
+ * `prohibitedMarketingPatterns` substitutes the compiled run. The engine holds
+ * the TOKEN (a placeholder name), never a number word — the vocabulary stays
+ * entirely in pack data, exactly as `tests/category.literals.test.ts` requires.
+ */
+export const NUMBER_WORD_MACRO = '{{numberWord}}';
+
+/**
+ * The pack's prohibited-marketing patterns with `NUMBER_WORD_MACRO` expanded —
+ * the ONE place C19 and A8 read that list, so both checks see the same lexicon.
+ *
+ * NO VOCABULARY => THE WORD-FORM PATTERNS ARE WITHDRAWN, and only those. A pack
+ * that ships no `spelledOutNumbers` (or empties its cardinals) keeps every
+ * digit-anchored pattern exactly as written and simply loses the word leg,
+ * which is the same narrowing direction `spelledOutNumbers` already documents
+ * for C24/C12/C10/A5. It can never widen: an unexpanded macro would otherwise
+ * be compiled as the literal characters `{{numberWord}}` and match nothing
+ * useful while quietly changing the surrounding pattern's grouping.
+ *
+ * No macro anywhere in the list => the pack's own array is returned untouched.
+ */
+export function prohibitedMarketingPatterns(pack: KnowledgePack): [string, string][] {
+  const raw = pack.rules?.prohibitedMarketing?.patterns ?? [];
+  if (!raw.some(([source]) => typeof source === 'string' && source.includes(NUMBER_WORD_MACRO))) {
+    return raw;
+  }
+  const run = spelledOutRunSource(pack.rules?.attributeGuard?.spelledOutNumbers);
+  const out: [string, string][] = [];
+  for (const [source, label] of raw) {
+    if (typeof source !== 'string' || !source.includes(NUMBER_WORD_MACRO)) {
+      out.push([source, label]);
+      continue;
+    }
+    if (!run) continue;
+    out.push([source.split(NUMBER_WORD_MACRO).join(`(?:${run})`), label]);
+  }
+  return out;
 }
 
 /** The pack's inert connector words, trimmed and de-blanked. Never a literal. */

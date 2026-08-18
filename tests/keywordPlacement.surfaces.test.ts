@@ -249,3 +249,80 @@ describe("C28 'placed' rows against the new surfaces", () => {
     expect(c28(present)).toEqual([]);
   });
 });
+
+// ===========================================================================
+// AC-G3 — AM-10d, SUPERSEDED. The visual surfaces ARE in the C28 vocabulary.
+// ===========================================================================
+
+/**
+ * AC-G3 — the amendment this file's fix contradicts, pinned so the contradiction
+ * cannot be re-litigated by accident.
+ *
+ * The game plan's **AM-10d** says image/video ALT text is NOT a
+ * keyword-placement surface. `keywordRules.visibleSurfaces` lists BOTH `images`
+ * and `video`, added by commit `47b5f1e` (F1) to close the R50 ALT bypass §1 of
+ * `CONFORMANCE-DEVIATIONS.md` records — a deliberate, safe-direction widening,
+ * now marked superseded in §1.4 of that file.
+ *
+ * The direction is what makes it safe, and it is asserted here rather than
+ * argued: admitting a surface can only cause a term to be FOUND in more places,
+ * so an absence leg (`negative`) gains enforcement and the `placed` leg gains an
+ * obligation a row can fail — never a way to pass one it would otherwise fail.
+ */
+describe('AC-G3 — AM-10d is superseded by F1, and the vocabulary says so', () => {
+  it("the pack declares BOTH visual surfaces, and both resolve", () => {
+    const kr = pack.rules.keywordRules!;
+    expect(kr.visibleSurfaces).toContain('images');
+    expect(kr.visibleSurfaces).toContain('video');
+    expect(keywordSurfaceText(clean, 'images')).not.toBeNull();
+    expect(keywordSurfaceText(clean, 'video')).not.toBeNull();
+  });
+
+  it("the 'images' reader carries altText as well as the brief fields", () => {
+    const l = clone();
+    l.imagePlan[2]!.altText = 'ALTMARKER';
+    l.imagePlan[2]!.notes = 'NOTESMARKER';
+    const text = keywordSurfaceText(l, 'images') ?? '';
+    expect(text).toContain('ALTMARKER');
+    expect(text).toContain('NOTESMARKER');
+  });
+
+  it('THE REASON: a negative rival brand in an image ALT FAILS (it used to ship)', () => {
+    const l = clone();
+    l.imagePlan[2]!.altText = `${l.imagePlan[2]!.altText} ${RIVAL}`;
+    const fs = c28(l);
+    expect(mentions(fs, RIVAL)).toBe(true);
+    expect(fs.some((f) => f.context.includes("'images'"))).toBe(true);
+    expect(runGate(l, pack, ctx).pass).toBe(false);
+  });
+
+  it('THE OTHER DIRECTION: lawful ALT copy in the same field raises nothing', () => {
+    const l = clone();
+    l.imagePlan[2]!.altText = 'Supplement facts panel showing serving size and cultures per serving';
+    expect(c28(l)).toEqual([]);
+    expect(runGate(l, pack, ctx).pass).toBe(true);
+  });
+
+  it('THE COST AM-10d WOULD HAVE PREVENTED, stated as a test: `placed` on images alone passes', () => {
+    // Recorded, not fixed: the residue of AM-10d that F1 did not preserve. A row
+    // may satisfy its placement obligation from an ALT string. It is an
+    // artifact-visible strategy call, not a compliance failure, and the
+    // alternative cost a live R50 bypass — see CONFORMANCE-DEVIATIONS.md §1.4.
+    const l = clone();
+    l.imagePlan[2]!.altText = `${l.imagePlan[2]!.altText} shelf stable cultures`;
+    l.keywords = [
+      ...(l.keywords ?? []),
+      { term: 'shelf stable cultures', tier: 3, status: 'placed', surfaces: ['images'], why: 'Long-tail' },
+    ];
+    expect(c28(l)).toEqual([]);
+  });
+
+  it('and the SAME row fails when the term is NOT actually in the ALT text', () => {
+    const l = clone();
+    l.keywords = [
+      ...(l.keywords ?? []),
+      { term: 'shelf stable cultures', tier: 3, status: 'placed', surfaces: ['images'], why: 'Long-tail' },
+    ];
+    expect(c28(l).some((f) => f.context.includes("declared placed on 'images'"))).toBe(true);
+  });
+});

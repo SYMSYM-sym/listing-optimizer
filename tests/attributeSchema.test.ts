@@ -80,10 +80,44 @@ describe('every field declares a valid source', () => {
     }
   });
 
-  it('the operator-owned set is the five seller-account facts', () => {
+  /**
+   * AC-G4(a) — `launch_date` joined this set. WS2.1 named a launch date
+   * alongside price/GTIN/SKU and the schema had no field for it; it is an OFFER
+   * fact the app cannot read from a detail page, so it gets the SAME treatment
+   * as the other four rather than a new mechanism. The list is asserted by
+   * EQUALITY so a sixth cannot be added without this line changing.
+   */
+  it('the operator-owned set is the six seller-account facts', () => {
     const operator = pack.attributeSchema.filter((f) => f.source === 'operator').map((f) => f.field);
     expect(operator.sort()).toEqual(
-      ['condition_type', 'external_product_id', 'item_sku', 'model_number', 'standard_price'].sort(),
+      [
+        'condition_type',
+        'external_product_id',
+        'item_sku',
+        'launch_date',
+        'model_number',
+        'standard_price',
+      ].sort(),
+    );
+  });
+
+  it('AC-G4(a): launch_date is operator-owned, exempt from C23, and never generated', () => {
+    const f = pack.attributeSchema.find((x) => x.field === 'launch_date');
+    expect(f, 'launch_date is missing from the schema').toBeDefined();
+    expect(f!.source).toBe('operator');
+    expect(f!.required).toBe(false);
+    expect(f!.filterFacet).toBe(false);
+    // C23 never asks for it...
+    const l = mut((x) => { delete x.attributes.launch_date; });
+    expect(c23(l).some((x) => x.field === 'attributes.launch_date')).toBe(false);
+    // ...and the attributes prompt does not offer it to the model (built the
+    // same way the R2 suite below builds it).
+    const schemaFields = pack.attributeSchema
+      .filter((x) => x.source !== 'operator')
+      .map((x) => `${x.field} | ${x.required ? 'required' : 'optional'} | ${x.example}`)
+      .join('\n');
+    expect(buildGroupPrompts(pack, 'dual').attributes(snapshot, schemaFields)).not.toContain(
+      'launch_date',
     );
   });
 

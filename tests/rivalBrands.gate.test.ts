@@ -254,3 +254,110 @@ describe('(c) the automatic set is not a way to satisfy anything', () => {
     expect(fs.some((f) => f.context.includes('ingested competitor brand'))).toBe(false);
   });
 });
+
+// ===========================================================================
+// (d) AC-G2 — THE ONE-WORD ESCAPE, PINNED IN BOTH DIRECTIONS
+// ===========================================================================
+
+/**
+ * AC-G2 — WHAT §7.4 OF THE RECORD LEFT OUT.
+ *
+ * §7.4 recorded the one-word bound and said the case "is left to the model's
+ * `negative` row (which still works, and still fails from every surface)".
+ * Every word of that is true, and it reads as if the residual were merely "the
+ * model has to remember". It is not: **the model is not obliged to write
+ * `negative` at all.** An acceptance audit reproduced the larger residual — a
+ * one-word rival labelled `not-targeted` (a status C28 deliberately does not
+ * scan) produces ZERO C28 failures and the brand ships.
+ *
+ * This suite pins the behaviour AS IT IS, in both directions, so the corrected
+ * §7.4 is tied to something executable and so a future widening of the bound
+ * has to come here and change these expectations deliberately.
+ *
+ * THE BOUND IS NOT CHANGED. See §7.4 for the merits: the only disambiguator
+ * that would make a one-word automatic negative safe is a test for "is this an
+ * ordinary English word", no pack declares one, and any list that tried to be
+ * one would be INCOMPLETE — and its incompleteness fails in the OVER-BLOCKING
+ * direction, which this project treats as exactly as severe as a bypass.
+ */
+describe('(d) AC-G2 — the one-word rival escape, stated precisely', () => {
+  const ONE_WORD_BRAND = 'Northwind';
+  const ONE_WORD_RIVALS = [competitor('B0RIVAL0008', { brand_name: ONE_WORD_BRAND })];
+
+  /** A row that names the rival under a status C28 does not scan. */
+  const rowFor = (term: string, status: string) => ({
+    term,
+    tier: 1 as const,
+    status: status as never,
+    surfaces: [] as string[],
+    why: 'Recorded for the strategy note',
+  });
+
+  it('THE ESCAPE IS REAL: a one-word rival labelled `not-targeted` ships with ZERO C28 failures', () => {
+    const l = clone();
+    l.description = `${l.description}\n${ONE_WORD_BRAND} is the other option.`;
+    l.keywords = [...(l.keywords ?? []), rowFor(ONE_WORD_BRAND, 'not-targeted')];
+    expect(withRivals(l, ONE_WORD_RIVALS)).toEqual([]);
+    expect(gateWithRivals(l, ONE_WORD_RIVALS)).toEqual({ pass: true, failures: [] });
+  });
+
+  it('THE ESCAPE IS WIDER THAN THE ONE STATUS: `placed` on the same one-word brand also ships', () => {
+    // The auditor named `not-targeted`; `placed` is the same hole, because a
+    // brand name is in none of the lexicons the four-test screen reads and the
+    // placement leg is SATISFIED by the term really being in the copy.
+    const l = clone();
+    l.title = `${l.title} ${ONE_WORD_BRAND}`;
+    l.keywords = [
+      ...(l.keywords ?? []),
+      { term: ONE_WORD_BRAND, tier: 1, status: 'placed', surfaces: ['title'], why: 'Head term' },
+    ];
+    expect(withRivals(l, ONE_WORD_RIVALS)).toEqual([]);
+  });
+
+  it('AND WITH NO ROW AT ALL: the bare one-word brand in the copy raises nothing', () => {
+    // The residual is not about the label either — it is the resolver bound.
+    const l = clone();
+    l.description = `${l.description}\n${ONE_WORD_BRAND} is the other option.`;
+    expect(rivalBrandNames(ONE_WORD_RIVALS, l, snapshot)).toEqual([]);
+    expect(withRivals(l, ONE_WORD_RIVALS)).toEqual([]);
+  });
+
+  it('WHAT THE RECORD SAID IS STILL TRUE: a `negative` row on the same brand fails from every surface', () => {
+    for (const [surface, plant] of PLANTERS) {
+      const l = clone();
+      plant(l, ONE_WORD_BRAND);
+      l.keywords = [
+        ...(l.keywords ?? []),
+        { term: ONE_WORD_BRAND, tier: 'negative', status: 'negative', surfaces: [], why: 'Rival brand' },
+      ];
+      const fs = withRivals(l, ONE_WORD_RIVALS);
+      expect(
+        fs.some((f) => f.context.includes(`negative term '${ONE_WORD_BRAND}'`)),
+        `${surface}: ${JSON.stringify(fs.map((f) => f.context))}`,
+      ).toBe(true);
+    }
+  });
+
+  it('THE ESCAPE IS THE WORD-COUNT BOUND, NOT THE STATUS WORD: the MULTI-word rival labelled `not-targeted` DOES fail', () => {
+    const l = clone();
+    l.description = `${l.description}\n${RIVAL_BRAND} is the other option.`;
+    l.keywords = [...(l.keywords ?? []), rowFor(RIVAL_BRAND, 'not-targeted')];
+    const fs = withRivals(l);
+    expect(
+      fs.some((f) => f.context.includes(`ingested competitor brand '${RIVAL_BRAND}'`)),
+      JSON.stringify(fs.map((f) => f.context)),
+    ).toBe(true);
+  });
+
+  it('THE BOUND EARNS ITS KEEP: the ordinary-word brand does not turn lawful copy into a failure', () => {
+    // "NOW" is a real supplement brand. If the one-word bound were dropped
+    // without a complete ordinary-word test, THIS is what the tool would do to
+    // copy that never mentioned anybody.
+    const nowRival = [competitor('B0RIVAL0009', { brand_name: 'NOW' })];
+    const l = clone();
+    l.description = `${l.description}\nAvailable now in a travel size.`;
+    l.bullets[1] = `${l.bullets[1]} Now in a resealable pouch`;
+    expect(rivalBrandNames(nowRival, l, snapshot)).toEqual([]);
+    expect(gateWithRivals(l, nowRival)).toEqual({ pass: true, failures: [] });
+  });
+});
