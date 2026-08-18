@@ -2393,6 +2393,14 @@ asserts a model that writes it passes. The run that carried this also carried a
 C28 failure of the §13.1 class, which is what consumed the rounds. **Nothing was
 changed.**
 
+> **SUPERSEDED (§17.1).** This verdict was wrong. The same shape recurred on
+> ASIN B00IO89MYA (`2019 chars (1861 written + 158 appended)`) once the §13.1
+> C28 defect that had been consuming the rounds was fixed and the C4 finding was
+> the only one left. The facts above are correct and the 88-character figure is
+> used in §17.1's sizing; what was wrong was concluding that a correctly-stated
+> number needs no margin. The prompts and the repair line now state a **target**
+> a derived 6% below the cliff. C4's trigger is unchanged in both directions.
+
 ---
 
 ## 14. ROUND S — `negative` was doing two jobs, and C28 owned only one of them.
@@ -2911,3 +2919,185 @@ An id added without the check is the move this entry declines.
 it; §16.3, §1.4 and the §7.4 correction are record entries and tests. The golden
 fixture keeps **zero** gate failures with nothing weakened, and
 `tests/falsePositives.gate.test.ts` (206) is green.
+
+---
+
+## 17. ROUND H — a correct number stated at the wrong place, and a floor that punished the engine's own corrections.
+
+Both defects come from the same live run, **ASIN B00IO89MYA**, and both are the
+same shape: a rule that was *arithmetically right* and *operationally
+unwinnable*.
+
+### 17.1 ARCHITECTURE CHANGE — the STATED description target now sits a derived margin below the C4 cap. This SUPERSEDES §13.2.
+
+    C4 | description | 2019 chars (1861 written + 158 appended)
+
+Every number in the system was already correct when this fired. §12.4 gave the
+arithmetic one home (`descriptionBudget`), and both the generation prompt and
+the C4 repair line stated **1842** from it. The model wrote **1861** — nineteen
+characters past a correctly-stated ceiling — and the appended disclaimer carried
+the assembled field nineteen characters past the hard cap.
+
+So this is **not** an arithmetic defect, and §13.2 was right that far. What it
+got wrong was the conclusion. Telling a language model to write "≤1842
+characters" and enforcing failure at exactly 1842 leaves **zero** tolerance for
+the ordinary variance of the thing doing the writing. The number the run was
+told to hit was the number at which failure begins.
+
+**THE FIX.** `descriptionBudget` now derives two more values from the same one
+arithmetic:
+
+    budget = max - reserve            the CLIFF   (1842) — never stated anywhere
+    margin = ceil(budget * 0.06)      the MARGIN  (111)
+    target = budget - margin          the TARGET  (1731) — what every prompt and
+                                                   every fix line states
+
+**C4's trigger is untouched**, to the byte: empty, or assembled length over
+`rules.descriptionMax`. `target` is an instruction, not a limit. Nothing
+operator-facing moved either — the ship sheet, the diff and the UI still show
+the real 2000-character field limit, because that is the operator's constraint,
+not the generator's.
+
+**WHY 6%, AND WHY THIS SUPERSEDES §13.2.** There are **two** overshoots in this
+record, and a margin sized to one of them leaves the other failing:
+
+| run | written | stated | overshoot | as % of stated |
+|---|---|---|---|---|
+| §13.2 | 1930 | 1842 | 88 | 4.78% |
+| §17.1 | 1861 | 1842 | 19 | 1.03% |
+
+6% is **111 characters** on the supplements pack — 1.26x the worst observed and
+5.8x the most recent. A **fraction** rather than a fixed count because a fixed
+count would be a fourth hand-copied constant of exactly the kind §12.4 abolished
+and would scale wrongly against any other `descriptionMax`.
+
+**WHY NOT MORE.** The margin is paid for in description length on every run. At
+6% the target keeps **94%** of the writable budget and **87%** of the hard cap;
+1731 characters is still a full-length description that covers what the product
+is, who it is for, how to use it and quality/safety. Trading a length failure for
+a thin-content one would be the same defect facing the other way. And the margin
+no longer has to cover the tail alone: an overshoot that *does* clear it now
+produces a repair line stating `target`, a number **below** the cliff, so the
+next round has room too — which is exactly what the pre-§12.4 repair line
+lacked.
+
+**§13.2 IS SUPERSEDED, NOT DELETED.** Its facts were correct and its numbers are
+used above. Its verdict — "nothing was changed" — was wrong, and the reason it
+looked right at the time is instructive: the run it examined also carried a C28
+failure of the §13.1 class, which is what consumed the rounds, so the C4 finding
+read as incidental. It was not; it recurred.
+
+**THE OTHER CAPPED SURFACES — ASKED, AND ANSWERED WITH TESTS** (the new
+`H1 — the other capped surfaces` block in `tests/c4.descriptionBudget.test.ts`):
+
+* **bullets (C2)** and **backend bytes (C3)** — **no margin, because code already
+  CLAMPS them.** `sanitizeBullets` truncates each bullet to `bulletMax` (less one
+  for the claim marker) and `sanitizeBackendSearchTerms` truncates at a word
+  boundary to `backendMaxBytes`, both before the gate sees the listing. An
+  overshoot cannot reach those checks from a generated run at all — a stronger
+  guarantee than a margin. Backend is where the "the model cannot count what the
+  check counts" argument is sharpest (the cap is UTF-8 **bytes** and the prompt
+  asks for other-language variants) and it is precisely the clamped one.
+* **title (C1), title75 and itemHighlights (C15)** — **no margin, deliberately.**
+  C4 was unwinnable because the measured quantity is *not* the written string:
+  the engine appends afterwards, so a run could obey the stated number exactly
+  and fail on a number it never wrote. On the title surfaces the measured
+  quantity **is** the written string, the failure quotes the model's own length
+  and the fix quotes the same cap the trigger uses, so a repair round is a
+  straight edit. Spending title characters — the scarcest keyword real estate on
+  the page — to pre-empt a failure the loop already repairs would cost ranking
+  surface for nothing. Both properties are asserted in both directions.
+* **PRECEDENT:** this is the shape `keywordsGroupSchemaFor` already uses for the
+  keyword artifact's `why` field — the prompt states a shorter limit than the
+  schema enforces, so an ordinary overshoot never costs a reparse round.
+
+**Status: FIXED.** `DESCRIPTION_MARGIN_FRACTION` and the derivation live in
+`lib/gate/checks/c-length.ts`; `lib/engine/prompts/system.ts` and
+`lib/engine/prompts/description.ts` render `target`.
+`tests/c4.descriptionBudget.test.ts` pins, per pack: the margin and target are
+**derived** from `budget` (not duplicated); a model writing exactly the target
+passes with the disclaimer appended; a model overshooting the target by the
+**whole margin** still passes; each recorded overshoot (19 and 88) passes now and
+still fails against the old stated number; one character past the **hard cap**
+still fails; and every prompt and the repair line state `target`, state
+`reserve`, and **never** state the cliff.
+
+### 17.2 ARCHITECTURE CHANGE — `minNegatives` counts what the model PROPOSED, and the anti-gaming property became a leg of its own.
+
+    C28 | keywords | 2 negative term(s)
+
+`rules.keywordRules.minNegatives` is 3 and the model had supplied **three**
+exclusions. The floor counted two because `deriveKeywordPlacement` had
+reclassified one out of `negative` — correctly, for one of the reasons §8 and
+§13.1 built that boundary: the term was the subject product's **own brand**
+(`ownBrandIdentity`) or a **property the ingested snapshot's structured
+attributes declare about it** (`productPropertyIdentity`). The run was failed for
+**code's own correction**.
+
+*(A third cause is sometimes named alongside those two — a compliance-lexicon
+term **deferred** to the check that owns it, §14.1. It never cost the floor
+anything: THE DEFERENCE keeps the row saying `negative` and increments the count
+before deferring, bound 4 of §14.1. `tests/minNegativesFloor.h2.test.ts` (a)
+asserts that beside the other two, so the record is measured rather than
+assumed.)*
+
+This is the §13.1 incoherence class one level up: a rule asserting something
+about **the model's effort** while measuring the artifact **after the engine
+legitimately edited it**. And no repair round clears it honestly — the only move
+the message asks for is "record another negative", i.e. invent a rival brand to
+pad the list.
+
+**THE CONFLICT, STATED.** Two requirements point in opposite directions:
+
+1. a run must converge when the model proposed enough exclusions and code
+   corrected one of them;
+2. §8/§13.1 established, **with tests pinning it**
+   (`keywordDerivation.ownBrand.test.ts` (e),
+   `keywordDerivation.productProperty.test.ts` (e)), that a reference whose
+   negatives are **all** self-references must **not** clear the floor.
+
+They conflict only while **one number** serves both. So the two jobs are split,
+and **neither pinned test needed a line changed**:
+
+* **THE FLOOR COUNTS PROPOSALS** — surviving `negative` rows **plus** rows the
+  derivation reclassified out of `negative`, which it now records on
+  `proposedStatus`. That is what the floor's own failure text has always asked
+  for: that the **reference record** the exclusions. A reclassified row still
+  does — it is in the artifact, with the correction on `note`, on the ship sheet
+  where an operator reads it.
+* **THE ANTI-GAMING PROPERTY IS ITS OWN LEG** — a reference that records
+  exclusions but has **not one surviving `negative` row** fails, whatever its row
+  count, with a failure that **names** the defect ("every exclusion you recorded
+  names this product") instead of reporting a count the operator has to
+  reverse-engineer. It is gated on `min > 0` because it is a property *of the
+  floor*, and `minNegatives` is a `REQUIRED_PACK_PIECES` row, so emptying it
+  fails at PACK rather than quietly here.
+
+**`proposedStatus` IS DERIVATION-ONLY**, exactly like `surfaces`:
+`keywordsGroupSchemaFor` does not declare it (the boundary strips it) and
+`normalizeKeywords` builds each row from a fixed allowlist (a volunteered one is
+dropped). A run cannot mark its own rows corrected — asserted end to end.
+
+**THE RESIDUE, STATED RATHER THAN HIDDEN.** A reference with **one** genuine
+rival plus self-reference padding can reach the count. Zero genuine rivals never
+can. That is the deliberate trade: the alternative is failing otherwise-clean
+runs for a correction the model was never told about, with no honest repair
+available, and every padded row carries its derivation note into the artifact and
+the ship sheet. A count of rows was never proof of effort; what it can be is
+proof that **at least one real exclusion** was made, and that is now enforced
+explicitly rather than as a side-effect of arithmetic.
+
+**R50 IS UNTOUCHED.** `negative` is still never derived away for a genuine
+rival, C28 still scans every surface for it, the automatic competitor-derived
+rival set (§7) still reads no label at all, and the floor being satisfied does
+not silence any of it.
+
+**Status: FIXED.** `lib/gate/checks/c-keywords.ts` (THE FLOOR),
+`lib/engine/keywordPlacement.ts` (`proposedStatus`), `lib/types.ts`.
+`tests/minNegativesFloor.h2.test.ts` holds it in both directions: the live shape
+converges for each reclassification cause and end to end through `optimize()`;
+fewer proposals than the floor still fails; all-self-reference still fails;
+a genuine rival is unaffected in every direction; `proposedStatus` cannot be
+model-supplied; only a row proposed as `negative` is credited; and the golden
+fixture still gates with zero failures. `keywords[].proposedStatus` is enrolled
+in the §P2 field-closure oracle.
