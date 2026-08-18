@@ -441,7 +441,7 @@ tables of `tests/p1.fieldClosure.oracle.test.ts`.
 
 ---
 
-## 2. FLAGGED ADDITION — C24 **and C12** now read a SPELLED-OUT figure too. This is an intentional divergence from the kit.
+## 2. FLAGGED ADDITION — C24, **C12** and (Y2) **C10/A5** now read a SPELLED-OUT figure too. This is an intentional divergence from the kit.
 
 ### 2.1 What this entry used to say, and why it changed
 
@@ -483,15 +483,16 @@ The number vocabulary is **PACK DATA** (`rules.attributeGuard.spelledOutNumbers`
 — see the `_spelledOutNumbersComment` beside it); the gate names no number word,
 so `tests/category.literals.test.ts` stays green.
 
-It is deliberately **two lists**, and the split is the false-positive control:
+It is deliberately **three lists**, and the split is the false-positive control:
 
 | list | contents | rule |
 | --- | --- | --- |
 | `cardinals` | one … ninety | a match must **begin** with one of these |
 | `magnitudes` | hundred … trillion | may only appear **after** a cardinal |
+| `connectors` (Y1) | the inert words — `and`, `a`, `an` | never begins or ends a run on its own; may sit **between** two value words, or lead one in front of a magnitude that is not also a unit here, where it supplies the implicit one (`"a hundred"` = 100) |
 
-so a value that merely names its unit — `"Billion CFU"` — is not read as a
-figure. Each word carries its **value** (`{"fifty": 50}`, `{"billion": 1e9}`)
+so a value that merely names its unit — `"Billion CFU"`, and `"a Billion CFU"` —
+is not read as a figure. Each word carries its **value** (`{"fifty": 50}`, `{"billion": 1e9}`)
 because N3 (item 2.4) *measures* the figure rather than merely detecting it; C24
 uses only the keys. One list, not a list plus a parallel table that can drift.
 
@@ -553,11 +554,23 @@ materially larger change with a materially larger false-positive surface. It
 told anyone extending C12 to treat it as its own flagged addition with its own
 battery.
 
-**That has now been done, and the limitation no longer exists.** The hole it
-described was the worse of the two: C24's is a filter-fed attribute stating a
-number as a dose *even when the number is right*; C12's was a bullet or
-description reading **"Fifty Billion CFU per serving"** while the canonical
-potency was something else — an **overstated potency claim shipping in
+**That was done, and this entry then claimed "the limitation no longer
+exists". That claim was OVERSTATED — see 2.4.8.** What N3 actually closed was
+the PLAIN word form: a run of number words the pack's vocabulary can read
+end-to-end, `"Fifty Billion CFU per serving"` and `"Ninety Billion CFU"`. What
+it did NOT close was any form containing a word the vocabulary does not hold —
+above all the ordinary English connector in `"One Hundred and Fifty Billion
+CFU"`, which N3 read as the sub-run `"Fifty Billion CFU"` and reported as
+AGREEING with a canonical 50. That was found by ADVERSARIAL REVIEW after the
+change shipped, not by the battery written alongside it: every N3 test used a
+connector-free numeral, so nothing in the suite exercised the fallback. The
+class was closed in Y1 (2.4.8); the residue that remains after Y1 is stated
+there rather than described as absent.
+
+The hole N3 addressed was still the worse of the two: C24's is a filter-fed
+attribute stating a number as a dose *even when the number is right*; C12's was
+a bullet or description reading **"Fifty Billion CFU per serving"** while the
+canonical potency was something else — an **overstated potency claim shipping in
 customer-facing copy**, which is the exact class C12 exists to prevent. A
 recorded limitation is not a licence to keep one; it is a promise to come back.
 
@@ -598,10 +611,15 @@ risk. Five bounds, four inherited from N2 and one new:
    unmatchable however the number is written — and it is a *deliberate*
    narrowing, not an oversight: the digit halves of `"90 Capsules per bottle"`
    and `"a 30 day supply"` still fail, and a test asserts exactly that pair.
-2. **A CARDINAL MUST LEAD** — `"Billion CFU"` is not a figure.
+2. **A CARDINAL MUST LEAD** — `"Billion CFU"` is not a figure. Y1 admits one
+   further lead and no more: an inert connector in front of a magnitude the
+   caller does not also append as a unit (`"A hundred Billion CFU"` is a figure;
+   `"a Billion CFU"` is not, because there the token is the unit).
 3. **THE SEPARATOR IS REQUIRED** and both sides are word-bounded.
-4. **THE VALUE COMPOSES AS THE DIGITS DO.** This is the new bound and the one
-   that decides whether the change is safe. `"Fifty Billion CFU"` is FIFTY of
+4. **THE VALUE COMPOSES AS THE DIGITS DO, OR THERE IS NO VALUE.** This is the
+   bound that decides whether the change is safe, and Y1 (2.4.8) supplied its
+   missing half: a run this reader cannot read WHOLE yields no figure at all,
+   never the value of a fragment of itself. `"Fifty Billion CFU"` is FIFTY of
    the compound unit `billion cfu` — exactly what the digit scan reads out of
    `"50 Billion CFU"` — **not** fifty thousand million. The run pattern is
    therefore **lazy**, so the longest-first unit alternation wins the token
@@ -687,32 +705,81 @@ directions are tested (*"N3: a SPELLED-OUT amount is stripped from the name…"*
 and *"N3: stripping the amount does NOT hide a genuinely undeclared
 ingredient"*).
 
-#### 2.4.6 What is still NOT done, stated — C10/A5 potency PHRASING
+#### 2.4.6 C10/A5 potency PHRASING — DECLINED at N3, RE-DECIDED and EXTENDED at Y2
 
-**`potencyPhrasingOver` (C10 on customer copy, A5 on A+) remains
-digit-anchored.** `"Fifty Billion CFU per serving"` therefore still evades the
-*attachment* rule, even though N3 now measures the same string for truth.
+**What this section used to say, and the part of it that was false.** N3 left
+`potencyPhrasingOver` (C10 on customer copy, A5 on A+) digit-anchored and gave
+three reasons. One of them was:
 
-Why it was not extended in this commit, rather than left unmentioned:
+> *"The residue is bounded. An untrue word-form per-serving figure is now caught
+> by C12; what still evades is a true figure attached to a dose in words."*
 
-- **It is a different objection.** C10/A5 do not compare a figure against
-  anything — they object to attaching the hero potency to a single dose,
-  whatever the number is. Extending them creates NEW blocking behaviour on a
-  phrasing rule, which is a flagged addition in its own right and needs its own
-  both-direction battery; it is not a consequence of this one.
-- **The residue is bounded.** An *untrue* word-form per-serving figure is now
-  caught by C12; what still evades is a *true* figure attached to a dose in
-  words. The digit form of the identical sentence still fails.
-- **Structurally it is not free.** The two patterns are built inside
-  `compileUnits`, which is cached on a `UnitRules` object that holds no
-  pack-level guard data, so sharing the vocabulary there means changing the
-  cache key or exposing the alternation sources — a change to a hot path shared
-  by two checks, which is not something to fold into a commit whose point is to
-  be conservative about false positives.
+**That was false as written, and Y1 proved it.** `"Delivers One Hundred and
+Fifty Billion CFU per serving"` against a canonical `50 Billion CFU` is an
+untrue word-form per-serving figure, and C12 did not catch it — it measured it
+as truthful (2.4.8). Both halves failed together on exactly the sentence shape
+the argument named, so the boundedness it asserted did not hold. It was an
+argument about a residue nobody had measured.
 
-**A future change to this must also change:** the `perServingRe`/`deliversRe`
-construction in `compileUnits`, `potencyPhrasingOver`'s signature, both call
-sites (`c10PotencyPhrasing`, `a5AplusPotencyPhrasing`) and this entry.
+**RE-DECIDED ON THE MERITS: EXTENDED.** Not because the C12 hole is now fixed —
+that would rebuild the same argument on a repaired premise — but because the
+decline reasoned from the wrong property of these two checks:
+
+- **C10/A5 need no composed VALUE.** They object to attaching the headline
+  potency to a single dose *whatever the number is*. That makes them DETECTION
+  rules, in the same sense C24 is, and detection is unaffected by a run the
+  reader would refuse to compose. So C10/A5 are precisely the right home for the
+  residue C12's fragment refusal must leave behind (2.4.8) — the one part of the
+  gate that can still speak about a figure it cannot read.
+- **The "different objection" argument was correct and is honoured**, not
+  discarded: this is NEW blocking behaviour on a phrasing rule, so it carries
+  its own both-direction battery under `Y2` in
+  `tests/complianceCompletions.test.ts` rather than riding on N3's.
+- **The structural argument was real and is answered structurally.** The two
+  patterns are no longer built inside `compileUnits`. They live in
+  `phrasingPatterns`, with their own cache keyed by the `UnitRules` object AND
+  by the compiled run source, so the hot path `CompiledUnits` shares with
+  `extractUnitNumbers` keeps its old key, and a caller that passes no vocabulary
+  gets byte-for-byte the pattern it had.
+
+**The mechanism.** `potencyPhrasingOver` takes the pack's `attributeGuard` and
+compiles the figure alternation as *digits* **or** `spelledOutRunSource` — the
+same vocabulary, the same compiler, no second copy. Every other bound is
+untouched: a POTENCY unit and a PER-DOSE phrase are both still required within
+the same clause, and the negation context still applies.
+
+**Both directions, by test name** (`tests/complianceCompletions.test.ts`, under
+`Y2 — C10/A5 potency PHRASING reads the spelled-out figure`):
+
+- *"Y2: a word-form per-serving attachment now FAILS C10, exactly as the digit
+  form does"* — three sentences, each asserted to produce the **same number of
+  failures with the same fix text** as its digit twin.
+- *"Y2: the TRUE word-form figure is caught too — the attachment is the
+  objection, not the number"* — `"Delivers Fifty Billion CFU per serving"` with
+  a canonical 50: C12 is silent, C10 is not. That is the case C12 can never
+  cover, and the reason the extension is worth its false-positive surface.
+- *"Y2: A5 gets the same leg on A+ copy"*.
+- *"Y2: over-blocking — ordinary prose, and a potency NOT attached to a dose,
+  still PASS"* — ten phrases including `"Fifty Billion CFU in every capsule of
+  the blend"`, `"A Fifty Billion CFU blend of ten strains"`, `"a hundred percent
+  vegan"` and a negated mention.
+- *"Y2: the leg is PACK DATA — no vocabulary is the exact digit-anchored rule
+  C10/A5 shipped with"*, where the digit failures are asserted **equal** to the
+  digit failures under the full pack.
+- *"Y2: the golden fixture is untouched — still ZERO gate failures"*.
+
+**What is verified, stated precisely and no wider:** under the shipped pack the
+three sentences named in the first test fail C10, the A+ sentence fails A5, and
+the ten phrases named in the fourth test do not fail. This is one attachment rule
+widened to a second script. It is **not** a claim that C10/A5 now catch every way
+a dose attachment can be phrased, and it is not a claim about any figure shape
+the reader's own bounds exclude (2.4.2 bound 1).
+
+**A future change to this must also change:** `phrasingPatterns` and
+`potencyPhrasingOver` in `lib/gate/checks/shared.ts`, both call sites
+(`c10PotencyPhrasing` in `c-quality.ts`, `a5AplusPotencyPhrasing` in
+`a-aplus.ts`), the `Y2:` cases in `tests/complianceCompletions.test.ts` and this
+entry.
 
 #### 2.4.7 The other figure-reading code, examined and declined
 
@@ -728,6 +795,136 @@ sites (`c10PotencyPhrasing`, `a5AplusPotencyPhrasing`) and this entry.
 N3 block in `c12FactConsistency`'s header, `AttributeGuardRules` in
 `lib/types.ts`, `rules.attributeGuard.spelledOutNumbers` (+ its `_comment`) in
 `knowledge/rules.json`, and the `N3:` cases in
+`tests/complianceCompletions.test.ts`.
+
+#### 2.4.8 Y1 — CORRECTED RECORD and CLOSED CLASS: N3 mis-MEASURED the connector form
+
+**THE DEFECT, as an adversarial reviewer proved it through the real `runGate`.**
+
+```
+bullets[0] = "Delivers One Hundred and Fifty Billion CFU per serving"
+facts.potency = "50 Billion CFU"
+=> ZERO failures from the entire gate
+```
+
+`and` was not in the pack vocabulary and **could not be**: `valueMap` keeps only
+entries whose `value > 0`, so an inert word declared as a cardinal is widened
+into the PATTERN and then dropped from the VALUE table. The run pattern could
+not cross `and`, so the reader fell back to the SUB-RUN `"Fifty Billion CFU"`,
+composed **50**, and — 50 being the canonical figure — the check concluded the
+copy **agreed with the facts**.
+
+That is not a miss. It is a **MIS-MEASUREMENT**: the gate affirmatively measured
+a threefold overstatement as truthful. Two more forms were confirmed:
+`"Two Hundred and Fifty Billion CFU"` read as 50 the same way, and
+`"A Hundred Billion CFU"` evaded entirely because an article cannot lead a run.
+C24 still *detected* the and-form in a dosage attribute — detection needs no
+measurement — so the defect was C12-specific, i.e. the half N3 was for.
+
+**Why the N3 battery did not find it.** Every N3 case used a connector-free
+numeral (`Fifty Billion CFU`, `Ninety Billion CFU`, `Five Hundred mg`,
+`Two Thousand mg`). The suite tested the vocabulary it had; it did not test what
+happens at the edge of that vocabulary. That is the general lesson here, and it
+is why the Y1 battery asserts behaviour with the pack list **emptied** as well
+as full.
+
+**TWO FIXES. The second is the one that closes the class.**
+
+**(1) The INERT CONNECTOR is pack data in its own right.**
+`rules.attributeGuard.spelledOutNumbers.connectors` — `and`, `a`, `an` on this
+pack. It is a list of **words**, not word→value pairs, and the shape is
+load-bearing rather than cosmetic: being valueless is what a connector IS, so no
+`value > 0` filter can strip one out of a string list and leave the pattern and
+the value table disagreeing. `lib/gate` names no connector, so
+`tests/category.literals.test.ts` stays green.
+
+Two placement rules, both structural and both in the pattern:
+
+| rule | effect |
+| --- | --- |
+| a connector inside a run is **glued to the value word after it** | a run can never begin or end on one — `"fifty and"` + a unit is not a figure |
+| a connector may **lead** a run only in front of a magnitude, and only one the caller does not also append as a **unit** | `"A hundred"` is 100; `"a Billion CFU"` stays the UNIT reading the digit scan gives `"1 Billion CFU"`, so a truthful `1 Billion CFU` listing is not failed as 1,000,000,000 |
+
+and one composition rule, in `composeSpelledValue`: a connector is accepted only
+where English puts it — leading (supplying the implicit one) or directly after a
+magnitude. `"fifty and sixty"` is therefore **not** composed as 110; it returns
+`null`, i.e. no reading.
+
+**(2) THE READER REFUSES A FRAGMENT — the actual root cause.**
+`hasUnreadFigureBefore` in `lib/gate/checks/shared.ts`. A run the reader cannot
+read WHOLE now yields **no figure at all** rather than the value of part of
+itself. The guard is deliberately **vocabulary-independent**, because the
+fallback recurs with any word a pack happens to lack:
+
+- the token in front of the match is a value-bearing number word or a bare digit
+  run the match did not consume → fragment (`"Hundred Fifty Billion CFU"`);
+- the token in front is a FUNCTION word (`nonAttributingWords` — structural
+  English plus every token the pack declares as a unit, dosage form, per-dose
+  phrase, potency verb or supply cue) and the token before THAT is a value word
+  → fragment. This is the `and` case, and it consults **no connector list**, so
+  it fires for `and`, `plus`, `or` and anything else of that shape whether or
+  not the pack declares it.
+
+It stops there, and the stopping rule is the false-positive control: a CONTENT
+word in front of the run ENDS the numeral to its left. In `"Ten Strains Fifty
+Billion CFU"` the `Ten` belongs to `Strains`, so that reading is kept and a real
+detection is not silently dropped; `"Ten Billion CFU and Fifty Billion CFU"` is
+a LIST of two complete figures and both are read; clause punctuation ends the
+search entirely.
+
+**THE CHOSEN BEHAVIOUR ON A HIT IS TO REFUSE TO MEASURE, NOT TO FAIL CLOSED —
+and the defence.** Failing closed would mean emitting a compliance failure about
+a figure the reader has just said it cannot read. The shapes that reach this
+guard include lawful copy — `"Ten Billion CFU and Fifty Billion CFU"` is a list,
+`"Ten Billion and Fifty Billion CFU"` is ambiguous prose rather than a lie — so a
+failure there is over-blocking, which this project treats as exactly as severe as
+a bypass, and it would be an over-block the operator cannot act on because the
+message could not name a correct figure. Refusing is strictly safer than the
+behaviour it replaces on **both** axes: it can never affirm a false figure as
+truthful, and it can never report a true one as false. What it costs is
+**coverage**, and that cost is bounded and deliberately covered elsewhere rather
+than assumed away: C24 still DETECTS the same string in a dosage attribute, and
+Y2 (2.4.6) gave C10/A5 the same detection on customer copy — because detection
+needs no composed value. This is the same division of labour that already makes
+C24 exist separately from C12.
+
+**Both directions, by test name** (`tests/complianceCompletions.test.ts`, under
+`Y1 — connectors, and the fragment the reader refuses (C12)`):
+
+| letter | test | what it pins |
+| --- | --- | --- |
+| (a) | *"Y1 (a): all three PROVEN bypasses now FAIL C12 against a contradicting canonical figure"* and *"...the whole gate reports them — the reviewer ran `runGate`, so this does too"* | the three exact strings |
+| (b) | *"Y1 (b): the same three forms, TRUTHFUL, still PASS"* | the over-block direction: the bullet is silent, and the whole listing behaves identically to the digit form of the same truthful sentence |
+| (b) | *"Y1 (b): truthful in the OTHER script too — a word-form canonical FACT matches digit copy"* | the fact side reads the connector form as well |
+| (c) | *"Y1 (c): word form and digit form resolve to the SAME number, asserted against the digit scan"* | value, unit AND dimension asserted equal to `extractUnitNumbers` on `150/250/100 Billion CFU` |
+| (c) | *"Y1 (c): the three named values are 150, 250 and 100 exactly"* | plus `A Thousand mg` = 1000 and `Two Thousand and Five Hundred mg` = 2500, so the rule generalises rather than special-casing three strings |
+| (d) | *"Y1 (d): with connectors emptied, the and-form resolves to NOTHING — never to the fragment"* | the chosen safe behaviour, asserted **explicitly** on the reader (`[]`, where the pre-Y1 answer was `[{ value: 50 }]`) |
+| (d) | *"Y1 (d): the refusal is vocabulary-INDEPENDENT — an unknown joiner is refused too"* | `plus`, `or`, a leading magnitude, and a connector English does not put there |
+| (d) | *"Y1 (d): refusing is NARROW — a complete figure beside another quantity is still read"* | the coverage the guard must NOT cost |
+| (e) | *"Y1 (e): connector-bearing lawful prose still PASSES"* | `"one and a half servings"`, `"a hundred percent"`, `"take one and then another"`, `"two and three"`, `"a one-time purchase"` and nine more, against C12 **and** C10 |
+| (e) | *"Y1 (e): the whole N3 lawful-prose battery is unchanged by the connector leg"* | the reviewer's original battery, re-run |
+| (f) | *"Y1 (f): emptying the pack vocabulary restores EXACT digit-only behaviour"* | three emptyings; the digit failures asserted **equal** to the digit failures under the full pack, for C12 and C10 |
+| (f) | *"Y1 (f): emptying ONLY the connectors narrows the reader — it does not reopen the fragment"* | the new list is a widener like the other two |
+| (g) | *"Y1 (g): the golden fixture is untouched — still ZERO gate failures"* | plus C12, C10 and A5 individually silent on it |
+
+**What is verified, stated precisely and no wider.** The three named strings fail
+C12 under the shipped pack and pass when the canonical fact matches; the reader
+composes `One Hundred and Fifty` / `Two Hundred and Fifty` / `A Hundred` to the
+same numbers, units and dimensions the digit scan yields; and a run that reaches
+`hasUnreadFigureBefore` or that `composeSpelledValue` returns `null` for produces
+no reading. **This is not a claim that every uncomposable numeral is now
+detected.** A word-form figure the reader refuses is measured by nothing —
+C10/A5 detect the *attachment* shape (2.4.6) and C24 the *attribute* shape, and
+neither is a measurement. That residue is the price of refusing, it is stated
+here rather than argued away, and the way to shrink it is to add words to the
+pack vocabulary — which is a pack change, not a gate change.
+
+**A future change to Y1 must also change:** `spelledOutRunSource`,
+`connectorWords`, `composeSpelledValue`, `hasUnreadFigureBefore`,
+`previousToken` and `spelledOutFigureReader` in `lib/gate/checks/shared.ts`,
+`AttributeGuardRules.spelledOutNumbers.connectors` in `lib/types.ts`,
+`rules.attributeGuard.spelledOutNumbers.connectors` (+ its
+`_spelledOutNumbersComment`) in `knowledge/rules.json`, and the `Y1:` cases in
 `tests/complianceCompletions.test.ts`.
 
 ### 2.5 Unchanged: the WS5.5 panel confirmation
@@ -877,7 +1074,7 @@ buys a nicer table at the cost of the audit trail.
 - kit `C32` (ASCII + AI-tells) → app **`C27`**
 - kit `C24` (dosage-attribute guard) → app **`C24`** — same number, same check,
   but **not the same value shape**: this app reads a spelled-out figure as well
-  as a digit one, and so does `C12` (item 2, N2/N3)
+  as a digit one, and so do `C12` (item 2, N2/N3) and `C10`/`A5` (item 2.4.6, Y2)
 
 Anyone reading a kit check number against this repository should use this table
 first.

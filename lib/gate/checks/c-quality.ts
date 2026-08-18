@@ -172,7 +172,7 @@ export function c9Allergen(l: OptimizedListing, pack: KnowledgePack): Failure[] 
 }
 
 export function c10PotencyPhrasing(l: OptimizedListing, pack: KnowledgePack): Failure[] {
-  return potencyPhrasingOver(customerSurfaces(l), pack.rules.units, 'C10');
+  return potencyPhrasingOver(customerSurfaces(l), pack.rules.units, 'C10', pack.rules.attributeGuard);
 }
 
 export function c11FictionPhrases(l: OptimizedListing, pack: KnowledgePack): Failure[] {
@@ -211,7 +211,10 @@ export function c11FictionPhrases(l: OptimizedListing, pack: KnowledgePack): Fai
  *      day, a container count and no unit at all — none of them a hero unit —
  *      so a bare number word can never trip this leg. Count and day figures
  *      stay digit-only.
- *   2. A CARDINAL MUST LEAD, so "Billion CFU" is not read as a figure.
+ *   2. A CARDINAL MUST LEAD, so "Billion CFU" is not read as a figure. Y1
+ *      admits one further lead: an inert pack CONNECTOR in front of a
+ *      magnitude that is not also a unit here, which is how "A Hundred Billion
+ *      CFU" reads as 100 while "a Billion CFU" stays the unit.
  *   3. THE SEPARATOR IS REQUIRED and both sides are word-bounded.
  *   4. THE VALUE IS COMPOSED THE SAME WAY THE DIGITS ARE — "Fifty Billion CFU"
  *      is fifty of the compound unit, exactly as "50 Billion CFU" is, so
@@ -219,6 +222,15 @@ export function c11FictionPhrases(l: OptimizedListing, pack: KnowledgePack): Fai
  *   5. ABSENT PACK DATA = EXACT PRIOR BEHAVIOUR. The reader is a widener:
  *      emptying the lists narrows C12 back to the digit-anchored scan, it
  *      never disarms it.
+ *
+ * Y1 — AND THE ONE THING THIS CHECK MUST NEVER DO. It measures, so a figure it
+ * reads WRONG is worse than one it does not read at all: "One Hundred and Fifty
+ * Billion CFU" once resolved to the sub-run "Fifty Billion CFU" and was
+ * reported as AGREEING with a canonical 50. The reader now either reads a
+ * figure whole or returns nothing for it — see `hasUnreadFigureBefore` in
+ * `./shared` and CONFORMANCE-DEVIATIONS.md item 2.4.8. The residue that costs
+ * (a figure nobody measures) is picked up as a DETECTION by C24 on attributes
+ * and by C10/A5 on copy, neither of which needs a composed value.
  */
 export function c12FactConsistency(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const surfaces = [

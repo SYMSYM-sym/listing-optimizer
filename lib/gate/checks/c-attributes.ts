@@ -1,6 +1,6 @@
 import type { AttributeField, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { presentAllergens } from './c-quality';
-import { fail, heroUnitSource, spelledOutRunSource } from './shared';
+import { fail, heroUnitSource, heroUnitTokens, spelledOutRunSource } from './shared';
 
 /**
  * C23 — ATTRIBUTE DISCIPLINE (pack-driven; the schema is
@@ -230,7 +230,10 @@ export function c24DosageAttributeGuard(l: OptimizedListing, pack: KnowledgePack
   // run pattern is compiled by `spelledOutRunSource` in `./shared`, which is
   // the SINGLE place the pack vocabulary becomes a pattern — C12 reads the
   // same lists through the same function (CONFORMANCE-DEVIATIONS.md item 2).
-  const runSource = spelledOutRunSource(guard?.spelledOutNumbers);
+  const runSource = spelledOutRunSource(
+    guard?.spelledOutNumbers,
+    heroUnitTokens(pack.rules?.units, guard),
+  );
   if (runSource) {
     valueRes.push(new RegExp(`\\b(?:${runSource})[\\s-]+(?:${unitSource})\\b`, 'i'));
   }
@@ -306,7 +309,7 @@ function amountPattern(pack: KnowledgePack): RegExp | null {
   const source = alternation(units);
   if (!source) return null;
   const digits = `\\d[\\d,.]*\\s*(?:${source})\\b`;
-  const runSource = spelledOutRunSource(pack.rules?.attributeGuard?.spelledOutNumbers);
+  const runSource = spelledOutRunSource(pack.rules?.attributeGuard?.spelledOutNumbers, units);
   if (!runSource) return new RegExp(digits, 'gi');
   return new RegExp(`${digits}|\\b(?:${runSource})[\\s-]+(?:${source})\\b`, 'gi');
 }

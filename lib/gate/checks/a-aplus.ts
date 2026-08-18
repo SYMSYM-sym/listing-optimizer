@@ -76,7 +76,7 @@ export function a4AplusProductName(l: OptimizedListing, pack: KnowledgePack): Fa
 }
 
 export function a5AplusPotencyPhrasing(l: OptimizedListing, pack: KnowledgePack): Failure[] {
-  return potencyPhrasingOver(aplusSurfaces(l.aplusContent), pack.rules.units, 'A5');
+  return potencyPhrasingOver(aplusSurfaces(l.aplusContent), pack.rules.units, 'A5', pack.rules.attributeGuard);
 }
 
 export function a6AplusFictionPhrases(l: OptimizedListing, pack: KnowledgePack): Failure[] {

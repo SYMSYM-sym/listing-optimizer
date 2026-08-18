@@ -450,6 +450,25 @@ export interface AttributeGuardRules {
   spelledOutNumbers?: {
     cardinals: Record<string, number>;
     magnitudes?: Record<string, number>;
+    /**
+     * Y1 — the INERT words English puts inside a numeral: "one hundred AND
+     * fifty", "A hundred". A list of WORDS, not word→value pairs, and that
+     * shape is load-bearing: the value tables are built by a filter that keeps
+     * only entries whose `value > 0`, so an inert word declared as a cardinal
+     * would widen the PATTERN while being dropped from the VALUE table — the
+     * two halves would disagree and the composition would be wrong. Being
+     * valueless is what a connector is, so it is declared that way.
+     *
+     * A connector never begins or ends a run on its own; it may only sit
+     * between two value words, or lead one in front of a magnitude, where it
+     * supplies the implicit one ("a hundred" == 100).
+     *
+     * ABSENT OR EMPTY is safe in the same sense as the lists above: without it
+     * a run simply cannot cross a connector, and the reader REFUSES the
+     * fragment rather than resolving it (see `hasUnreadFigureBefore` in
+     * `lib/gate/checks/shared.ts`).
+     */
+    connectors?: string[];
   };
 }
 

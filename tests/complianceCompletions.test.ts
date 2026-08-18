@@ -6,6 +6,8 @@ import { optimize } from '@/lib/engine/optimize';
 import { normalizeListingTypography, toAsciiTypography } from '@/lib/engine/typography';
 import { buildShipSheet } from '@/lib/export/shipSheet';
 import {
+  a5AplusPotencyPhrasing,
+  c10PotencyPhrasing,
   c12FactConsistency,
   c17Style,
   c24DosageAttributeGuard,
@@ -13,6 +15,7 @@ import {
   c27OutputHygiene,
   type GateContext,
 } from '@/lib/gate/checks';
+import { extractUnitNumbers, spelledOutFigureReader } from '@/lib/gate/checks/shared';
 import { runGate } from '@/lib/gate/runGate';
 import { mapProduct } from '@/lib/ingest/providers/rainforest';
 import { toSnapshot } from '@/lib/ingest/toSnapshot';
@@ -596,6 +599,461 @@ describe('C12 reads a SPELLED-OUT hero figure (N3)', () => {
 
   it('N3: the golden fixture is untouched — still ZERO gate failures', () => {
     expect(c12FactConsistency(clean, pack)).toEqual([]);
+    expect(runGate(clean, pack, ctx).failures).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// Y1 — the INERT CONNECTOR, and the FRAGMENT the reader must never resolve
+// ===========================================================================
+
+/**
+ * ============================================================================
+ * Y1 — A PROVEN BYPASS OF N3, FOUND BY ADVERSARIAL REVIEW.
+ * ============================================================================
+ *
+ * WHAT WAS BROKEN. `"Delivers One Hundred and Fifty Billion CFU per serving"`
+ * against a canonical `facts.potency` of `"50 Billion CFU"` produced ZERO
+ * failures from the entire gate. `and` is not in the pack vocabulary and could
+ * not be: `valueMap` keeps only entries whose `value > 0`, so an inert word
+ * declared as a cardinal is dropped from the value table. The run pattern
+ * therefore could not cross `and`, the reader fell back to the SUB-RUN
+ * `"Fifty Billion CFU"`, composed 50, and — 50 being the canonical figure —
+ * concluded the copy AGREED with the facts.
+ *
+ * That is worse than a miss. It is a MIS-MEASUREMENT: the gate affirmatively
+ * measured a threefold overstatement as truthful. `"Two Hundred and Fifty
+ * Billion CFU"` read as 50 the same way, and `"A Hundred Billion CFU"` evaded
+ * the pattern entirely because an article cannot lead a run.
+ *
+ * TWO FIXES, and the second is the one that matters:
+ *
+ *  1. CONNECTORS are now pack data in their own right — a list of WORDS, since
+ *     being valueless is what a connector IS and no `value > 0` filter can
+ *     strip a word out of a string list. `lib/gate` names none of them.
+ *  2. THE READER REFUSES A FRAGMENT. A run it cannot read WHOLE yields no
+ *     figure at all rather than the value of part of itself. This is the fix
+ *     for the CLASS: the fallback recurs with any vocabulary a pack lacks, so
+ *     the guard is deliberately vocabulary-INDEPENDENT and is asserted below
+ *     with the connector list emptied.
+ */
+describe('Y1 — connectors, and the fragment the reader refuses (C12)', () => {
+  /** The three forms the reviewer proved, with what each must resolve to. */
+  const bypasses: [string, number][] = [
+    ['Delivers One Hundred and Fifty Billion CFU per serving', 150],
+    ['Delivers Two Hundred and Fifty Billion CFU per serving', 250],
+    ['A Hundred Billion CFU per serving', 100],
+  ];
+
+  const withoutConnectors = (): KnowledgePack => {
+    const k = clonePack();
+    delete k.rules.attributeGuard!.spelledOutNumbers!.connectors;
+    return k;
+  };
+
+  // (a) --------------------------------------------------------------------
+  it('Y1 (a): all three PROVEN bypasses now FAIL C12 against a contradicting canonical figure', () => {
+    expect(clean.facts.potency).toBe('50 Billion CFU');
+    for (const [copy] of bypasses) {
+      const l = mut((x) => {
+        x.bullets[0] = copy;
+      });
+      const failures = c12FactConsistency(l, pack).filter((f) => f.field === 'bullets[0]');
+      expect(failures.length, copy).toBe(1);
+      expect(failures[0]!.fix, copy).toContain("facts.potency '50 Billion CFU'");
+      expect(idsOf(l), copy).toContain('C12');
+    }
+  });
+
+  it('Y1 (a): the whole gate reports them — the reviewer ran runGate, so this does too', () => {
+    for (const [copy] of bypasses) {
+      const l = mut((x) => {
+        x.bullets[0] = copy;
+      });
+      expect(runGate(l, pack, ctx).failures.map((f) => f.checkId), copy).toContain('C12');
+    }
+  });
+
+  // (b) --------------------------------------------------------------------
+  /**
+   * THE OVER-BLOCK DIRECTION, and the one that matters most. The same three
+   * sentences are TRUTHFUL when the canonical fact matches, and a check that
+   * fails truthful copy is as bad as one that misses a lie.
+   */
+  it('Y1 (b): the same three forms, TRUTHFUL, still PASS', () => {
+    for (const [copy, value] of bypasses) {
+      const words = mut((x) => {
+        x.facts.potency = `${value} Billion CFU`;
+        x.bullets[0] = copy;
+      });
+      // the bullet itself is silent...
+      expect(
+        c12FactConsistency(words, pack).filter((f) => f.field === 'bullets[0]'),
+        copy,
+      ).toEqual([]);
+      // ...and the listing as a whole behaves EXACTLY as the digit form of the
+      // same truthful sentence does. (The fixture's other surfaces state the
+      // old 50, so raising the canonical figure moves them together — that is
+      // the control, and it is the same for both scripts.)
+      const digits = mut((x) => {
+        x.facts.potency = `${value} Billion CFU`;
+        x.bullets[0] = `Delivers ${value} Billion CFU per serving`;
+      });
+      expect(c12FactConsistency(words, pack), copy).toEqual(c12FactConsistency(digits, pack));
+    }
+  });
+
+  it('Y1 (b): truthful in the OTHER script too — a word-form canonical FACT matches digit copy', () => {
+    for (const [words, digits] of [
+      ['One Hundred and Fifty Billion CFU', 150],
+      ['Two Hundred and Fifty Billion CFU', 250],
+      ['A Hundred Billion CFU', 100],
+    ] as [string, number][]) {
+      const l = mut((x) => {
+        x.facts.potency = words;
+        x.bullets[0] = `Delivers ${digits} Billion CFU per serving`;
+      });
+      expect(
+        c12FactConsistency(l, pack).filter((f) => f.field === 'bullets[0]'),
+        words,
+      ).toEqual([]);
+    }
+  });
+
+  // (c) --------------------------------------------------------------------
+  /**
+   * THE VALUE IS THE WHOLE POINT. Each connector form must resolve to exactly
+   * what the DIGIT scan yields for the same figure — not approximately, and not
+   * merely "to something different from the canonical fact".
+   */
+  it('Y1 (c): word form and digit form resolve to the SAME number, asserted against the digit scan', () => {
+    const reader = spelledOutFigureReader(pack.rules.units, pack.rules.attributeGuard)!;
+    for (const [words, digits] of [
+      ['One Hundred and Fifty Billion CFU', '150 Billion CFU'],
+      ['Two Hundred and Fifty Billion CFU', '250 Billion CFU'],
+      ['A Hundred Billion CFU', '100 Billion CFU'],
+      ['one hundred and fifty billion cfu', '150 billion cfu'],
+      ['Two Hundred and Fifty-Billion CFU', '250 Billion CFU'],
+    ] as [string, string][]) {
+      const word = reader.read(words);
+      const digit = extractUnitNumbers(digits, pack.rules.units);
+      expect(word.length, words).toBe(1);
+      expect(digit.length, digits).toBe(1);
+      expect(word[0]!.value, words).toBe(digit[0]!.value);
+      expect(word[0]!.unit, words).toBe(digit[0]!.unit);
+      expect(word[0]!.dimension, words).toBe(digit[0]!.dimension);
+    }
+  });
+
+  it('Y1 (c): the three named values are 150, 250 and 100 exactly', () => {
+    const reader = spelledOutFigureReader(pack.rules.units, pack.rules.attributeGuard)!;
+    expect(reader.read('One Hundred and Fifty Billion CFU')[0]!.value).toBe(150);
+    expect(reader.read('Two Hundred and Fifty Billion CFU')[0]!.value).toBe(250);
+    expect(reader.read('A Hundred Billion CFU')[0]!.value).toBe(100);
+    // and the composition rule generalises rather than special-casing the three
+    expect(reader.read('A Thousand mg')[0]!.value).toBe(1000);
+    expect(reader.read('Two Thousand and Five Hundred mg')[0]!.value).toBe(2500);
+  });
+
+  // (d) --------------------------------------------------------------------
+  /**
+   * THE ROOT CAUSE, AND THE CHOSEN SAFE BEHAVIOUR.
+   *
+   * A run the reader cannot read WHOLE returns NO figure. Not a fragment's
+   * value, and not a failure either.
+   *
+   * WHY REFUSE RATHER THAN FAIL CLOSED. A failure here would be an assertion
+   * about a figure the reader has just said it cannot read, and the shapes that
+   * reach the guard include lawful prose — `"Ten Billion CFU and Fifty Billion
+   * CFU"` is a list, `"Ten Billion and Fifty Billion CFU"` is ambiguous rather
+   * than untrue. Emitting a failure on those is over-blocking, which this
+   * project treats as exactly as severe as a bypass. Refusing is strictly safer
+   * than what it replaces: it can never affirm a false figure as truthful and
+   * it can never report a true one as false. The cost is COVERAGE, it is
+   * bounded, and the other legs are still armed — C24 DETECTS the same string
+   * in a dosage attribute and (Y2) C10/A5 detect it on customer copy, because
+   * detection needs no composed value.
+   *
+   * The guard is asserted with the connector list EMPTIED, because that is the
+   * state every future pack with a missing word is in.
+   */
+  it('Y1 (d): with connectors emptied, the and-form resolves to NOTHING — never to the fragment', () => {
+    const kit = withoutConnectors();
+    const reader = spelledOutFigureReader(kit.rules.units, kit.rules.attributeGuard)!;
+    for (const text of [
+      'One Hundred and Fifty Billion CFU',
+      'Two Hundred and Fifty Billion CFU',
+    ]) {
+      // the pre-Y1 behaviour was `[{ value: 50 }]` — the sub-run, read as the figure
+      expect(reader.read(text), text).toEqual([]);
+    }
+    // ...and the same holds through C12: no failure, and above all no failure
+    // or silent pass that treats 50 as the figure this sentence states.
+    const l = mut((x) => {
+      x.bullets[0] = 'Delivers One Hundred and Fifty Billion CFU per serving';
+    });
+    expect(c12FactConsistency(l, kit)).toEqual([]);
+  });
+
+  it('Y1 (d): the refusal is vocabulary-INDEPENDENT — an unknown joiner is refused too', () => {
+    const reader = spelledOutFigureReader(pack.rules.units, pack.rules.attributeGuard)!;
+    for (const text of [
+      'One Hundred plus Fifty Billion CFU', // a joiner no pack declares
+      'Hundred Fifty Billion CFU', // a magnitude cannot lead, so `Fifty` would have
+      'Two Hundred or Fifty Billion CFU',
+      'Fifty and Sixty mg', // a connector English does not put there
+    ]) {
+      expect(reader.read(text), text).toEqual([]);
+    }
+  });
+
+  it('Y1 (d): refusing is NARROW — a complete figure beside another quantity is still read', () => {
+    const reader = spelledOutFigureReader(pack.rules.units, pack.rules.attributeGuard)!;
+    // "Ten" belongs to "Strains": the numeral to the left is COMPLETE, so the
+    // reading is not a fragment and must not be dropped.
+    expect(reader.read('Ten Strains Fifty Billion CFU').map((n) => n.value)).toEqual([50]);
+    expect(reader.read('Ten Strains, Fifty Billion CFU').map((n) => n.value)).toEqual([50]);
+    expect(reader.read('A Fifty Billion CFU blend of ten strains').map((n) => n.value)).toEqual([50]);
+    // a LIST of two complete figures is two readings, not a refusal
+    expect(
+      reader.read('Ten Billion CFU and Fifty Billion CFU').map((n) => n.value),
+    ).toEqual([10, 50]);
+    // and the coverage that costs nothing is still there: an overstated figure
+    // sitting next to a strain count is still reported
+    const l = mut((x) => {
+      x.bullets[0] = 'Ten Strains Ninety Billion CFU';
+    });
+    expect(c12FactConsistency(l, pack).filter((f) => f.field === 'bullets[0]')).toHaveLength(1);
+  });
+
+  // (e) --------------------------------------------------------------------
+  /**
+   * THE LAWFUL-PROSE BATTERY, extended with the sentences the CONNECTORS put at
+   * risk. Connectors are the commonest words in English; the bound that keeps
+   * them safe is the same one as before — a HERO unit is still required, and a
+   * connector may never begin or end a run.
+   */
+  it('Y1 (e): connector-bearing lawful prose still PASSES', () => {
+    for (const value of [
+      'one and a half servings',
+      'One and a half servings per day',
+      'a hundred percent',
+      'A hundred percent plant based',
+      'take one and then another',
+      'Take one and then another with water',
+      'two and three',
+      'Two and three capsule servings',
+      'a one-time purchase',
+      'A one-time purchase and a one-month supply',
+      'One softgel in the morning and one in the evening',
+      'Ten strains and a prebiotic blend',
+      'A daily capsule and a nightly one',
+      'An easy routine, one capsule and done',
+    ]) {
+      const l = mut((x) => {
+        x.bullets[0] = value;
+        x.description = `<p>${value}</p>`;
+      });
+      expect(c12FactConsistency(l, pack), value).toEqual([]);
+      expect(c10PotencyPhrasing(l, pack), value).toEqual([]);
+    }
+  });
+
+  it('Y1 (e): the whole N3 lawful-prose battery is unchanged by the connector leg', () => {
+    for (const value of [
+      'one capsule daily',
+      'two servings',
+      'Two servings per day',
+      'thirty day supply',
+      'take one to two capsules',
+      'sixty capsules, one month supply',
+      'one a day',
+      'one hundred percent plant based',
+      'ten strains',
+      'a one-time purchase',
+      'first-time customers',
+      'Twenty four hours of digestive comfort',
+      'Ten gummies per pouch',
+      'Three tablets, two times a day',
+      'Sixty vegetable capsules provide a two month supply',
+      'Fifty percent more than the previous size',
+      'Billion CFU',
+      'Billion CFU per serving',
+      'Measured in Billion CFU',
+    ]) {
+      const l = mut((x) => {
+        x.bullets[0] = value;
+        x.description = `<p>${value}</p>`;
+      });
+      expect(c12FactConsistency(l, pack), value).toEqual([]);
+    }
+  });
+
+  // (f) --------------------------------------------------------------------
+  it('Y1 (f): emptying the pack vocabulary restores EXACT digit-only behaviour', () => {
+    const digits = mut((x) => {
+      x.bullets[0] = 'Delivers 150 Billion CFU per serving';
+    });
+    const words = mut((x) => {
+      x.bullets[0] = 'Delivers One Hundred and Fifty Billion CFU per serving';
+    });
+    for (const kit of [
+      (() => {
+        const k = clonePack();
+        delete k.rules.attributeGuard!.spelledOutNumbers;
+        return k;
+      })(),
+      (() => {
+        const k = clonePack();
+        k.rules.attributeGuard!.spelledOutNumbers = { cardinals: {}, magnitudes: { billion: 1e9 }, connectors: ['and'] };
+        return k;
+      })(),
+      (() => {
+        const k = clonePack();
+        delete k.rules.attributeGuard;
+        return k;
+      })(),
+    ]) {
+      expect(spelledOutFigureReader(kit.rules.units, kit.rules.attributeGuard)).toBeNull();
+      // the word form is invisible again — the pre-N3 digit-anchored scan
+      expect(c12FactConsistency(words, kit)).toEqual([]);
+      expect(c10PotencyPhrasing(words, kit)).toEqual([]);
+      // ...and every digit figure is caught EXACTLY as it is under the full pack
+      expect(c12FactConsistency(digits, kit)).toEqual(c12FactConsistency(digits, pack));
+      expect(c10PotencyPhrasing(digits, kit)).toEqual(c10PotencyPhrasing(digits, pack));
+      expect(c12FactConsistency(digits, kit).length).toBeGreaterThan(0);
+      expect(c10PotencyPhrasing(digits, kit).length).toBeGreaterThan(0);
+      expect(c12FactConsistency(clean, kit)).toEqual([]);
+      expect(c10PotencyPhrasing(clean, kit)).toEqual([]);
+    }
+  });
+
+  it('Y1 (f): emptying ONLY the connectors narrows the reader — it does not reopen the fragment', () => {
+    const kit = withoutConnectors();
+    const digits = mut((x) => {
+      x.bullets[0] = 'Delivers 150 Billion CFU per serving';
+    });
+    // the plain word form is untouched by the connector list
+    const plain = mut((x) => {
+      x.bullets[0] = 'Delivers Ninety Billion CFU per serving';
+    });
+    expect(c12FactConsistency(plain, kit)).toEqual(c12FactConsistency(plain, pack));
+    expect(c12FactConsistency(digits, kit)).toEqual(c12FactConsistency(digits, pack));
+    // the and-form is not measured at all under the narrowed pack — and, above
+    // all, is not measured AS FIFTY
+    const l = mut((x) => {
+      x.bullets[0] = 'Delivers One Hundred and Fifty Billion CFU per serving';
+    });
+    expect(c12FactConsistency(l, kit)).toEqual([]);
+  });
+
+  // (g) --------------------------------------------------------------------
+  it('Y1 (g): the golden fixture is untouched — still ZERO gate failures', () => {
+    expect(runGate(clean, pack, ctx).failures).toEqual([]);
+    expect(c12FactConsistency(clean, pack)).toEqual([]);
+    expect(c10PotencyPhrasing(clean, pack)).toEqual([]);
+    expect(a5AplusPotencyPhrasing(clean, pack)).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// Y2 — C10/A5 read the SPELLED-OUT figure too
+// ===========================================================================
+
+/**
+ * ============================================================================
+ * Y2 — THE C10/A5 DECLINE, RE-DECIDED.
+ * ============================================================================
+ *
+ * CONFORMANCE-DEVIATIONS.md 2.4.6 declined extending `potencyPhrasingOver`,
+ * partly on the argument that the residue was bounded *because* "an untrue
+ * word-form per-serving figure is now caught by C12". Y1 proved that argument
+ * false as written: `"Delivers One Hundred and Fifty Billion CFU per serving"`
+ * was untrue, was not caught by C12, and was not caught by C10/A5 either — the
+ * two halves failed together on exactly the sentence shape the argument named.
+ *
+ * RE-DECIDED: EXTEND. C10/A5 are DETECTION rules — they object to attaching the
+ * headline potency to a single dose whatever the number is — so they need no
+ * composed value, which makes them the right home for precisely the residue
+ * C12's fragment refusal must leave behind. Same pack vocabulary, same
+ * compiler, no second copy.
+ */
+describe('Y2 — C10/A5 potency PHRASING reads the spelled-out figure', () => {
+  it('Y2: a word-form per-serving attachment now FAILS C10, exactly as the digit form does', () => {
+    for (const [words, digits] of [
+      ['Delivers Fifty Billion CFU per serving', 'Delivers 50 Billion CFU per serving'],
+      ['Fifty Billion CFU per serving of live cultures', '50 Billion CFU per serving of live cultures'],
+      ['Delivers One Hundred and Fifty Billion CFU per serving', 'Delivers 150 Billion CFU per serving'],
+    ] as [string, string][]) {
+      const wordListing = mut((x) => {
+        x.bullets[0] = words;
+      });
+      const digitListing = mut((x) => {
+        x.bullets[0] = digits;
+      });
+      const w = c10PotencyPhrasing(wordListing, pack).filter((f) => f.field === 'bullets[0]');
+      const d = c10PotencyPhrasing(digitListing, pack).filter((f) => f.field === 'bullets[0]');
+      expect(w.length, words).toBe(d.length);
+      expect(w.length, words).toBeGreaterThan(0);
+      expect(w[0]!.fix, words).toBe(d[0]!.fix);
+      expect(idsOf(wordListing), words).toContain('C10');
+    }
+  });
+
+  it('Y2: the TRUE word-form figure is caught too — the attachment is the objection, not the number', () => {
+    // 50 IS the canonical potency, so C12 has nothing to say. C10 still does.
+    const l = mut((x) => {
+      x.bullets[0] = 'Delivers Fifty Billion CFU per serving';
+    });
+    expect(c12FactConsistency(l, pack)).toEqual([]);
+    expect(c10PotencyPhrasing(l, pack).length).toBeGreaterThan(0);
+  });
+
+  it('Y2: A5 gets the same leg on A+ copy', () => {
+    const l = mut((x) => {
+      x.aplusContent!.modules[1]!.body = 'Delivers Fifty Billion CFU per serving';
+    });
+    const failures = a5AplusPotencyPhrasing(l, pack);
+    expect(failures.length).toBeGreaterThan(0);
+    expect(idsOf(l)).toContain('A5');
+  });
+
+  it('Y2: over-blocking — ordinary prose, and a potency NOT attached to a dose, still PASS', () => {
+    for (const value of [
+      'Fifty Billion CFU in every capsule of the blend',
+      'A Fifty Billion CFU blend of ten strains',
+      'Fifty Billion CFU per bottle',
+      'one capsule daily',
+      'two servings per day',
+      'Ten gummies per pouch',
+      'one hundred percent plant based, one capsule per day',
+      'a hundred percent vegan',
+      'Take one and then another with your meal',
+      'No claim of Fifty Billion CFU per serving is made here',
+    ]) {
+      const l = mut((x) => {
+        x.bullets[0] = value;
+        x.description = `<p>${value}</p>`;
+      });
+      expect(c10PotencyPhrasing(l, pack), value).toEqual([]);
+    }
+  });
+
+  it('Y2: the leg is PACK DATA — no vocabulary is the exact digit-anchored rule C10/A5 shipped with', () => {
+    const kit = clonePack();
+    delete kit.rules.attributeGuard!.spelledOutNumbers;
+    const words = mut((x) => {
+      x.bullets[0] = 'Delivers Fifty Billion CFU per serving';
+    });
+    const digits = mut((x) => {
+      x.bullets[0] = 'Delivers 50 Billion CFU per serving';
+    });
+    expect(c10PotencyPhrasing(words, kit)).toEqual([]);
+    expect(c10PotencyPhrasing(digits, kit)).toEqual(c10PotencyPhrasing(digits, pack));
+    expect(c10PotencyPhrasing(digits, kit).length).toBeGreaterThan(0);
+  });
+
+  it('Y2: the golden fixture is untouched — still ZERO gate failures', () => {
     expect(runGate(clean, pack, ctx).failures).toEqual([]);
   });
 });

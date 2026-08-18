@@ -379,6 +379,16 @@ interface CompiledUnits {
   unitRe: RegExp;
   dimensionOf: Map<string, Dimension>;
   familyOf: Map<string, string>;
+}
+
+/**
+ * C10/A5's two phrasing patterns. They are NOT part of `CompiledUnits` because
+ * they depend on the pack's number vocabulary as well as its units (Y2), and
+ * `CompiledUnits` is cached on the `UnitRules` object alone. Keeping them in
+ * their own cache is what let the word-form leg be added without changing the
+ * key of the hot path two other checks share.
+ */
+interface PhrasingPatterns {
   perServingRe: RegExp;
   deliversRe: RegExp;
 }
@@ -408,40 +418,89 @@ function compileUnits(units: UnitRules): CompiledUnits {
     }
   }
 
+  const never = '(?!)';
+  const compiled: CompiledUnits = {
+    unitRe: new RegExp(`(\\d[\\d,]*(?:\\.\\d+)?)[\\s-]*(${all.length ? alternationSource(all) : never})\\b`, 'gi'),
+    dimensionOf,
+    familyOf,
+  };
+  UNIT_CACHE.set(units, compiled);
+  return compiled;
+}
+
+const PHRASING_CACHE = new WeakMap<UnitRules, Map<string, PhrasingPatterns>>();
+
+/**
+ * Compile C10/A5's two phrasing patterns for a pack.
+ *
+ * `runSource` is the word-form number pattern (`spelledOutRunSource`) or `null`
+ * for the DIGIT-ANCHORED behaviour these checks shipped with. It is the cache
+ * sub-key, so a caller that passes no vocabulary gets byte-for-byte the old
+ * pattern and a caller that passes one gets the widened pattern, with no
+ * possibility of the two sharing an entry.
+ */
+function phrasingPatterns(units: UnitRules, runSource: string | null): PhrasingPatterns {
+  let byVocabulary = PHRASING_CACHE.get(units);
+  if (!byVocabulary) {
+    byVocabulary = new Map<string, PhrasingPatterns>();
+    PHRASING_CACHE.set(units, byVocabulary);
+  }
+  const key = runSource ?? '';
+  const cached = byVocabulary.get(key);
+  if (cached) return cached;
+
   const potency = alternationSource(units.dimensions?.potency ?? []);
   const perServing = alternationSource(units.perServingPhrases ?? []);
   const verbs = alternationSource(units.potencyVerbs ?? []);
   // A pack with no potency units or no per-dose phrasing simply has no C10/A5
   // rule — an impossible pattern is used so the check is a documented no-op.
   const never = '(?!)';
+  // The FIGURE: digits as always, plus — only when the pack ships a vocabulary
+  // — the same word run C12 and C24 read. Each alternative carries its own
+  // separator rule, so "ten gummies" can no more be read as "ten g" here than
+  // it can in the reader.
+  const digits = '\\d[\\d,.]*\\s*';
+  const figure = runSource ? `(?:${digits}|(?:${runSource})[\\s-]+)` : `(?:${digits})`;
 
-  const compiled: CompiledUnits = {
-    unitRe: new RegExp(`(\\d[\\d,]*(?:\\.\\d+)?)[\\s-]*(${all.length ? alternationSource(all) : never})\\b`, 'gi'),
-    dimensionOf,
-    familyOf,
+  const compiled: PhrasingPatterns = {
     perServingRe: new RegExp(
       potency && perServing
-        ? `(\\d[\\d,.]*)\\s*(${potency})\\b[^.]{0,40}?\\b(?:${perServing})`
+        ? `${figure}(?:${potency})\\b[^.]{0,40}?\\b(?:${perServing})`
         : never,
       'gi',
     ),
     deliversRe: new RegExp(
       potency && perServing && verbs
-        ? `\\b(?:${verbs})\\b[^.]{0,40}?(\\d[\\d,.]*)\\s*(${potency})\\b[^.]{0,30}?\\b(?:${perServing})`
+        ? `\\b(?:${verbs})\\b[^.]{0,40}?${figure}(?:${potency})\\b[^.]{0,30}?\\b(?:${perServing})`
         : never,
       'gi',
     ),
   };
-  UNIT_CACHE.set(units, compiled);
+  byVocabulary.set(key, compiled);
   return compiled;
 }
 
+/**
+ * C10 (customer copy) / A5 (A+) — the headline potency must not be attached to
+ * a single dose.
+ *
+ * Y2 — this reads the SPELLED-OUT figure too, on the same pack vocabulary and
+ * through the same compiler as C24 and C12. It is a DETECTION rule, not a
+ * measurement one: it objects to the attachment whatever the number is, so it
+ * needs no composed value and is unaffected by a run the reader would refuse to
+ * compose. `guard` absent (or a pack with no vocabulary) = the exact
+ * digit-anchored patterns these two checks shipped with.
+ */
 export function potencyPhrasingOver(
   surfaces: [string, string][],
   units: UnitRules,
   checkId: string,
+  guard?: AttributeGuardRules,
 ): Failure[] {
-  const { perServingRe, deliversRe } = compileUnits(units);
+  const { perServingRe, deliversRe } = phrasingPatterns(
+    units,
+    spelledOutRunSource(guard?.spelledOutNumbers, units.dimensions?.potency),
+  );
   const out: Failure[] = [];
   for (const [field, textRaw] of surfaces) {
     const text = normalize(textRaw);
@@ -485,9 +544,30 @@ export function fictionOver(surfaces: [string, string][], cp: CompliancePack, ch
  * "two thousand"). `null` when the pack ships no cardinals — the callers then
  * keep their exact digit-anchored behaviour.
  *
- * TWO lists, and the split IS the false-positive control: a run must BEGIN
- * with a cardinal, and a magnitude may only appear after one, so a string that
- * merely names its unit ("Billion CFU") is never read as a figure.
+ * THREE lists, and the split IS the false-positive control: a run must BEGIN
+ * with a cardinal (or with an inert word in front of a magnitude — see below),
+ * and a magnitude may only appear after one, so a string that merely names its
+ * unit ("Billion CFU") is never read as a figure.
+ *
+ * Y1 — THE INERT CONNECTOR. `connectors` are the words English puts INSIDE a
+ * numeral that carry no value of their own: "one hundred AND fifty",
+ * "A hundred". They cannot live in `cardinals`/`magnitudes` because `valueMap`
+ * keeps only entries whose `value > 0`, so an inert word would be dropped from
+ * the value table while still widening the pattern — the two halves would
+ * disagree. They are therefore a list of WORDS, not word→value pairs: being
+ * valueless is what they ARE, so the shape says so and no filter can strip
+ * them. Nothing here names one; the list is pack data like the other two.
+ *
+ * Two placement rules, both structural, both in the pattern rather than prose:
+ *   - a connector INSIDE a run is glued to the value word that FOLLOWS it, so a
+ *     run can never begin or end on one ("fifty and" + a unit is not a figure);
+ *   - a connector may LEAD a run only in front of a magnitude, and only a
+ *     magnitude the caller does not ALSO append as a unit. "A hundred" is one
+ *     hundred; "a Billion CFU" is the UNIT reading the digit scan gives
+ *     "1 Billion CFU", and taking `billion` as a MAGNITUDE there would report
+ *     1,000,000,000 against a canonical "1 Billion CFU" and fail truthful copy.
+ *     That exclusion is why `unitTokens` is a parameter: every caller passes
+ *     the token list its own pattern appends after the run.
  *
  * The trailing quantifier is LAZY on purpose. The callers append
  * `[\s-]+(?:<unit alternation>)` to this source, and the unit alternation is
@@ -500,12 +580,38 @@ export function fictionOver(surfaces: [string, string][], cp: CompliancePack, ch
  */
 export function spelledOutRunSource(
   vocabulary: AttributeGuardRules['spelledOutNumbers'] | undefined,
+  unitTokens?: string[],
 ): string | null {
   const cardinals = alternationSource(Object.keys(vocabulary?.cardinals ?? {}));
   if (!cardinals) return null;
-  const magnitudes = alternationSource(Object.keys(vocabulary?.magnitudes ?? {}));
+  const magnitudeWords = Object.keys(vocabulary?.magnitudes ?? {});
+  const magnitudes = alternationSource(magnitudeWords);
+  const connectors = alternationSource(connectorWords(vocabulary));
   const anyWord = magnitudes ? `${cardinals}|${magnitudes}` : cardinals;
-  return `(?:${cardinals})(?:[\\s-]+(?:${anyWord}))*?`;
+  // A connector is never free-standing: it is glued to the value word after it.
+  const inner = connectors
+    ? `(?:(?:${connectors})[\\s-]+)?(?:${anyWord})`
+    : `(?:${anyWord})`;
+  // "A hundred" — an inert lead supplies the implicit one, but only in front of
+  // a magnitude that is not itself one of THIS caller's unit tokens.
+  const appended = new Set((unitTokens ?? []).map((t) => t.trim().toLowerCase()));
+  const leadMagnitudes = alternationSource(
+    magnitudeWords.filter((w) => !appended.has(w.trim().toLowerCase())),
+  );
+  const lead =
+    connectors && leadMagnitudes
+      ? `(?:${cardinals})|(?:${connectors})[\\s-]+(?:${leadMagnitudes})`
+      : `(?:${cardinals})`;
+  return `(?:${lead})(?:[\\s-]+${inner})*?`;
+}
+
+/** The pack's inert connector words, trimmed and de-blanked. Never a literal. */
+function connectorWords(
+  vocabulary: AttributeGuardRules['spelledOutNumbers'] | undefined,
+): string[] {
+  return (vocabulary?.connectors ?? [])
+    .map((w) => String(w ?? '').trim())
+    .filter(Boolean);
 }
 
 /**
@@ -523,10 +629,21 @@ export function heroUnitSource(
   units: UnitRules | undefined,
   guard: AttributeGuardRules | undefined,
 ): string {
-  const tokens = (guard?.unitDimensions ?? []).flatMap(
+  return alternationSource(heroUnitTokens(units, guard));
+}
+
+/**
+ * The same hero tokens as a LIST. `spelledOutRunSource` needs the tokens rather
+ * than the alternation, to keep an inert lead off a magnitude that is also a
+ * unit at this call site (see its header).
+ */
+export function heroUnitTokens(
+  units: UnitRules | undefined,
+  guard: AttributeGuardRules | undefined,
+): string[] {
+  return (guard?.unitDimensions ?? []).flatMap(
     (dimension) => units?.dimensions?.[dimension] ?? [],
   );
-  return alternationSource(tokens);
 }
 
 /** Reads word-form hero figures out of a text. */
@@ -539,28 +656,61 @@ export interface SpelledOutFigureReader {
  * not compose into one. Ordinary English composition: cardinals add, `hundred`
  * multiplies what is in hand, the larger magnitudes close a group off.
  *
- * A magnitude that follows no cardinal returns `null` rather than a value —
- * the pattern already refuses to start a run on one, and this keeps the two
- * halves from disagreeing if the pattern is ever loosened.
+ * `null` IS THE SAFE ANSWER and the caller must treat it as one — see
+ * `spelledOutFigureReader`. A magnitude that follows no cardinal returns `null`
+ * rather than a value: the pattern already refuses to start a run on one, and
+ * this keeps the two halves from disagreeing if the pattern is ever loosened.
+ *
+ * Y1 — CONNECTORS. An inert word carries no value, and it is only accepted
+ * where English actually puts it:
+ *   - LEADING the run, where it supplies the implicit one in front of a
+ *     magnitude ("a hundred" == "one hundred" == 100);
+ *   - directly after a MAGNITUDE, closing a group off ("one hundred AND
+ *     fifty" == 150).
+ * Anywhere else — "fifty and sixty" — the run is not a numeral this reader can
+ * read, so it returns `null` rather than inventing an addition English does not
+ * perform.
  */
 function composeSpelledValue(
   run: string,
   cardinals: Map<string, number>,
   magnitudes: Map<string, number>,
+  connectors: Set<string>,
 ): number | null {
   let total = 0;
   let current = 0;
   let sawWord = false;
+  let previous: 'start' | 'cardinal' | 'magnitude' | 'connector' = 'start';
+  let leadConnector = false;
   for (const token of run.toLowerCase().split(/[\s-]+/)) {
     if (!token) continue;
+    if (connectors.has(token)) {
+      if (previous === 'start') {
+        leadConnector = true;
+        previous = 'connector';
+        continue;
+      }
+      if (previous === 'magnitude') {
+        previous = 'connector';
+        continue;
+      }
+      return null;
+    }
     const cardinal = cardinals.get(token);
     if (cardinal !== undefined) {
       current += cardinal;
       sawWord = true;
+      previous = 'cardinal';
       continue;
     }
     const magnitude = magnitudes.get(token);
-    if (magnitude === undefined || current === 0) return null;
+    if (magnitude === undefined) return null;
+    if (current === 0) {
+      // "a hundred": a LEADING inert word supplies the implicit one. Without
+      // one, a magnitude with nothing in hand is not a figure.
+      if (!leadConnector || sawWord) return null;
+      current = 1;
+    }
     if (magnitude >= 1000) {
       total += current * magnitude;
       current = 0;
@@ -568,7 +718,9 @@ function composeSpelledValue(
       current *= magnitude;
     }
     sawWord = true;
+    previous = 'magnitude';
   }
+  if (previous === 'connector') return null;
   const value = total + current;
   return sawWord && Number.isFinite(value) && value > 0 ? value : null;
 }
@@ -590,19 +742,34 @@ function valueMap(entries: Record<string, number> | undefined): Map<string, numb
  * no vocabulary / no hero unit. `null` is the DIGIT-ANCHORED behaviour: every
  * caller treats an absent reader as "scan digits only", so emptying the pack
  * lists is a narrowing back to kit parity and can never disarm a check.
+ *
+ * THE READER EITHER READS A FIGURE WHOLE OR RETURNS NOTHING FOR IT. There is no
+ * third outcome and, in particular, no partial one: a run it cannot compose, or
+ * one that is part of a longer figure it did not read, yields NO `UnitNumber`
+ * at all rather than the value of a fragment. Y1 — a fragment that resolves to
+ * a number is not a miss, it is a MIS-MEASUREMENT: the caller compares it
+ * against the canonical fact and reports agreement.
  */
 export function spelledOutFigureReader(
   units: UnitRules | undefined,
   guard: AttributeGuardRules | undefined,
 ): SpelledOutFigureReader | null {
   if (!units) return null;
-  const runSource = spelledOutRunSource(guard?.spelledOutNumbers);
+  const runSource = spelledOutRunSource(
+    guard?.spelledOutNumbers,
+    heroUnitTokens(units, guard),
+  );
   if (!runSource) return null;
   const unitSource = heroUnitSource(units, guard);
   if (!unitSource) return null;
   const cardinals = valueMap(guard?.spelledOutNumbers?.cardinals);
   if (cardinals.size === 0) return null;
   const magnitudes = valueMap(guard?.spelledOutNumbers?.magnitudes);
+  const connectors = new Set(connectorWords(guard?.spelledOutNumbers).map((w) => w.toLowerCase()));
+  // Every VALUE-BEARING word the vocabulary knows — the input to the
+  // fragment guard below. Connectors are deliberately absent: they carry no
+  // value, so one sitting in front of a run is not an unread figure.
+  const valueWords = new Set<string>([...cardinals.keys(), ...magnitudes.keys()]);
   // The separator is REQUIRED and both sides are word-bounded, so "ten
   // gummies" can never be read as "ten g".
   const re = new RegExp(`\\b(${runSource})[\\s-]+(${unitSource})\\b`, 'gi');
@@ -620,7 +787,12 @@ export function spelledOutFigureReader(
         const runText = m[1];
         const unitStr = m[2];
         if (!runText || !unitStr) continue;
-        const value = composeSpelledValue(runText, cardinals, magnitudes);
+        // Y1 — REFUSE A FRAGMENT. Both of these return no reading at all
+        // rather than a number: a run this reader cannot read WHOLE must never
+        // resolve to part of itself and then be compared as though it were the
+        // figure the copy states. See the header on `hasUnreadFigureBefore`.
+        if (hasUnreadFigureBefore(text, m.index, valueWords, units)) continue;
+        const value = composeSpelledValue(runText, cardinals, magnitudes, connectors);
         if (value === null) continue;
         const unit = unitStr.toLowerCase().replace(/\s+/g, ' ');
         const dimension = dimensionOf.get(unit);
@@ -739,15 +911,93 @@ function nonAttributingWords(units: UnitRules): Set<string> {
  * CFU blend") — are measured against the canonical fact exactly as before.
  */
 function isAttributed(text: string, index: number, units: UnitRules): boolean {
-  let i = index - 1;
-  while (i >= 0 && /[\s\-]/.test(text[i]!)) i--;
-  if (i < 0) return false;
-  if (!/[A-Za-z0-9']/.test(text[i]!)) return false; // clause punctuation / bracket
-  const end = i + 1;
-  while (i >= 0 && /[A-Za-z0-9']/.test(text[i]!)) i--;
-  const token = text.slice(i + 1, end);
+  const previous = previousToken(text, index);
+  if (!previous) return false;
+  const token = previous.token;
   if (!/[A-Za-z]/.test(token) || token.length < 2) return false;
   return !nonAttributingWords(units).has(token.toLowerCase());
+}
+
+/**
+ * The token immediately in FRONT of `index`, skipping only run separators
+ * (spaces and hyphens). `null` at the start of the text and at any clause
+ * punctuation — a bracket, comma, colon or full stop ENDS the neighbourhood, so
+ * nothing here ever reaches across one.
+ */
+function previousToken(text: string, index: number): { token: string; start: number } | null {
+  let i = index - 1;
+  while (i >= 0 && /[\s\-]/.test(text[i]!)) i--;
+  if (i < 0) return null;
+  if (!/[A-Za-z0-9']/.test(text[i]!)) return null; // clause punctuation / bracket
+  const end = i + 1;
+  while (i >= 0 && /[A-Za-z0-9']/.test(text[i]!)) i--;
+  return { token: text.slice(i + 1, end), start: i + 1 };
+}
+
+/**
+ * Y1 — TRUE when a word-form match at `index` is a FRAGMENT of a longer figure
+ * this reader did not read whole.
+ *
+ * THE DEFECT THIS EXISTS FOR. `"One Hundred and Fifty Billion CFU"` against a
+ * canonical `50 Billion CFU` produced ZERO failures from the entire gate. The
+ * run pattern could not cross `and`, so the reader fell back to the SUB-RUN
+ * `"Fifty Billion CFU"`, composed 50, found it equal to the canonical figure
+ * and concluded the copy AGREED with the facts. That is worse than a miss: the
+ * gate affirmatively measured a threefold overstatement as truthful. Adding
+ * `and` to the vocabulary fixes that one string; this fixes the CLASS, because
+ * the same fallback recurs with any word a pack happens to lack.
+ *
+ * THE RULE, and it is deliberately vocabulary-INDEPENDENT — it must still fire
+ * for a word the pack never declared:
+ *
+ *   - the token in front of the run is a value-bearing number word or a bare
+ *     digit run that the match did NOT consume → fragment
+ *     (`"Hundred Fifty Billion CFU"`: a magnitude cannot lead, so the reader
+ *     would otherwise start at `Fifty`);
+ *   - the token in front is a FUNCTION word (`nonAttributingWords` — structural
+ *     English plus every token the pack declares as a unit, dosage form, per-
+ *     dose phrase, potency verb or supply cue) and the token before THAT is a
+ *     value word or digits → fragment. This is the `and` case, and it does not
+ *     consult the connector list, so it catches `and`, `plus`, `or` and
+ *     anything else of that shape whether or not the pack declares it.
+ *
+ * AND WHY IT STOPS THERE. A CONTENT word in front of the run ENDS the numeral
+ * to its left: in `"Ten Strains Fifty Billion CFU"` the `Ten` belongs to
+ * `Strains`, and refusing there would silently drop a real reading of ordinary
+ * listing copy. `"Ten Billion CFU and Fifty Billion CFU"` is not a fragment
+ * either — the function word is preceded by a UNIT token, not a value word, so
+ * the left figure is complete and both are read and compared. Clause
+ * punctuation ends the search (`previousToken`), so `"Ten Strains, Fifty
+ * Billion CFU"` is never in scope at all.
+ *
+ * THE BEHAVIOUR ON A HIT IS TO REFUSE TO MEASURE, not to fail closed. A
+ * failure here would be an assertion about a figure the reader has just said it
+ * cannot read, and the shapes that reach this guard include lawful copy
+ * (`"Ten Billion and Fifty Billion CFU"` is ambiguous prose, not a lie), so
+ * emitting one would be over-blocking — which this project treats as exactly as
+ * severe as a bypass. Refusing is strictly safer than the alternative it
+ * replaces: it can never affirm a false figure as truthful and it can never
+ * report a true one as false. What it costs is COVERAGE, and that cost is
+ * bounded and stated in CONFORMANCE-DEVIATIONS.md item 2.4.8 — C24 still
+ * DETECTS the same string in a dosage attribute, and Y2 gave C10/A5 the same
+ * detection on customer copy, because detection needs no composed value.
+ */
+function hasUnreadFigureBefore(
+  text: string,
+  index: number,
+  valueWords: Set<string>,
+  units: UnitRules,
+): boolean {
+  const isValue = (token: string): boolean =>
+    valueWords.has(token.toLowerCase()) || /^\d[\d,.]*$/.test(token);
+  const first = previousToken(text, index);
+  if (!first) return false;
+  if (isValue(first.token)) return true;
+  // A content word terminates the numeral in front of it; only a function word
+  // can be the gap INSIDE one.
+  if (!nonAttributingWords(units).has(first.token.toLowerCase())) return false;
+  const second = previousToken(text, first.start);
+  return second !== null && isValue(second.token);
 }
 
 /**
