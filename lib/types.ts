@@ -599,6 +599,30 @@ export interface KeywordRules {
    * enforced, so it is not a `REQUIRED_PACK_PIECES` row.
    */
   negativeScopeNote?: string;
+  /**
+   * J2 — the line that states WHERE THE NEGATIVE ROWS COME FROM.
+   *
+   * `negativeScopeNote` says what `negative` is FOR and what it is not for;
+   * neither it nor anything else the model was shown said that the reference
+   * must carry a MINIMUM number of them, nor which source to draw them from. A
+   * live run (B00IO89MYA) therefore wrote ZERO negative rows and failed
+   * `C28 | keywords | 0 negative term(s)` with no honest repair available: the
+   * only instruction naming a source led with "every rival brand name", and no
+   * competitor ASIN had been supplied, so the model had no rival-brand knowledge
+   * and the message was in effect asking it to invent a competitor.
+   *
+   * The source that is ALWAYS available is the vocabulary the compliance rules
+   * rule out — the terms the copy deliberately did not use, which are printed in
+   * the same prompt and which C28 already credits toward the floor (a
+   * compliance-owned negative row is DEFERRED to the check that owns it and
+   * still counts, `tests/complianceNegatives.deference.test.ts`). This note says
+   * that plainly, and says equally plainly that a rival must not be invented.
+   *
+   * Prompt-only, like `ownBrandNote` and `negativeScopeNote`: nothing here is
+   * enforced, so it is not a `REQUIRED_PACK_PIECES` row. What IS enforced is
+   * `minNegatives` and its anti-gaming leg.
+   */
+  negativeSourceNote?: string;
   /** Operator-facing note rendered above the keyword section of the ship sheet. */
   sheetNote?: string;
 }
@@ -959,21 +983,44 @@ export interface CompliancePack {
   /** Character window C22 measures proximity over (default 40). */
   naturalStateProximityWindow?: number;
   /**
-   * ADVISORY-SENTENCE escape for C22's therapeutic-action rule (R3) — a
-   * FALSE-POSITIVE REDUCER, never a manifest piece (emptying it makes the
-   * gate stricter). A sentence that pairs one of these cue verbs with one of
-   * `advisoryProfessionalNouns` (cue first, professional within the adjacency
-   * gap) is the mandated consult-a-professional safety warning, not a product
+   * The RECOMMENDATION half of the mandated consult-a-professional safety
+   * warning — a FALSE-POSITIVE REDUCER, never a manifest piece (emptying it
+   * makes the gate stricter). A sentence that pairs one of these cue verbs
+   * with one of `advisoryProfessionalNouns` (cue first, professional within
+   * the adjacency gap) carries an advisory recommendation, not a product
    * claim: "Women who are pregnant or nursing … should talk with a physician"
-   * must never be flagged. The escape covers R3 ONLY — abnormality markers
-   * (R1/R2), the C6 noun scan and the C6 action-paired tier are untouched —
-   * and it is DENIED when a therapeutic-action verb shares the state's own
-   * comma-bounded clause segment, so "reverses aging, talk to your doctor"
-   * still fails.
+   * must never be flagged.
+   *
+   * TWO C22 rules read it:
+   *  - the R3 escape (therapeutic-action rule), which needs the pairing alone
+   *    and is DENIED when a therapeutic-action verb shares the state's own
+   *    comma-bounded clause segment, so "reverses aging, talk to your doctor"
+   *    still fails;
+   *  - the SAFETY-WARNING CONSTRUCTION, which additionally needs an
+   *    `advisoryConditionCues` cue and scopes R1/R2. See that field.
+   * The C6 noun scan and the C6 action-paired tier are untouched by both.
    */
   advisoryCueVerbs?: string[];
   /** Professional nouns the advisory cue must be followed by. See `advisoryCueVerbs`. */
   advisoryProfessionalNouns?: string[];
+  /**
+   * The CONDITION half of the safety-warning construction — conditional
+   * subordinators ("if", "when", "unless", "in the event") and generic-addressee
+   * relative heads ("anyone who", "those who", "women who"). A CLOSED
+   * GRAMMATICAL CLASS, deliberately not a list of warning phrasings: the
+   * warning is a shape, and enumerating its wordings into
+   * `naturalStateSafePhrases` lost to ordinary paraphrase three times.
+   *
+   * A sentence carrying BOTH this cue and an `advisoryCueVerbs` /
+   * `advisoryProfessionalNouns` recommendation is a SAFETY WARNING, so C22
+   * reads its abnormality markers as the READER'S condition rather than the
+   * product's target: R2 (two markers) does not fire inside it, and R1
+   * (marker beside a natural state) does not fire when the marker and the
+   * state sit in DIFFERENT items of the enumeration. A marker that MODIFIES
+   * the state shares its item and still fails ("severe menopause symptoms"),
+   * which is the anti-laundering half. Emptying it makes the gate stricter.
+   */
+  advisoryConditionCues?: string[];
   /**
    * APPROVED structure/function claim SHAPES injected into the system prompt —
    * the PREVENTION half of the natural-state doctrine. Bracketed slots are

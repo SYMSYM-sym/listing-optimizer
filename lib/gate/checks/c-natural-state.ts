@@ -74,6 +74,12 @@ import {
  * sentence is, and a marker that sits inside a `naturalStateSafePhrases` span
  * (research vocabulary, consult-a-professional warnings) is blanked before the
  * scan the same way C21 blanks its safe context.
+ *
+ * THE ONE PLACE THE SUBJECT IS INFERRED STRUCTURALLY is the mandated
+ * consult-a-professional SAFETY WARNING, which the attribute template REQUIRES
+ * the listing to carry: see `safetyWarningRanges`. It scopes R1/R2 by
+ * recognising the warning's grammatical shape from pack cues, which is what
+ * replaced three rounds of enumerating one more wording of the same warning.
  */
 
 const CHECK_ID = 'C22';
@@ -110,6 +116,12 @@ interface NaturalStateConfig {
    */
   advisoryCues: string[];
   advisoryProfessionals: string[];
+  /**
+   * The CONDITION half of the SAFETY-WARNING CONSTRUCTION
+   * (`compliancePack.advisoryConditionCues` — pack data). See
+   * `safetyWarningRanges`.
+   */
+  conditionCues: string[];
 }
 
 const uniq = (lists: (string[] | undefined)[]): string[] => [
@@ -169,6 +181,7 @@ function configOf(pack: KnowledgePack): NaturalStateConfig | null {
       neg: diseaseNegationOptions(pack.compliancePack ?? packs[0]!),
       advisoryCues: uniq(packs.map((cp) => cp.advisoryCueVerbs)),
       advisoryProfessionals: uniq(packs.map((cp) => cp.advisoryProfessionalNouns)),
+      conditionCues: uniq(packs.map((cp) => cp.advisoryConditionCues)),
     };
   }
   CONFIG_CACHE.set(pack, config);
@@ -331,11 +344,115 @@ function advisoryEscapes(text: string, state: TermMatch, cfg: NaturalStateConfig
   return scanTerms(clauseSegmentAround(text, state.index), cfg.verbs).length === 0;
 }
 
+/**
+ * THE SAFETY-WARNING CONSTRUCTION — the structural answer to a false positive
+ * that three enumerative point-fixes failed to close.
+ *
+ * The mandated consult-a-professional warning is a REQUIRED field of the
+ * attribute template, so the generator must emit it and it flows into the
+ * customer-facing copy. It is not an open set of phrasings, it is one GRAMMATICAL
+ * SHAPE: a CONDITION clause enumerating states the READER may be in, governed by
+ * a RECOMMENDATION to consult a professional.
+ *
+ *   "Consult your healthcare provider before use IF pregnant, nursing, taking
+ *    medication, or managing a MEDICAL CONDITION, and keep out of reach."
+ *
+ * R1 read the abnormality marker "medical condition" as naming the abnormal form
+ * of the natural state "nursing" and failed the listing — an unsatisfiable pair,
+ * because the attribute template forces the very text C22 rejected. Each earlier
+ * fix wrote one more wording of the warning into `naturalStateSafePhrases`
+ * ("have a diagnosed medical condition", then "have a known medical condition")
+ * and each lost to the next ordinary paraphrase.
+ *
+ * THE RULE, entirely pack-driven (`advisoryCueVerbs`, `advisoryProfessionalNouns`,
+ * `advisoryConditionCues`); this module holds only the sentence arithmetic:
+ *
+ *   A sentence is a SAFETY WARNING when it carries BOTH legs —
+ *     (a) a RECOMMENDATION: an advisory cue verb followed within
+ *         `ADVISORY_PAIR_GAP` characters by a professional noun (the same test
+ *         `advisoryEscapes` already uses); AND
+ *     (b) a CONDITION cue: a conditional subordinator or a generic-addressee
+ *         relative head, which is what marks the enumeration that follows as the
+ *         READER'S states rather than the product's targets.
+ *
+ * Inside such a sentence the markers describe the reader, so:
+ *   - R2 (two markers) does not fire at all — "have been diagnosed with a
+ *     medical condition", "living with a chronic medical condition" are what a
+ *     warning is FOR;
+ *   - R1 does not fire when the marker and the state sit in DIFFERENT items of
+ *     the enumeration (`sameEnumerationItem`), because a marker in a coordinate
+ *     item is a separate condition, not a modifier of the state.
+ *
+ * ANTI-LAUNDERING, stated exactly. A marker that MODIFIES its neighbour shares
+ * its enumeration item and R1 still fires however the sentence is dressed:
+ * "Consult your doctor if you want relief from severe menopause symptoms" and
+ * "Anyone who has chronic menopause should talk with a physician" both fail.
+ * A sentence with no condition cue is not a construction at all, so
+ * "Ask your doctor about our formula for severe menopause symptoms" fails on
+ * both counts. R3, the C6 disease-noun scan and the C6 action-paired tier never
+ * consult this rule, so a named disease inside a warning still fails.
+ */
+const SENTENCE_BOUNDARY_RE = /[.!?;\n]/;
+
+/**
+ * Items of an ENUMERATION: clause punctuation OR a coordinating conjunction.
+ * Function words and punctuation only — the domain vocabulary this rule needs
+ * ("nursing", "medical condition", "consult", "physician", "if", "anyone who")
+ * all comes from the pack.
+ */
+const ENUM_ITEM_BREAK_RE = /[,;:.!?()\n—–]|\b(?:and|or|nor)\b/i;
+
+/** True when nothing between the two matches breaks the enumeration item. */
+function sameEnumerationItem(text: string, a: TermMatch, b: TermMatch): boolean {
+  const first = a.index <= b.index ? a : b;
+  const second = a.index <= b.index ? b : a;
+  const from = endOf(first);
+  const to = second.index;
+  if (to <= from) return true; // overlapping or adjacent
+  return !ENUM_ITEM_BREAK_RE.test(text.slice(from, to));
+}
+
+/** Character ranges of every sentence in `text` that is a safety warning. */
+function safetyWarningRanges(text: string, cfg: NaturalStateConfig): [number, number][] {
+  const out: [number, number][] = [];
+  if (
+    cfg.advisoryCues.length === 0 ||
+    cfg.advisoryProfessionals.length === 0 ||
+    cfg.conditionCues.length === 0
+  ) {
+    return out;
+  }
+  let start = 0;
+  for (let i = 0; i <= text.length; i += 1) {
+    if (i < text.length && !SENTENCE_BOUNDARY_RE.test(text[i]!)) continue;
+    const sentence = text.slice(start, i);
+    if (sentence.trim() && isSafetyWarningSentence(sentence, cfg)) out.push([start, i]);
+    start = i + 1;
+  }
+  return out;
+}
+
+function isSafetyWarningSentence(sentence: string, cfg: NaturalStateConfig): boolean {
+  const cues = scanTerms(sentence, cfg.advisoryCues);
+  if (cues.length === 0) return false;
+  const pros = scanTerms(sentence, cfg.advisoryProfessionals);
+  const paired = cues.some((c) => pros.some((p) => p.index >= c.index && p.index - endOf(c) <= ADVISORY_PAIR_GAP));
+  if (!paired) return false;
+  return scanTerms(sentence, cfg.conditionCues).length > 0;
+}
+
 function scanVariant(text: string, cfg: NaturalStateConfig, seen: Set<string>, out: Hit[]): void {
   const scanned = blankSafeSpans(text, cfg.safe);
   const marked = scanTerms(scanned, cfg.marked, cfg.neg);
   const markers = scanTerms(scanned, cfg.markers, cfg.neg);
   if (marked.length === 0 && markers.length < 2) return;
+
+  // SAFETY-WARNING CONSTRUCTION spans, read from the UNBLANKED variant (blanking
+  // is length-preserving, so indices line up) because the recommendation phrase
+  // may itself be a blanked safe span. See `safetyWarningRanges`.
+  const safetyRanges = safetyWarningRanges(text, cfg);
+  const inSafetyWarning = (i: number): boolean =>
+    safetyRanges.some(([lo, hi]) => i >= lo && i < hi);
 
   // R1 — abnormality marker beside a natural state / normal symptom.
   // Evaluated FIRST and never subject to the qualifier escape: an abnormality
@@ -343,6 +460,16 @@ function scanVariant(text: string, cfg: NaturalStateConfig, seen: Set<string>, o
   for (const s of marked) {
     for (const m of markers) {
       if (gapBetween(s, m) > cfg.window) continue;
+      // Inside a safety warning a marker in a DIFFERENT enumeration item is a
+      // separate reader condition, not the abnormal form of the state. A marker
+      // that shares the state's item modifies it and still fails.
+      if (
+        inSafetyWarning(s.index) &&
+        inSafetyWarning(m.index) &&
+        !sameEnumerationItem(text, s, m)
+      ) {
+        continue;
+      }
       const key = `1|${s.term}|${m.term}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -362,6 +489,10 @@ function scanVariant(text: string, cfg: NaturalStateConfig, seen: Set<string>, o
       if (a.term === b.term) continue;
       const gap = gapBetween(a, b);
       if (gap < 0 || gap > cfg.window) continue;
+      // Inside a safety warning both markers describe the READER'S condition,
+      // which is what the warning exists to ask about ("if you have been
+      // diagnosed with a medical condition").
+      if (inSafetyWarning(a.index) && inSafetyWarning(b.index)) continue;
       const key = `2|${[a.term, b.term].sort().join('|')}`;
       if (seen.has(key)) continue;
       seen.add(key);

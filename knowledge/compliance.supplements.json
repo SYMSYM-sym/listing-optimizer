@@ -1680,7 +1680,7 @@
     "seek the advice of"
   ],
   "naturalStateProximityWindow": 40,
-  "_advisoryComment": "FALSE-POSITIVE REDUCER for C22 R3 only (never a manifest piece \u2014 emptying these makes the gate STRICTER, not weaker). A sentence that pairs one of `advisoryCueVerbs` with one of `advisoryProfessionalNouns` (cue first, professional within the adjacency gap) is an ADVISORY \u2014 the mandated consult-a-professional safety warning \u2014 not a product claim, so R3's therapeutic-action rule does not fire on a natural state inside it (\"Women who are pregnant or nursing \u2026 should talk with a physician\"). Scope, stated exactly: the escape covers R3 alone; abnormality markers (R1/R2), the C6 disease-noun scan and the C6 action-paired tier are untouched, and the escape is DENIED when a therapeutic-action verb shares the state's own comma-bounded clause segment \u2014 \"reverses aging, talk to your doctor\" still fails because \"reverses\" sits in the same segment as \"aging\".",
+  "_advisoryComment": "FALSE-POSITIVE REDUCER for C22 (never a manifest piece \u2014 emptying these makes the gate STRICTER, not weaker). These two lists recognise the RECOMMENDATION half of the mandated safety warning and are read by TWO rules: R3's advisory escape, described below, and \u2014 together with `advisoryConditionCues` \u2014 the SAFETY-WARNING CONSTRUCTION that scopes R1/R2 (see that list's comment). A sentence that pairs one of `advisoryCueVerbs` with one of `advisoryProfessionalNouns` (cue first, professional within the adjacency gap) is an ADVISORY \u2014 the mandated consult-a-professional safety warning \u2014 not a product claim, so R3's therapeutic-action rule does not fire on a natural state inside it (\"Women who are pregnant or nursing \u2026 should talk with a physician\"). Scope, stated exactly: the escape covers R3 alone; abnormality markers (R1/R2), the C6 disease-noun scan and the C6 action-paired tier are untouched, and the escape is DENIED when a therapeutic-action verb shares the state's own comma-bounded clause segment \u2014 \"reverses aging, talk to your doctor\" still fails because \"reverses\" sits in the same segment as \"aging\".",
   "advisoryCueVerbs": [
     "consult",
     "consult with",
@@ -1713,6 +1713,32 @@
     "midwife",
     "dietitian",
     "nutritionist"
+  ],
+  "_advisoryConditionCuesComment": "THE THIRD LEG OF THE SAFETY-WARNING CONSTRUCTION, and the reason C22 stopped losing to paraphrase. The mandated consult-a-professional warning is a GRAMMATICAL SHAPE, not a set of wordings: a CONDITION clause enumerating states the READER may be in, governed by a recommendation to consult a professional. `advisoryCueVerbs` + `advisoryProfessionalNouns` recognise the recommendation; this list recognises the condition clause that introduces the reader states — conditional subordinators (\"if\", \"when\", \"unless\", \"in the event\") and generic-addressee relative heads (\"anyone who\", \"those who\", \"women who\"). It is a CLOSED GRAMMATICAL CLASS, deliberately not a list of warning phrasings: three previous point-fixes each enumerated one more wording of the same warning into `naturalStateSafePhrases` (\"have a diagnosed medical condition\", then \"have a known medical condition\") and each lost to the next ordinary paraphrase (\"managing a medical condition\"). Inside a sentence carrying BOTH legs, C22's abnormality-marker rules read the markers as the READER'S condition rather than the product's target: R2 (two markers) does not fire at all, and R1 (marker beside a natural state) does not fire when the marker and the state sit in DIFFERENT items of the enumeration — which is the anti-laundering half, because a marker that MODIFIES the state (\"severe menopause symptoms\", \"chronic menopause\") shares its item and still fails however the sentence is dressed. The relative heads carry \"who\"/\"with\" on purpose: bare \"anyone\" would exempt \"Anyone can ask their doctor about our chronic disorder formula\", which is a claim, not a warning. Emptying this list makes the gate STRICTER, not weaker, so it is not a required manifest piece.",
+  "advisoryConditionCues": [
+    "if",
+    "when",
+    "whenever",
+    "unless",
+    "in case",
+    "in case of",
+    "in the event",
+    "in the event of",
+    "should you",
+    "anyone who",
+    "anyone with",
+    "someone who",
+    "those who",
+    "those with",
+    "people who",
+    "people with",
+    "persons who",
+    "individuals who",
+    "women who",
+    "men who",
+    "adults who",
+    "users who",
+    "customers who"
   ],
   "_approvedClaimTemplatesComment": "THE PREVENTION HALF. Lawful structure/function claim SHAPES from the FDA guidance — a statement about the role of a nutrient or ingredient in affecting normal structure or function, or the mechanism by which it maintains that structure or function. Rendered into the system prompt by `buildSystemPrompt` so the generator writes compliant copy by construction rather than being repaired into it. Bracketed slots are placeholders the model fills from the product's own facts.",
   "approvedClaimTemplates": [
