@@ -22,11 +22,18 @@ import { routeFailure, unroutableFailures, type RoutingGap } from './fieldRoutin
 export {
   FIELD_TO_GROUP,
   NOT_REGENERABLE,
+  SURFACE_TO_GROUP,
   fieldToGroup,
   routeFailure,
+  surfaceToGroup,
   unroutableFailures,
 } from './fieldRouting';
-export type { FieldRoutingTable, RepairRoute, RoutingGap } from './fieldRouting';
+export type {
+  FieldRoutingTable,
+  RepairRoute,
+  RoutingGap,
+  SurfaceRoutingTable,
+} from './fieldRouting';
 
 /**
  * Bounded repair loop. Maps each failure to the prompt group that OWNS it and

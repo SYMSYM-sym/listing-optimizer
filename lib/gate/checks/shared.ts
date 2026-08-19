@@ -22,11 +22,24 @@ import {
 } from '../util';
 import { diseaseActionVerbs } from './pack';
 
-export const fail = (checkId: string, field: string, context: string, fix: string): Failure => ({
+/**
+ * `surface` is the OPTIONAL fifth argument, and it is only ever passed by a
+ * check whose `field` is NOT the thing to rewrite — see the note on `Failure`
+ * in `lib/types.ts`. The key is omitted entirely when nothing is supplied, so
+ * every existing failure object is byte-identical to what it was.
+ */
+export const fail = (
+  checkId: string,
+  field: string,
+  context: string,
+  fix: string,
+  surface?: string,
+): Failure => ({
   checkId,
   field,
   context: String(context ?? '').slice(0, 220),
   fix,
+  ...(typeof surface === 'string' && surface.trim() !== '' ? { surface: surface.trim() } : {}),
 });
 
 /**

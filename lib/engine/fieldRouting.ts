@@ -64,8 +64,89 @@ export const FIELD_TO_GROUP: FieldRoutingTable = [
   { match: (f) => f.startsWith('videoBrief'), group: 'images' },
   { match: (f) => f.startsWith('qa'), group: 'qa' },
   // WS3 — C28 reports against `keywords[i]`; the keyword group owns the repair.
+  //
+  // N1 — WITH ONE EXCEPTION, WHICH IS RESOLVED ABOVE THIS TABLE. A C28 failure
+  // that names an offending SURFACE is about the COPY, not about the row; see
+  // `SURFACE_TO_GROUP` and `routeFailure` below. This row still owns every
+  // artifact-side C28 failure: an over-declared `placed` row, a `captured-via`
+  // row with no route, a `minNegatives` shortfall, an unknown status, an
+  // undocumented row.
   { match: (f) => f === 'keywords' || f.startsWith('keywords['), group: 'keywords' },
 ];
+
+/**
+ * WHICH GENERATION GROUP AUTHORS A SCANNED **SURFACE** — the second half of the
+ * routing question, and the one the field table cannot answer.
+ *
+ * ============================================================================
+ * THE LIVE DEFECT (B00EEEITVA, N1)
+ * ============================================================================
+ * One failure, and the run ended `verified:false` with every repair round spent:
+ *
+ *   C28 | keywords[6] | negative term 'dairy free' appears on 'title'
+ *
+ * The catch is CORRECT and must stay: the label declares `Contains: Milk`
+ * (the strain is grown on a dairy medium) and the generated title claimed
+ * "Dairy Free", which is a false allergen claim. What could not happen was the
+ * REPAIR. The failure is reported on `keywords[6]` because C28's job is to
+ * verify the keyword reference row by row, so the field table above routed it
+ * to the `keywords` group — and the keyword group cannot touch the title. The
+ * loop rewrote the reference until it ran out of rounds while the offending two
+ * words sat in the copy, owned by a group no round ever called.
+ *
+ * ============================================================================
+ * WHY A SECOND TABLE RATHER THAN MORE ROWS IN THE FIRST
+ * ============================================================================
+ * The two tables answer different questions over different vocabularies.
+ * `FIELD_TO_GROUP` maps an OUTPUT-CONTRACT FIELD PATH (`videoBrief.shots[0]`,
+ * `aplus.modules[hero].body`) to the group that emits it. This one maps a
+ * SURFACE NAME from the keyword rules' own vocabulary (`rules.keywordRules`
+ * `visibleSurfaces` / `backendSurfaces`) — `bullet3`, `faq`, `video` — which is
+ * what C28 actually holds at the point it fails, and which its surface readers
+ * (`keywordSurfaceText`) already resolve to text. Folding one into the other
+ * would mean either the check inventing field paths it does not have, or this
+ * module guessing which of two vocabularies a string belongs to.
+ *
+ * IT READS THE STRUCTURED `surface`, NEVER THE PROSE. The surface name is on
+ * the `Failure` (see `lib/types.ts`); nothing here parses `context`. A routing
+ * table that reads English is a routing table that breaks the day someone
+ * rewords a failure message, which is the class of bug this module exists to
+ * stop, not to add.
+ *
+ * NO DOMAIN VOCABULARY, same as the table above: `knowledge/rules.json` ships
+ * ONE `keywordRules` block for every category, so these names are as
+ * category-independent as `title` and `description` already were.
+ */
+export type SurfaceRoutingTable = ReadonlyArray<{
+  match: (surface: string) => boolean;
+  group: GroupName;
+}>;
+
+export const SURFACE_TO_GROUP: SurfaceRoutingTable = [
+  { match: (s) => s === 'title' || s === 'title75' || s === 'itemHighlights', group: 'title' },
+  // The reader resolves `bullet<N>` for any N, so the row does too.
+  { match: (s) => s === 'bullets' || /^bullet\d+$/i.test(s), group: 'bullets' },
+  { match: (s) => s === 'description', group: 'description' },
+  { match: (s) => s === 'backend', group: 'backend' },
+  { match: (s) => s === 'attributes', group: 'attributes' },
+  // The FAQ is part of the A+ payload (`aplusContent.faq`) and is written by
+  // the A+ prompt, so both names route to the one group that can rewrite them.
+  { match: (s) => s === 'aplus' || s === 'faq', group: 'aplus' },
+  { match: (s) => s === 'qa', group: 'qa' },
+  // One images call returns `{ imagePlan, videoBrief }` — the same coupling the
+  // `videoBrief` row above records.
+  { match: (s) => s === 'images' || s === 'video', group: 'images' },
+];
+
+/** The group that authors a surface, or null when this module has no row. */
+export function surfaceToGroup(
+  surface: string | null | undefined,
+  table: SurfaceRoutingTable = SURFACE_TO_GROUP,
+): GroupName | null {
+  const name = String(surface ?? '').trim();
+  if (!name) return null;
+  return table.find((r) => r.match(name))?.group ?? null;
+}
 
 /**
  * FAILURES NOTHING CAN REGENERATE — stated, not left to fall off the end.
@@ -124,6 +205,7 @@ export type RepairRoute =
 export function routeFailure(
   failure: Failure,
   table: FieldRoutingTable = FIELD_TO_GROUP,
+  surfaceTable: SurfaceRoutingTable = SURFACE_TO_GROUP,
 ): RepairRoute {
   const field = String(failure?.field ?? '');
   const checkId = String(failure?.checkId ?? '');
@@ -132,6 +214,42 @@ export function routeFailure(
   // the model is forbidden to write.
   const excluded = NOT_REGENERABLE.find((r) => r.match(field, checkId));
   if (excluded) return { kind: 'not-regenerable', id: excluded.id, why: excluded.why };
+  /**
+   * N1 — A FAILURE THAT NAMES AN OFFENDING SURFACE IS ROUTED BY THAT SURFACE.
+   *
+   * Consulted BEFORE the field table, because the whole point is that `field`
+   * gives the WRONG answer for these: `keywords[6]` resolves perfectly well to
+   * the keyword group, and that is precisely the loop that never converged.
+   * Only a check that knows its `field` is not the thing to rewrite sets
+   * `surface` at all (today: C28's `negative` leg and its automatic
+   * rival-brand leg), so no existing failure changes route.
+   *
+   * INSTEAD OF THE FIELD'S GROUP, NOT IN ADDITION TO IT — deliberately:
+   *
+   *  1. `RepairRoute` names ONE owner, and the loop feeds the failure's text
+   *     into THAT group's regeneration prompt. Handing "remove 'dairy free'
+   *     from the title" to the keyword prompt as well asks the reference author
+   *     to do something it cannot do, which is how a prompt earns a confidently
+   *     wrong edit.
+   *  2. The reference is re-read anyway. `runRepairLoop`'s WS3 coupling adds
+   *     the `keywords` group to any round that regenerates ANY copy group, and
+   *     `optimize()` re-derives every row's placement from the copy that
+   *     actually ships on every round. So the artifact is rebuilt against the
+   *     repaired title in the SAME round — "in addition" without a second
+   *     owner, and without a second concept in this module.
+   *
+   * A surface this module cannot map is `unroutable`, NOT a silent fall-back to
+   * the field row. Falling back would reinstate exactly the non-converging loop
+   * this exists to end, and would do it invisibly; `unroutable` is reported by
+   * `unroutableFailures`, by the audit and on the ship sheet. A pack that adds a
+   * surface therefore has to add a row here, and the oracle asserts every
+   * surface the shipped pack declares already has one.
+   */
+  const surface = String(failure?.surface ?? '').trim();
+  if (surface) {
+    const group = surfaceToGroup(surface, surfaceTable);
+    return group ? { kind: 'group', group } : { kind: 'unroutable' };
+  }
   const row = table.find((r) => r.match(field, checkId));
   return row ? { kind: 'group', group: row.group } : { kind: 'unroutable' };
 }
@@ -140,8 +258,9 @@ export function routeFailure(
 export function fieldToGroup(
   failure: Failure,
   table: FieldRoutingTable = FIELD_TO_GROUP,
+  surfaceTable: SurfaceRoutingTable = SURFACE_TO_GROUP,
 ): GroupName | null {
-  const route = routeFailure(failure, table);
+  const route = routeFailure(failure, table, surfaceTable);
   return route.kind === 'group' ? route.group : null;
 }
 
@@ -161,10 +280,11 @@ export interface RoutingGap {
 export function unroutableFailures(
   failures: readonly Failure[] | null | undefined,
   table: FieldRoutingTable = FIELD_TO_GROUP,
+  surfaceTable: SurfaceRoutingTable = SURFACE_TO_GROUP,
 ): RoutingGap[] {
   const out = new Map<string, RoutingGap>();
   for (const f of Array.isArray(failures) ? failures : []) {
-    if (routeFailure(f, table).kind !== 'unroutable') continue;
+    if (routeFailure(f, table, surfaceTable).kind !== 'unroutable') continue;
     const gap = { checkId: String(f?.checkId ?? ''), field: String(f?.field ?? '') };
     out.set(`${gap.checkId}:${gap.field}`, gap);
   }

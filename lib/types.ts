@@ -1574,6 +1574,30 @@ export interface Failure {
   field: string;
   context: string;
   fix: string;
+  /**
+   * N1 — THE SURFACE THAT CARRIES THE OFFENDING TEXT, when it is NOT `field`.
+   *
+   * Almost every check reports on the surface it scanned, so `field` names both
+   * the finding and the thing to rewrite and this stays absent. One family does
+   * not: C28 verifies the KEYWORD REFERENCE, so its `field` is a row of that
+   * artifact (`keywords[i]`) while the string it objects to is sitting in the
+   * COPY, on a surface named in `context`. A live run (B00EEEITVA) failed
+   * forever on exactly that — `C28 | keywords[6] | negative term 'dairy free'
+   * appears on 'title'` — because the repair loop routed `keywords[i]` to the
+   * keyword group and regenerated the reference over and over while the offending
+   * words sat in the title, owned by a group the round never called.
+   *
+   * So the surface is carried STRUCTURALLY. `lib/engine/fieldRouting.ts` reads
+   * this field, never the prose in `context`: a routing table that parses
+   * English is a routing table that breaks when a message is reworded.
+   *
+   * The name is the check's own SURFACE VOCABULARY (`rules.keywordRules`
+   * `visibleSurfaces` / `backendSurfaces`), not an output-contract field path —
+   * the same vocabulary the surface readers resolve — because that is what the
+   * check actually knows. Optional, and absent on every failure whose `field`
+   * already names the thing to rewrite.
+   */
+  surface?: string;
 }
 
 export interface GateResult {

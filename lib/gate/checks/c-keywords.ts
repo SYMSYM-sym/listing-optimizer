@@ -203,6 +203,35 @@ import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
  * `rules.keywordRules`; this module holds none. `visibleSurfaces`,
  * `backendSurfaces`, `statuses` and `minNegatives` are all
  * `REQUIRED_PACK_PIECES` rows, because emptying any of them disarms a leg.
+ *
+ * N1 — THE `negative` LEG NOW SAYS WHICH SURFACE IT FOUND THE TERM ON, AS A
+ * STRUCTURED FIELD RATHER THAN ONLY IN ITS PROSE.
+ *
+ * Production, ASIN B00EEEITVA, one failure and every repair round spent:
+ *
+ *   C28 | keywords[6] | negative term 'dairy free' appears on 'title'
+ *
+ * The catch is CORRECT — the label declares milk and the title claimed "Dairy
+ * Free", which is a false allergen claim — and NOT ONE BYTE OF WHEN THIS CHECK
+ * FIRES CHANGED. What could not happen was the REPAIR. This check reports
+ * against the keyword ROW it is verifying (`keywords[6]`), the repair loop
+ * routes `keywords[i]` to the KEYWORD group, and the offending words were in
+ * the TITLE — owned by a group no round ever called. So the loop rewrote the
+ * reference forever and never touched the copy.
+ *
+ * The surface is therefore carried on the `Failure` (`surface`, see
+ * `lib/types.ts`) and `lib/engine/fieldRouting.ts` resolves it to the group
+ * that AUTHORS that surface. Nothing there parses this file's messages.
+ *
+ * ONLY TWO LEGS SET IT, and the choice is not arbitrary: the `negative`
+ * presence leg and the automatic rival-brand leg below are the only ones whose
+ * ARTIFACT SIDE CANNOT MOVE. Every other status is re-derived from the finished
+ * copy on every round by `lib/engine/keywordPlacement.ts`, so regenerating the
+ * reference genuinely repairs an over-declared `placed` row, a `candidate` or
+ * `captured-via` row the copy falsifies, or a backend-only leak — and those
+ * keep routing to the keyword group, as does the `minNegatives` shortfall and
+ * the missing-`via` leg. `negative` is the one status derivation must never
+ * overwrite, because its falsification by the copy IS the R50 violation.
  */
 const CHECK_ID = 'C28';
 
@@ -602,6 +631,32 @@ export function c28KeywordPlacement(
                 field,
                 `negative term '${term}' appears on '${name}'`,
                 `Remove '${term}' from ${name} — it is on the negative list (${str(t.why).trim() || 'no reason recorded'})`,
+                // N1 — THE OFFENDING STRING IS IN THE COPY, NOT IN THE ROW, AND
+                // THE FAILURE NOW SAYS SO STRUCTURALLY.
+                //
+                // `field` is `keywords[i]` because that is the row this check is
+                // verifying, and the repair loop used to read only `field`: it
+                // routed to the KEYWORD group and regenerated the reference,
+                // round after round, while the words sat in the title. Live,
+                // B00EEEITVA: `negative term 'dairy free' appears on 'title'` on
+                // a product whose label declares milk — a correct catch, and one
+                // that could never converge.
+                //
+                // THIS LEG IS THE ONE THAT NEEDS IT, AND THE OTHERS ARE NOT AN
+                // OVERSIGHT. `lib/engine/keywordPlacement.ts` re-derives every
+                // OTHER status from the finished copy on every round, so a
+                // `placed`/`backend`/`candidate`/`captured-via` row that
+                // contradicts the copy is CORRECTED by regenerating the
+                // reference — routing those to the keyword group converges.
+                // `negative` is the one status that derivation deliberately never
+                // touches, because its falsification by the copy is not a
+                // mislabelled row, IT IS THE R50 VIOLATION. So for this leg alone
+                // the artifact side cannot move and the copy is the only honest
+                // remedy — which is exactly what naming the surface routes to.
+                //
+                // Nothing about WHEN this fires changed: same corpus, same regex,
+                // same everywhere-scan. Only the address on the envelope.
+                name,
               ),
             );
           }
@@ -725,6 +780,13 @@ export function c28KeywordPlacement(
             'keywords',
             `ingested competitor brand '${name}' appears on '${surface}'`,
             `'${name}' is the brand of a competitor ASIN the operator supplied for this run, so it is a rival brand by construction — remove it from ${surface}. A rival's name in our copy is trademark exposure (R50) whatever status the keyword reference gives it, and it belongs on the negative list rather than in the listing`,
+            // N1 — the same reasoning as the `negative` leg above, and with even
+            // less ambiguity: this leg reads no row at all, so there is nothing
+            // in the artifact a regeneration of the reference could correct. The
+            // rival's name is in the COPY and the copy is the only place it can
+            // be removed from, so the failure names the surface that carries it
+            // and the loop regenerates the group that authors that surface.
+            surface,
           ),
         );
       }

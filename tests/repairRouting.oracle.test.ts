@@ -271,6 +271,15 @@ const BATTERY: BrokenCase[] = [
 interface Emitted {
   checkId: string;
   field: string;
+  /**
+   * N1 — the STRUCTURED surface a failure names when its `field` is not the
+   * thing to rewrite. Carried through the oracle rather than dropped, so the
+   * assertion below routes the failures the gate ACTUALLY emitted rather than a
+   * reconstruction of them: a C28 `negative` failure resolves through
+   * `SURFACE_TO_GROUP`, and a surface with no row there is reported here as
+   * exactly the routing gap it is.
+   */
+  surface?: string;
   case: string;
 }
 
@@ -280,7 +289,9 @@ beforeAll(async () => {
   clean = clean ?? (await optimize(snapshot, pack, mockLlm));
   for (const c of BATTERY) {
     const failures: Failure[] = runGate(c.listing(), (c.pack ?? (() => pack))(), c.ctx ?? ctx).failures;
-    for (const f of failures) emitted.push({ checkId: f.checkId, field: f.field, case: c.label });
+    for (const f of failures) {
+      emitted.push({ checkId: f.checkId, field: f.field, surface: f.surface, case: c.label });
+    }
   }
 });
 
@@ -327,12 +338,17 @@ describe('the routing oracle covers every check the gate wires', () => {
 function unresolved(table: FieldRoutingTable): string[] {
   const seen = new Map<string, string>();
   for (const e of emitted) {
-    if (routeFailure({ checkId: e.checkId, field: e.field, context: '', fix: '' }, table).kind !== 'unroutable') {
+    if (
+      routeFailure(
+        { checkId: e.checkId, field: e.field, context: '', fix: '', ...(e.surface ? { surface: e.surface } : {}) },
+        table,
+      ).kind !== 'unroutable'
+    ) {
       continue;
     }
     seen.set(
-      `${e.checkId}:${e.field}`,
-      `field '${e.field}' emitted by check ${e.checkId} (case: ${e.case}) resolves to NO generation group and is not a documented non-regenerable class`,
+      `${e.checkId}:${e.field}${e.surface ? `@${e.surface}` : ''}`,
+      `field '${e.field}'${e.surface ? ` (surface '${e.surface}')` : ''} emitted by check ${e.checkId} (case: ${e.case}) resolves to NO generation group and is not a documented non-regenerable class`,
     );
   }
   return [...seen.values()].sort();
@@ -350,7 +366,13 @@ describe('the routing oracle — every field the gate can emit resolves', () => 
   it('every documented non-regenerable class is reached by the battery, so the exemptions are not dead weight', () => {
     const reached = new Set<string>();
     for (const e of emitted) {
-      const r = routeFailure({ checkId: e.checkId, field: e.field, context: '', fix: '' });
+      const r = routeFailure({
+        checkId: e.checkId,
+        field: e.field,
+        context: '',
+        fix: '',
+        ...(e.surface ? { surface: e.surface } : {}),
+      });
       if (r.kind === 'not-regenerable') reached.add(r.id);
     }
     expect([...reached].sort()).toEqual(NOT_REGENERABLE.map((r) => r.id).sort());

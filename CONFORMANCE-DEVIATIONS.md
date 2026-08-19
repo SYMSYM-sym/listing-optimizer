@@ -3452,3 +3452,134 @@ around it). Four tests in `tests/attributeSchema.test.ts`: both packs state the
 canonical string and its field; the live value `none` still fails and its fix line
 names the string the prompt now states; and a pack with no canonical string states
 no rule while the `Contains:` half is untouched.
+
+## 21. ROUND N1 - a CORRECT C28 catch that was structurally unrepairable: the failure was reported on the artifact, the offending words were in the copy.
+
+**THE LIVE FINDING.** Production, ASIN B00EEEITVA. One failure, every repair
+round spent, run ends `verified:false`:
+
+```
+C28 | keywords[6] | negative term 'dairy free' appears on 'title'
+```
+
+and the artifact row behind it:
+
+```json
+{"term":"dairy free","tier":3,"status":"negative","surfaces":[],
+ "why":"Contradicts Contains: Milk allergen declaration on label"}
+```
+
+**THE CATCH IS RIGHT AND NOTHING ABOUT IT MOVED.** The label declares
+`Contains: Milk` (the strain is grown on a dairy medium) and the generated title
+claimed "Dairy Free". That is a false allergen claim, it is exactly what C28's
+`negative` leg exists to report, and C28 fires on it byte-for-byte as it did
+before: same corpus, same `termRegex`, same everywhere-scan, same surfaces
+including the invisible ones. `tests/n1.keywordSurfaceRouting.test.ts` §5
+re-asserts the trigger surface by surface and re-asserts that lawful copy on
+those same surfaces still passes.
+
+**WHAT WAS ACTUALLY WRONG: THE ADDRESS ON THE ENVELOPE.** C28 verifies the
+keyword REFERENCE row by row, so it reports on `keywords[6]`, and
+`lib/engine/fieldRouting.ts` routed `keywords[i]` to the `keywords` group. The
+repair loop therefore regenerated the keyword ARTIFACT, round after round, while
+the offending two words sat in the TITLE - owned by a group no round ever
+called. The loop could rewrite the reference forever and never touch the copy.
+This is the same class as the `videoBrief.*` hole that motivated
+`fieldRouting.ts` in the first place, one level up: there the field had no row,
+here the field has a row that resolves to a group which cannot act.
+
+**THE FIX - THE SURFACE IS CARRIED STRUCTURALLY, AND THE ROUTER READS IT.**
+
+1. `Failure` gains an optional `surface?: string` (`lib/types.ts`). It is the
+   check's own surface vocabulary (`rules.keywordRules.visibleSurfaces` /
+   `backendSurfaces`), which is what C28 holds at the point it fails and what
+   its readers (`keywordSurfaceText`) already resolve to text. It is ABSENT on
+   every failure whose `field` already names the thing to rewrite - which is
+   every other check in the gate.
+2. `SURFACE_TO_GROUP` in `lib/engine/fieldRouting.ts` maps a surface name to the
+   group that AUTHORS it (`title`/`title75`/`itemHighlights` -> title;
+   `bullet<N>`/`bullets` -> bullets; `aplus`/`faq` -> aplus; `images`/`video` ->
+   images; and so on). `routeFailure` consults it BEFORE the field table,
+   because `field` is precisely what gives the wrong answer here.
+3. **NOTHING PARSES PROSE.** The routing tables never read `context`. A table
+   that read English would break the day someone reworded a message - the class
+   of bug this module exists to end, not to add.
+
+**INSTEAD OF THE KEYWORD GROUP, NOT IN ADDITION TO IT - and the reasoning.**
+`RepairRoute` names ONE owner and the loop feeds the failure text into THAT
+group's regeneration prompt; handing "remove 'dairy free' from the title" to the
+keyword prompt as well asks the reference author to do something it cannot do.
+And nothing is lost by not naming it: `runRepairLoop`'s WS3 coupling already
+adds the `keywords` group to any round that regenerates any copy group, and
+`optimize()` re-derives every row's placement from the copy that actually ships
+on every round. The artifact is therefore rebuilt against the repaired title in
+the SAME round - "in addition" in effect, without a second owner and without a
+second concept in the router. `tests/n1.keywordSurfaceRouting.test.ts` §4 asserts
+both call counts.
+
+**THE ASYMMETRY, AND WHY IT IS EXACTLY ONE LEG.** Only the C28 legs whose
+ARTIFACT SIDE CANNOT MOVE name a surface:
+
+- the `negative` presence leg, and
+- the automatic ingested-rival-brand leg (which reads no row at all).
+
+Every other C28 failure keeps routing to `keywords`, because regenerating the
+reference really does repair it: `lib/engine/keywordPlacement.ts` re-derives
+`placed`, `backend`, `candidate`, `not-targeted` and the absence half of
+`captured-via` from the finished copy on every round. `negative` is the single
+status that derivation deliberately never touches - its falsification by the
+copy is not a mislabelled row, IT IS THE R50 VIOLATION - so it is the single leg
+whose only honest remedy is the copy. An over-declared `placed` row, a
+`captured-via` row with no route, a `minNegatives` shortfall, an unknown status
+and an undocumented row are all pinned to `keywords` in §3 of the test file.
+
+**CLOSED WORLD, FAIL-LOUD.** A `surface` this module cannot map resolves to
+`unroutable`, NOT to a silent fall-back to the field row: falling back would
+reinstate the non-converging loop invisibly, while `unroutable` is reported by
+`unroutableFailures`, by `buildAudit` (`routingGaps`) and on the ship sheet.
+§1 asserts that every surface the shipped pack declares has a row, so a pack
+that adds a surface has to add one in the same commit.
+
+**THE SWEEP - other checks that report on one field while the remedy lives in
+another.** Every `fail(...)` call in `lib/gate/checks/**` was read against the
+question "is `field` the thing to rewrite?". Findings:
+
+- **C28 `negative` + the automatic rival-brand leg** - the defect above. FIXED.
+- **C28 `candidate` / `captured-via` presence / backend-only leak** - the same
+  SHAPE (field is a row, context names a surface) and NOT the same defect: the
+  derivation boundary re-derives all three from the copy every round, so the
+  keyword group is a group that can actually repair them. Deliberately left on
+  `keywords`; pinned by §3(d) so the decision cannot rot into an oversight.
+- **C28 `'<term>' is declared placed on '<surface>' but does not appear there`
+  and `'<term>' is backend-only but is not in the backend field`** - absence
+  claims, not "appears on". The artifact is the honest remedy (and is derived),
+  so `keywords` is correct. Pinned by §3(a).
+- **C28 `surface '<name>'` (the closed-world leg)** - field `keywords`, context
+  a surface name the gate CANNOT READ. No generation group can fix a missing
+  reader, so no routing change would help; it is a code/pack defect and the
+  required-pack-piece rows already fail it closed. RECORDED, not changed.
+- **C12 internal count conflict** (`lib/gate/checks/shared.ts`, the
+  `!allowedCounts && internalCounts.size > 1` leg) - the one near-miss elsewhere:
+  it reports on the FIRST cited surface while the context cites two, so the loop
+  regenerates one of the two groups that could resolve the conflict. It is NOT
+  the N1 defect - `field` is a real output-contract surface path that routes to a
+  group which owns half the conflict and can repair it by changing its own
+  figure - but it can pick the less natural of two remedies. RECORDED, not
+  changed: splitting it into one failure per cited surface would change the
+  failure count for a purely cosmetic gain in routing.
+- **C7** (`field` is the customer surface, context names the source attribute),
+  **C9**, **C24**, **C26**, **A3**, **A7**, **C30** - all report on a field their
+  own group owns. No action.
+
+**BOTH DIRECTIONS, BY TEST NAME** (`tests/n1.keywordSurfaceRouting.test.ts`):
+§1 the surface table is complete/closed/prose-free; §2 a `negative` term on each
+of the twelve pack surfaces names that surface and routes to its author, and the
+automatic rival leg does too; §3 the artifact-owned families still route to
+`keywords`; §4 the live shape converges - round 1 reproduces `C28 | keywords[i]
+| ... appears on 'title'` as the ONLY finding, the same failure with `surface`
+stripped routes to `keywords` (the defect, named), and the loop regenerates the
+title and reaches `verified:true`; §5 a model that keeps writing the term still
+ends UNVERIFIED, the trigger is unmoved and clean copy still passes; §6 deleting
+the row that owns a surface makes the live failure `unroutable` - the table is
+not vacuous. `tests/repairRouting.oracle.test.ts` now carries `surface` through
+the oracle, so every surface the gate actually emits is asserted to resolve.
