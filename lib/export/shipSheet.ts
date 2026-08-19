@@ -502,6 +502,22 @@ ul.ops{margin:8px 0 0;padding-left:20px}
     note: 'Paste exactly as shown, on one line. The <br> tags render the paragraphs.',
     copyable,
   });
+  // K1 — THE CLAMP IS NOT SILENT. When the assembly step shortened the written
+  // description to fit the cap once the compliance disclaimer is appended, the
+  // operator is told so HERE, beside the field they are about to paste, with
+  // both lengths. Absent on every run that was not clamped, which is almost all
+  // of them. This is a notice, never a verdict: `verified` is computed only in
+  // `lib/audit/buildAudit.ts` and nothing here feeds it.
+  const clamp = l.descriptionClamped;
+  if (clamp) {
+    h +=
+      `<div class=kwnote>${esc(
+        `Shortened by the system: the generator wrote ${clamp.writtenChars} characters and ` +
+          `${clamp.keptChars} were kept, cut at a paragraph or sentence boundary so the verbatim ` +
+          `compliance disclaimer fits inside the ${rules.descriptionMax}-character limit. ` +
+          'Read the ending before you paste it.',
+      )}</div>`;
+  }
   // WS10 — R12 and R11. Two rendering facts that decide whether this field
   // works, printed beside the field rather than filed somewhere else.
   const surfaceNotes = rules.copySurfaceNotes;

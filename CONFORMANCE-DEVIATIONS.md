@@ -3217,3 +3217,112 @@ floor still fail, with a message that names a source the run can draw on; a
 genuine rival is unaffected and still enforced from the copy; and the anti-gaming
 leg still fails a reference whose every negative names this product.
 `tests/minNegativesFloor.h2.test.ts` is green **unedited**.
+
+## 19. ROUND K - the third C4 overshoot, settled structurally rather than with a fourth constant; and the C28 floor's second live shape.
+
+### 19.1 RESOLVED, NOT DEVIATED - the description is now CLAMPED, like every other capped surface.
+
+**THE RECORD, three live observations** against a canonical `descriptionMax` of
+2000 and a disclaimer reserve of 158:
+
+| build | stated target | model wrote | over target | verdict |
+|---|---|---|---|---|
+| pre-margin | 1842 (the cliff) | 1930 | +88 | C4 FAILED |
+| pre-margin | 1842 (the cliff) | 1861 | +19 | C4 FAILED |
+| post-margin (`60823bc`, margin 111) | 1731 | 1851 | +120 | C4 FAILED |
+
+**THE FINDING.** `DESCRIPTION_MARGIN_FRACTION` (6%, 111 characters) was sized
+against the first two observations - 1.26x the worst then on record. The third
+observation beat it. A percentage fitted to past overshoots is a prediction
+about a tail nobody has measured, and this was already the second fix of the
+same defect; a fourth constant would have been the third.
+
+**THE STRUCTURAL ANSWER WAS IN ROUND H'S OWN REPORT.** H1 asked whether the other
+capped surfaces share this failure mode and found that they do not, because CODE
+CLAMPS THEM: `sanitizeBullets` truncates each bullet to `bulletMax` (less one for
+the claim marker) at a word boundary, and `sanitizeBackendSearchTerms` truncates
+at a word boundary to `backendMaxBytes` - both in the deterministic assembly
+step, before the gate exists. An overshoot cannot reach C2 or C3 from a generated
+run at all. The description was the ONLY capped surface with no clamp and the
+ONLY capped surface that kept failing.
+
+**THE GUARDRAIL, ADDRESSED EXPLICITLY.** "Never mutate content to force a gate
+pass" prohibits one move: seeing a failure and editing the copy until it goes
+away. Four properties separate this clamp from that move. (1) It is
+UNCONDITIONAL - it runs on every run in the same assembly step as the other two
+clamps, and never reads a `Failure`, a `GateResult` or a repair context; none of
+those are in scope where it is called. (2) It acts on a string the ENGINE ALREADY
+OWNS: `optimize()` appends the compliance disclaimer the model is forbidden to
+write, so the field C4 measures was never the model's text alone and its length
+was never a quantity the model controlled. (3) The CHECKER IS UNCHANGED - C4's
+trigger does not move by one character (empty, or assembled length over
+`rules.descriptionMax`), the whole gate re-validates the clamped listing from
+scratch, and shortening cannot manufacture a substantiated claim, a present
+disclaimer or a missing declaration out of nothing. (4) It FAILS CLOSED where it
+cannot act cleanly. **Verdict: not a violation.**
+
+**Status: FIXED.** `lib/engine/descriptionClamp.ts` (new) clamps the written body
+to `descriptionBudget(pack).budget` - the ONE arithmetic - preferring the latest
+paragraph or sentence boundary, falling back to a word boundary, and DECLINING
+entirely when no boundary exists inside the budget or when the only boundary is
+shallower than `KEEP_FLOOR_FRACTION` (0.6) of it. It never cuts mid-word, it is
+idempotent, and text already inside the budget is returned BYTE-IDENTICALLY.
+`lib/engine/optimize.ts` calls it BEFORE the disclaimer is appended, so the
+disclaimer can never be truncated by it; it logs `optimize.description_clamped`
+(lengths only, never copy) and records `descriptionClamped` on the listing,
+ABSENT when nothing was cut so an ordinary run is byte-for-byte the object it
+was. `lib/export/shipSheet.ts` prints both lengths beside the description, so the
+operator can see the field was shortened before pasting it.
+`lib/engine/prompts/description.ts` now states the consequence in words - and
+still never names the cliff, because naming it is what B00IO89MYA obeyed.
+
+**THE MARGIN IS KEPT.** It is what stops the clamp firing on ordinary work: the
+prompt still asks for `target`, so the clamp only ever meets a description that
+already ignored the number it was given. Two of the three recorded overshoots
+(+19, +88) never reach it.
+
+`tests/descriptionClamp.k1.test.ts` (43 tests, both shipped packs): all three
+recorded overshoots converge; the +120 case is shown to be the one the margin
+could not absorb; an in-budget description is emitted byte-identically with no
+marker (identity asserted, not merely a pass); a boundary-less over-budget body
+is NOT clamped and C4 still fails; C4's empty leg and its fix line are unmoved;
+the disclaimer survives whole and exactly once on the end; a clamped listing has
+NO gate failure its unclamped baseline lacks (asserted by comparing full
+`runGate` failure sets, including a case constructed so the cut lands exactly on
+the baseline body); and the operator-facing note appears on a clamped run and on
+no other. `tests/c4.descriptionBudget.test.ts` is green **unedited** - the
+boundary-less `'a'.repeat(n)` fixtures it uses are precisely the case in which
+the clamp declines to act, so every pre-existing assertion still measures what it
+measured.
+
+### 19.2 CORRECTED RECORD - C28's floor has TWO live shapes, and J2 covers both; what was missing was the pin.
+
+**THE TWO SHAPES.** `0 negative term(s)` (the model wrote none) and
+`2 negative term(s)` (it wrote some and fell short of the floor of 3). Section
+18.2 was written against the first.
+
+**THE FINDING: J2 ALREADY COVERS THE SECOND, AND STATES THE NUMBER RATHER THAN
+IMPLYING IT.** The keyword prompt renders `minNegatives` verbatim ("at least 3
+rows must carry the ... status") from the same pack number the gate enforces, and
+the C28 failure text states the floor AND the count the artifact recorded ("must
+record at least 3 negative terms and records 2"). A model that wrote two is told
+the target and its own shortfall. **No behaviour needed changing.**
+
+**WHAT WAS MISSING WAS THE PIN**, in three places: nothing asserted that the
+prompt the ENGINE assembles (through `buildGroupPrompts`, from
+`pack.rules.keywordRules`) carries the floor - a floor rendered only when a test
+passes the rules by hand is a floor no live run ever sees; nothing asserted the
+`and records N` half, which is the only part that distinguishes the two shapes;
+and the end-to-end shortfall was untested.
+
+**Status: PINNED.** `tests/negativesFloorShortfall.k2.test.ts` (14 tests) holds
+all three in both directions, plus the pack-data direction (no floor in the pack,
+no floor line and no floor failure; the same reference still fails under the
+shipped pack). The H2 x J2 interaction was checked and is ALREADY pinned in
+`tests/minNegativesFloor.h2.test.ts` - "OWN BRAND: the row really is reclassified,
+only 2 survive, and the run CONVERGES" (3 proposed, 1 reclassified) and "FAILS:
+two genuine negatives" / "FAILS: one genuine plus one reclassified is still only
+TWO proposals" (2 proposed) - and section (d) of the new file re-states that pair
+as the single property the two rounds have to agree on, because it is the one
+that would break silently if either round moved. No production file changed for
+19.2.

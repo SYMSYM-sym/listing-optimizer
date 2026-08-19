@@ -1447,6 +1447,28 @@ export interface KeywordTerm {
 export type ElementState = 'draft' | 'verified' | 'published';
 
 /** The full generated deliverable for one ASIN — the Output Contract. */
+/**
+ * K1 — the record that the DESCRIPTION CLAMP cut the model's text.
+ *
+ * `optimize()` truncates an over-budget description at a paragraph, sentence or
+ * word boundary before the compliance disclaimer is appended (see
+ * `lib/engine/descriptionClamp.ts` for why, and for why that is generation
+ * policy rather than gate laundering). This is how the operator finds out: it
+ * carries the two lengths and nothing else — never the copy — and the Ship
+ * Sheet prints them beside the description.
+ *
+ * NOTHING READS IT AS A VERDICT. No gate check, no score and no `verified`
+ * decision looks at it; `verified` is computed only in `lib/audit/buildAudit.ts`
+ * and is exactly `gateResult.pass`, re-derived by re-running the gate over the
+ * clamped copy like any other copy.
+ */
+export interface DescriptionClamp {
+  /** Characters the model wrote. */
+  writtenChars: number;
+  /** Characters that survived the clamp and ship. */
+  keptChars: number;
+}
+
 export interface OptimizedListing {
   /** Legacy title: ≤200 chars; product name first; word ≤2×; no banned chars/promo/price. */
   title: string;
@@ -1518,6 +1540,17 @@ export interface OptimizedListing {
    * byte-for-byte the object it was before.
    */
   degradedGroups?: string[];
+  /**
+   * K1 — present EXACTLY when the assembly step shortened the written
+   * description to fit `rules.descriptionMax` once the disclaimer is appended.
+   *
+   * ABSENT when nothing was cut, so an ordinary run is byte-for-byte the object
+   * it was before the clamp existed (the same shape `degradedGroups` uses). It
+   * is advisory and operator-facing: unlike `degradedGroups` it is NOT blocking,
+   * because a clamped description is not a broken one — the gate re-measures it
+   * like any other copy and fails closed if the cut broke anything.
+   */
+  descriptionClamped?: DescriptionClamp;
   state: ElementState;
 }
 

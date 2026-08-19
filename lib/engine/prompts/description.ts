@@ -23,6 +23,14 @@ export function descriptionPrompt(
   // count at which C4 begins to fail, and a live run (B00IO89MYA) landed 19
   // characters past it having been told it correctly. See
   // `DESCRIPTION_MARGIN_FRACTION` in `lib/gate/checks/c-length.ts`.
+  // K1 — and the consequence of ignoring it is now STATED. Three live runs
+  // overshot the number they were given (+88, +19, then +120 straight through a
+  // margin sized against the first two), so `optimize()` clamps an over-budget
+  // body at a paragraph or sentence boundary before the disclaimer is appended
+  // (`lib/engine/descriptionClamp.ts`). Telling the model that is honesty, not
+  // pressure: the instruction now describes what actually happens. The CLIFF is
+  // still never named — naming it is what B00IO89MYA obeyed — so the sentence
+  // below carries no number of its own.
   const headroom = budget.reserve > 0
     ? `≤${budget.target} chars of your own text (the system then appends the verbatim compliance disclaimer, ${budget.reserve} chars, and the finished field must be ≤${budget.max})`
     : `≤${budget.target} chars`;
@@ -44,6 +52,7 @@ ${styleBlock}
 
 ${canonical}
 TASK: Write the product description, ${headroom}.
+- Finish INSIDE that length. Anything past the limit is cut by the system at a paragraph or sentence boundary before the field is assembled, so an over-long draft ships without its final paragraph.
 ${recapture ? `${recapture}\n` : ''}${buyerBlock ? `${buyerBlock}\n` : ''}- Product name must appear.
 - Blank-line paragraph breaks. Plain text, no HTML.
 - Cover: what it is, who it's for, how to use, quality and safety.

@@ -12,9 +12,10 @@ import type {
 import { logServer } from '@/lib/server/log';
 // The separator lives with C4, which is the check that measures the assembled
 // field — see `DISCLAIMER_APPEND_SEPARATOR` there for why it has ONE home.
-import { DISCLAIMER_APPEND_SEPARATOR } from '@/lib/gate/checks/c-length';
+import { DISCLAIMER_APPEND_SEPARATOR, descriptionBudget } from '@/lib/gate/checks/c-length';
 import { sanitizeBackendSearchTerms } from './backendSanitize';
 import { sanitizeBullets } from './bulletSanitize';
+import { clampDescription } from './descriptionClamp';
 import { buildFacts } from './facts';
 import { deriveKeywordPlacement } from './keywordPlacement';
 import { normalizeListingTypography } from './typography';
@@ -327,9 +328,50 @@ export async function optimize(
     ]);
 
   // --- deterministic assembly ---
+  //
+  // K1 — THE DESCRIPTION CLAMP, in the same step as the other two clamps.
+  //
+  // `sanitizeBullets` and `sanitizeBackendSearchTerms` (below) already truncate
+  // their surfaces to the pack's caps before the gate sees them, which is why
+  // an overshoot cannot reach C2 or C3 from a generated run. The description
+  // had no such step and is the surface that kept failing C4 — three recorded
+  // overshoots (+88, +19, then +120 straight through a margin sized against the
+  // first two). It gets the same treatment, on the same terms: unconditional,
+  // deterministic, blind to the gate, and re-validated by the gate afterwards.
+  // `lib/engine/descriptionClamp.ts` carries the reasoning, including the
+  // explicit verdict on "never mutate content to force a gate pass".
+  //
+  // The budget is `descriptionBudget(pack).budget` — the ONE arithmetic, the
+  // exact ceiling on the model's own text once the disclaimer is appended. The
+  // prompt still states `target` (a margin below it), so the clamp only ever
+  // sees a description that already ignored the number it was given.
+  //
+  // ORDER MATTERS: the body is clamped BEFORE the disclaimer is appended, so
+  // the disclaimer can never be truncated by it.
+  const descriptionClamp = clampDescription(
+    description.description,
+    descriptionBudget(pack).budget,
+  );
+  if (descriptionClamp.clamped) {
+    // Never the copy itself (lib/server/log.ts contract) — lengths only.
+    logServer('optimize.description_clamped', {
+      budget: descriptionBudget(pack).budget,
+      writtenChars: descriptionClamp.writtenChars,
+      keptChars: descriptionClamp.keptChars,
+    });
+  }
   const finalDescription = disclaimer
-    ? appendDisclaimer(description.description, disclaimer)
-    : description.description;
+    ? appendDisclaimer(descriptionClamp.text, disclaimer)
+    : descriptionClamp.text;
+  // A repair round that did NOT regenerate the description reuses the body from
+  // `base`, which is already inside the budget and so clamps to itself. The
+  // marker must travel with it, or the second round would quietly claim the
+  // shipped description was never shortened.
+  const descriptionClamped = descriptionClamp.clamped
+    ? { writtenChars: descriptionClamp.writtenChars, keptChars: descriptionClamp.keptChars }
+    : groups.includes('description')
+      ? undefined
+      : base?.descriptionClamped;
 
   const finalAttributes = { ...attributes.attributes };
   // Belt and braces for the operator-owned class: the prompt never showed
@@ -372,6 +414,9 @@ export async function optimize(
     // what was finally emitted).
     bulletClaimBearing: bullets.bullets.map((b) => b.claimBearing === true),
     description: finalDescription,
+    // K1 — ABSENT unless the clamp actually cut something, so an ordinary run
+    // is byte-for-byte the object it was.
+    ...(descriptionClamped ? { descriptionClamped } : {}),
     // Deterministic C3/C16 cleanup after LLM (gate still re-validates).
     backendSearchTerms: sanitizeBackendSearchTerms(
       backend.backendSearchTerms,
