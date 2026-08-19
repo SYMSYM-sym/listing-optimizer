@@ -149,6 +149,23 @@ export interface UnitRules {
   families: string[][];
   /** Phrases that make a potency figure a per-dose claim (gate C10/A5). */
   perServingPhrases: string[];
+  /**
+   * WORKED SHAPES for the headline potency figure — the C10/A5 rule written
+   * out as copy rather than described.
+   *
+   * The rule was reworded to a purely positive abstraction ("the figure
+   * describes the blend AS A WHOLE") to stop the prompt naming the phrasing the
+   * check reacts to. That removed the echo and stopped BINDING: a generator
+   * mirroring a source listing that leads on the per-dose form has an abstract
+   * instruction on one side and a concrete sentence on the other. These are the
+   * concrete side. Each entry is a compliant sentence shape with bracketed
+   * slots filled from the canonical facts, so it names no forbidden phrasing
+   * (`tests/promptHygiene.test.ts`) while giving the model something to copy.
+   *
+   * Absent/empty ⇒ `heroSpecBlock` renders exactly the two lines it rendered
+   * before this key existed.
+   */
+  heroSpecExamples?: string[];
   /** Verbs that introduce a potency figure (gate C10/A5 second pattern). */
   potencyVerbs: string[];
   /** Dosage-form tokens the facts producer parses "take N <form> daily" with. */
@@ -1106,6 +1123,22 @@ export interface CompliancePack {
    * assembled prompt is byte-for-byte what it was.
    */
   trustFramingNote?: string;
+  /**
+   * WORKED SHAPES for the same trust-framing rule — `trustFramingNote` written
+   * out as copy rather than described.
+   *
+   * The note says what verifiable trust framing IS available without naming the
+   * banned form, which is what prompt hygiene requires and what stops the echo
+   * class returning. It is still an abstraction ("let the specification carry
+   * the credibility"), and against a source listing that leads on the banned
+   * framing an abstraction loses. Each entry here is a compliant sentence shape
+   * with bracketed slots, filled from the canonical facts, the operator panel
+   * or the source listing. It names no phrase C19/A8 react to.
+   *
+   * Absent/empty ⇒ no line, and the assembled prompt is byte-for-byte what it
+   * was.
+   */
+  trustFramingExamples?: string[];
   /**
    * brain/02 — the CANDIDATE-NOUN proposer (advisory). Heuristics for spotting
    * condition-like terms in the SOURCE listing that this pack's lexicon does

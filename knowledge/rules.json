@@ -590,6 +590,13 @@
     "perServingPhrases": [
       "per serving"
     ],
+    "_heroSpecExamplesComment": "N2 - THE WORKED SHAPES for the C10/A5 headline-potency rule. Round L reworded heroSpecBlock from 'NEVER attach it to a single dose - never write it as <the phrasing>' to a purely positive abstraction, because the negative form named the phrase the check reacts to and the model echoed it straight into imagePlan[1].spec. That removed the echo and it did not bind: a live run whose SOURCE listing writes the headline figure per-dose came back A5 | aplus.modules[hero].body (twice) and A5 | aplus.comparison[1].ours, because 'describe the whole' is an abstraction and the source sentence is concrete. These entries are the concrete side: a compliant sentence the model can copy, with bracketed slots filled from the canonical facts, containing no per-dose phrasing at all - so prompt hygiene stays green (the round-4 record in tests/promptHygiene.test.ts is what happens when an instruction spells out the form it forbids). The last, shortest shape exists for a comparison-table cell, which is where the third live failure was. Empty/absent => heroSpecBlock renders exactly the two lines it rendered before, so a category may decline to ship them (a narrowing of PREVENTION only; C10/A5 are unaffected), which is why this is not a REQUIRED_PACK_PIECE.",
+    "heroSpecExamples": [
+      "a [figure] blend of [ingredient]",
+      "[ingredient] at [figure] in the finished formula",
+      "the formula is built to [figure] of [ingredient]",
+      "[figure] formula"
+    ],
     "potencyVerbs": [
       "delivers",
       "deliver",

@@ -147,6 +147,24 @@ ${(cp.allergenRules ?? [])
    */
   const trustNote = cp?.trustFramingNote?.trim();
   const trustLine = trustNote ? `\n- ${trustNote}` : '';
+  /**
+   * N2 — THE WORKED SHAPES for the same class (`compliancePack.trustFramingExamples`).
+   *
+   * The note above says what verifiable trust framing IS available, and it is
+   * still a description of a form rather than the form. Against a source
+   * listing that leads on the banned framing the description lost: the same row
+   * came back on `aplus.modules[ingredients]` under both checks. These entries
+   * are the form itself — compliant sentences with bracketed slots the model
+   * fills from the canonical facts, the operator panel or the source listing —
+   * and, being compliant, they name no phrase either check reacts to. Empty or
+   * absent key ⇒ no line, and the assembled prompt is byte-for-byte what it was.
+   */
+  const trustExamples = (cp?.trustFramingExamples ?? []).map((e) => e.trim()).filter(Boolean);
+  const trustExampleLine = trustExamples.length
+    ? `\n- Written out — copy one of these shapes into a brand-story module or a comparison column, filling each bracketed slot from the canonical facts, the operator panel or the source listing above: ${trustExamples
+        .map((e) => `"${e}"`)
+        .join(' | ')}`
+    : '';
   // The SEMANTIC claim shapes (C21). A claim needs no disease word to be
   // illegal, so the noun list above is not sufficient prevention on its own.
   const semanticBlock = semanticClaimBlock(cp?.semanticDrugClaims);
@@ -158,7 +176,7 @@ ${(cp.allergenRules ?? [])
   const compliance = cp
     ? `
 COMPLIANCE (structure/function claims ONLY — this is load-bearing):
-${complianceLines}${trustLine}
+${complianceLines}${trustLine}${trustExampleLine}
 - Banned verbs as product claims: ${cp.diseaseVerbs.join(', ')}.
 - Write every benefit as a structure/function state ("supports healthy [system] function", "[parameter] balance"). The deterministic gate scans EVERY surface against this full enforced list, and against any other condition name — keep all of it out of your copy: ${activeNouns.join(', ')}.
 - Banned marketing phrases: ${cp.superlativeBans.join(', ')}.

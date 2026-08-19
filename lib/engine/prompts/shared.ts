@@ -315,6 +315,19 @@ export function prohibitedMarketingBlock(rules: ProhibitedMarketingRules | undef
  * C10 objects to the ATTACHMENT, and the attachment is what this now states.
  * The block is still rendered only when the pack declares the rule, so a
  * category that ships no per-dose phrasing still renders nothing at all.
+ *
+ * N2 — POSITIVE WAS RIGHT AND ABSTRACT WAS NOT ENOUGH. Removing the named
+ * phrasing removed the echo; it also removed the only concrete thing in the
+ * instruction. A later run on a source listing that writes the headline figure
+ * per-dose came back with the same rule failing three A+ fields
+ * (`aplus.modules[hero].body` twice and a comparison cell), because the model
+ * mirrors its input and "describe the whole" is an abstraction competing with a
+ * sentence. `rules.units.heroSpecExamples` is the concrete half: compliant
+ * sentence shapes the model can copy, whose bracketed slots are filled from the
+ * canonical facts. A compliant example contains no per-dose phrasing at all, so
+ * the round-4 constraint is untouched — the prompt still names nothing the
+ * check reacts to, and `tests/promptHygiene.test.ts` scans these entries as
+ * corpus B like every other rendered pack string.
  */
 export function heroSpecBlock(units: UnitRules | undefined): string {
   const phrases = (units?.perServingPhrases ?? []).map((p) => p.trim()).filter(Boolean);
@@ -325,11 +338,23 @@ export function heroSpecBlock(units: UnitRules | undefined): string {
         .map((v) => `"${v}"`)
         .join(' / ')}: what those verbs describe is the formula.`
     : '';
-  return [
+  const lines = [
     'HEADLINE SPEC (deterministically checked on this surface):',
     `- The headline potency figure describes the blend or formula AS A WHOLE. Write the figure together with the whole it belongs to, so the sentence says what the number is a property of.${verbLine}`,
     '- The figure itself is unchanged: state it, and state what it belongs to.',
-  ].join('\n');
+  ];
+  // N2 — THE WORKED SHAPES, from `rules.units.heroSpecExamples`. Everything
+  // above this is a description of the required form; these are the form
+  // itself, which is the half a model can copy. Empty/absent key ⇒ the block is
+  // byte-for-byte the two lines above.
+  const examples = (units?.heroSpecExamples ?? []).map((e) => e.trim()).filter(Boolean);
+  if (examples.length > 0) {
+    lines.push(
+      '- WRITTEN OUT — copy one of these shapes, filling each bracketed slot from the canonical facts above. The last one is short enough for a comparison-table cell:',
+      ...examples.map((e) => `  - "${e}"`),
+    );
+  }
+  return lines.join('\n');
 }
 
 /**
