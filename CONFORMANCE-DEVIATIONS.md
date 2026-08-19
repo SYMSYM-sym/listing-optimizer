@@ -3101,3 +3101,119 @@ a genuine rival is unaffected in every direction; `proposedStatus` cannot be
 model-supplied; only a row proposed as `negative` is credited; and the golden
 fixture still gates with zero failures. `keywords[].proposedStatus` is enrolled
 in the Â§P2 field-closure oracle.
+
+---
+
+## 18. ROUND J — a mandated warning the gate could not read as one, and a floor nobody was told about.
+
+### 18.1 ARCHITECTURE CHANGE — the consult-a-professional SAFETY WARNING is recognised as a CONSTRUCTION, not as a list of wordings.
+
+**THE LIVE DEFECT, FOR THE THIRD TIME.** Production, ASIN B00IO89MYA:
+
+```
+C22 | description | "before use if pregnant, nursing, taking medication, or managing a medical condition, and keep out of reach"
+fix: Abnormality marker 'medical condition' next to the natural state 'nursing' — …
+```
+
+`safety_warning` is a **REQUIRED** field of the supplements attribute template, so
+C23 forces the listing to carry the consult-a-professional warning and C22's R1
+then failed the text C23 demanded. That is an **unsatisfiable pair**: no repair
+round can clear it without deleting text the template requires.
+
+**WHY THE TWO EARLIER FIXES DID NOT HOLD.** Both were enumerative. The original
+forensic round added an R3 ADVISORY escape for
+`"Women who are pregnant or nursing … managing a health concern, should talk with
+a physician"`; ROUND M added the literal `"have a known medical condition"` to
+`compliancePack.naturalStateSafePhrases` beside `"have a diagnosed medical
+condition"`. Each covered one wording of the same warning, and the next ordinary
+paraphrase — `"managing a medical condition"` — walked straight past both. An
+enumeration of phrasings always loses to paraphrase; the pack comment on that
+list said the qualifier slot was "ENUMERATED, NEVER WILDCARDED", which is exactly
+the property that kept costing.
+
+**THE FIX IS STRUCTURAL.** The warning is one grammatical SHAPE, not an open set
+of strings: a **CONDITION clause enumerating states the READER may be in**,
+governed by a **RECOMMENDATION to consult a professional**. Both legs are pack
+data:
+
+* the RECOMMENDATION — `advisoryCueVerbs` followed within the adjacency gap by
+  `advisoryProfessionalNouns`, the same pairing test R3's escape already used;
+* the CONDITION — `advisoryConditionCues`, **new**, a CLOSED GRAMMATICAL CLASS of
+  conditional subordinators (`if`, `when`, `unless`, `in the event`) and
+  generic-addressee relative heads (`anyone who`, `those who`, `women who`).
+
+Inside a sentence carrying both legs the abnormality markers describe the
+READER'S condition rather than the product's target, so **R2** (two markers) does
+not fire, and **R1** (marker beside a natural state) does not fire when the
+marker and the state sit in **different items of the enumeration**
+(`sameEnumerationItem` — clause punctuation or a coordinating conjunction).
+`lib/gate/checks/c-natural-state.ts` holds the sentence arithmetic and not one
+word of vocabulary; `tests/category.literals.test.ts` is green.
+
+**THE ANTI-LAUNDERING HALF, STATED EXACTLY.** A marker that MODIFIES its
+neighbour shares its enumeration item and R1 still fires however the sentence is
+dressed — `"Consult your doctor if you want relief from severe menopause
+symptoms"` and `"Anyone who has chronic menopause should talk with a physician"`
+both still FAIL. A sentence with no condition cue is not the construction at all,
+so `"Ask your doctor about our formula for severe menopause symptoms"` fails on
+both legs, and the relative heads carry `who`/`with` on purpose so that
+`"Anyone can ask their doctor about our chronic disorder formula"` is not a
+construction either. R3, the C6 disease-noun scan and the C6 action-paired tier
+never consult the rule: a named disease inside a perfectly-formed warning is
+still failed by C6.
+
+**THE RESIDUE, STATED RATHER THAN HIDDEN.** The condition class is closed, so a
+warning that uses a REDUCED relative clause with no relative pronoun — "…and
+those managing any medical condition, should seek the advice of a physician" —
+is not recognised and still fails R1. Widening the class to the bare pronoun was
+rejected because it exempts `"Anyone can ask their doctor about our chronic
+disorder formula"`, which is a claim. `compliance.cosmetics.json` still ships no
+advisory lists of its own; it reaches these through the cross-check union, which
+is why the cosmetics pack behaves identically.
+
+**Status: FIXED.** `knowledge/compliance.supplements.json`
+(`advisoryConditionCues` + comment), `lib/types.ts`,
+`lib/gate/checks/c-natural-state.ts`.
+`tests/safetyWarning.construction.c22.test.ts` holds it in both directions: the
+live string, the two previously-fixed wordings and **seven ordinary paraphrases
+no pack list contains** are clean on three surfaces each and green through the
+whole gate; every one of those paraphrases FAILS AGAIN with
+`advisoryConditionCues` emptied and every other list untouched, which is the
+proof that the construction and not the enumerated safe-phrase list is doing the
+work; fifteen genuine abnormality claims — bare and dressed in a warning — still
+fail; C6 and R3 are asserted unreachable from the rule.
+
+### 18.2 CORRECTED RECORD — the `minNegatives` floor was enforced by a number the writer was never shown, drawn from a source it could not honestly have.
+
+**THE LIVE DEFECT.** Same run: `C28 | keywords | 0 negative term(s)`. The ROUND H
+change had already re-aimed the floor at PROPOSALS, so this was **not** the
+reclassification defect — the model wrote no negative rows at all.
+
+**THE FINDING, both halves.** `rules.keywordRules.minNegatives` was pack data
+**only the gate read**. `maxTerms` and `whyMaxChars` were both rendered into the
+keyword prompt; the floor was not, so the one number a keyword artifact can FAIL
+on was the one number its writer was never given. And the only SOURCE the
+instructions led with was "every rival brand name" — with no operator competitor
+ASINs supplied the model has no rival-brand knowledge, so that instruction asks
+it to **invent companies**, which cannot converge honestly.
+
+**THE FLOOR IS NOT MIS-SPECIFIED AND IS NOT LOWERED.** A source exists on every
+run: the vocabulary the compliance rules rule out, printed in the same prompt,
+which C28 already credits toward the floor (a compliance-owned negative row is
+DEFERRED to the check that owns it and still counts, §14). What was missing was
+that anybody said so.
+
+**Status: FIXED.** `lib/engine/prompts/keywords.ts` renders the floor from the
+same pack number the gate enforces and renders
+`rules.keywordRules.negativeSourceNote` (**new** pack data) beside it — naming
+the always-available source and refusing the invention of a rival outright.
+`lib/gate/checks/c-keywords.ts` states the same source in the failure text at
+repair time. `lib/types.ts` documents the field.
+`tests/negativeSource.j2.test.ts` holds it in both directions: the prompt states
+the minimum and the source and renders neither when the pack sets no floor; a
+reference whose negatives are only the avoided compliance vocabulary converges,
+in isolation and end to end through `optimize()`; zero rows and one-short-of-the
+floor still fail, with a message that names a source the run can draw on; a
+genuine rival is unaffected and still enforced from the copy; and the anti-gaming
+leg still fails a reference whose every negative names this product.
+`tests/minNegativesFloor.h2.test.ts` is green **unedited**.

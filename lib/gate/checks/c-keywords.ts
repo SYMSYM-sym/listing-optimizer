@@ -802,7 +802,19 @@ export function c28KeywordPlacement(
         CHECK_ID,
         'keywords',
         `${proposedNegatives} negative term(s)`,
-        `The keyword reference must record at least ${min} negative terms — the banned vocabulary and every rival brand name belong on it, or the next copy cycle re-adds them`,
+        // J2 — THE MESSAGE HAS TO NAME A SOURCE THE RUN CAN ACTUALLY DRAW ON.
+        // The previous text ("the banned vocabulary and every rival brand name
+        // belong on it") led with rival brands, and on a run with no operator
+        // competitor ASINs there are none to know: the only move it asked for
+        // was to invent a competitor, which is not a repair, it is a
+        // fabrication. So the message now leads with the source that exists on
+        // every run — the vocabulary the compliance rules rule out, which the
+        // copy already avoided — and says that such a row counts here even
+        // though the compliance checks, not this one, enforce it (the deference,
+        // bound 4 above). The prompt states the same thing before the artifact
+        // is written (`rules.keywordRules.negativeSourceNote`); this is the
+        // repair-time half of the same instruction.
+        `The keyword reference must record at least ${min} negative terms and records ${proposedNegatives}. Draw them from the vocabulary the compliance rules rule out — the terms this copy deliberately avoided — naming each one the way those rules name it, with the reason on the row; such a row counts toward this floor even though the compliance checks rather than this one enforce it. Add a rival brand only if this run supplied one: never invent a competitor to reach the count`,
       ),
     );
   }

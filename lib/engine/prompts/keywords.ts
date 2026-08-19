@@ -43,6 +43,19 @@ import { demandRecaptureBlock, keywordVocabularyBlock, snapshotBlock } from './s
  * overwrite — for a genuine rival, presence in the copy IS the violation. The
  * incoherent classification is rejected in code at the derivation boundary; the
  * `negativeScopeNote` line rendered below is what stops it being proposed.
+ *
+ * J2 — HOW MANY NEGATIVES, AND WHERE THEY COME FROM. A live run produced ZERO
+ * negative rows (`C28 | keywords | 0 negative term(s)`). Every note above tells
+ * the model what `negative` is FOR; none of them said the reference owes a
+ * MINIMUM number of them, because `minNegatives` was pack data the gate read and
+ * the prompt did not render — `maxTerms` and `whyMaxChars` were both rendered,
+ * the one number a run can FAIL on was not. And the only source those notes led
+ * with is "every rival brand name", which on a run with no operator competitor
+ * ASINs asks the model to invent companies. Both halves are fixed below: the
+ * floor is rendered from the same pack number the gate enforces, and
+ * `negativeSourceNote` (pack data) names the source that is available on every
+ * run — the vocabulary the compliance rules rule out, which C28 already credits
+ * toward the floor — while refusing the invention of a rival outright.
  */
 export interface KeywordSurfacesView {
   title: string;
@@ -131,6 +144,35 @@ export function keywordsPrompt(
     typeof kr?.negativeScopeNote === 'string' && kr.negativeScopeNote.trim() !== ''
       ? `- ${kr.negativeScopeNote.trim()}`
       : '';
+  // J2 — THE FLOOR, AND WHERE THE ROWS THAT MEET IT COME FROM.
+  //
+  // Live, ASIN B00IO89MYA: `C28 | keywords | 0 negative term(s)`. The model
+  // wrote no negative rows at all — and nothing it had been shown ever told it
+  // that a MINIMUM existed. `minNegatives` was pack data read only by the gate:
+  // `maxTerms` and `whyMaxChars` were both rendered here, the floor was not, so
+  // the one number the artifact could FAIL on was the one number the writer was
+  // never given. The instructions that did mention `negative` said what the
+  // status is for, never how many the reference owes.
+  //
+  // The number alone would not have been enough, and that is the second half of
+  // the fix. The only source those instructions led with is "every rival brand
+  // name" — and on a run with no operator competitor ASINs the model has NO
+  // rival-brand knowledge, so an instruction to record them is an instruction to
+  // invent companies. That cannot converge honestly. The source that is always
+  // available is the vocabulary the compliance rules rule out, which is printed
+  // in this same prompt and which C28 already credits toward the floor (a
+  // compliance-owned negative is DEFERRED to the check that owns it and still
+  // counts). `negativeSourceNote` is PACK DATA saying exactly that, including
+  // the refusal to invent a competitor — this module holds no lexicon and no
+  // instruction of its own.
+  const floor =
+    typeof kr?.minNegatives === 'number' && kr.minNegatives > 0
+      ? `- FLOOR: at least ${kr.minNegatives} rows must carry the "must appear nowhere" status. This is checked: a reference that records fewer is sent back, and one that records none has not done the job at all.`
+      : '';
+  const negativeSource =
+    typeof kr?.negativeSourceNote === 'string' && kr.negativeSourceNote.trim() !== ''
+      ? `- ${kr.negativeSourceNote.trim()}`
+      : '';
   const surfaces = [
     'THE FINISHED COPY (read it — this is the listing your reference describes, and the placement map is computed from these exact strings):',
     `title: ${emitted.title}`,
@@ -161,6 +203,8 @@ ${recapture}
 - THE TWO ABSENCE WORDS ARE FOR TERMS THE COPY ABOVE DOES NOT CARRY. "Held back for a later cycle" and "deliberately left alone" both say the term is NOT in this listing. Every ingredient you can read in the copy above, every spec it states and every phrase it uses IS in this listing — such a row is a placement, and code records it as one from the copy itself. Spend those two statuses on terms you are choosing to leave out.
 - "why" is required on every row: ONE short sentence of evidence${whyLimit}. It is evidence, not an essay.
 - A row that says a rival's brand name, or any term the compliance rules above forbid, belongs on the negative list. Every negative row states its reason in "why".
+${floor}
+${negativeSource}
 ${negativeScope}
 ${ownBrand}
 - Cover the listing properly WITHIN THAT BUDGET: the head terms, the named entities, the qualifier and trust terms, the buyer-language phrases, the invisible-only variants, and the terms this listing deliberately leaves alone. Spend the rows on the terms that decide the listing; a near-duplicate of a row you have already written earns nothing.
