@@ -1699,7 +1699,7 @@ describe('C27 output hygiene', () => {
 
 describe('substantiation register (R33/R38)', () => {
   it('marks a claim the SOURCE listing already made as HELD', () => {
-    const register = buildSubstantiationRegister(clean, snapshot, pack.compliancePack);
+    const register = buildSubstantiationRegister(clean, snapshot, pack);
     const nonGmo = register.find((r) => r.claim === 'Non-GMO');
     expect(nonGmo?.status).toBe('HELD');
     expect(nonGmo?.surface).toContain('title');
@@ -1709,7 +1709,7 @@ describe('substantiation register (R33/R38)', () => {
     const l = mut((x) => {
       x.bullets[3] = 'Quality you can verify: certified organic and third-party tested';
     });
-    const register = buildSubstantiationRegister(l, snapshot, pack.compliancePack);
+    const register = buildSubstantiationRegister(l, snapshot, pack);
     const organic = register.find((r) => r.claim === 'Organic');
     expect(organic?.status).toBe('PENDING');
     expect(organic?.note).toContain('not evidenced in source listing');
@@ -1719,7 +1719,7 @@ describe('substantiation register (R33/R38)', () => {
       description: `${snapshot.description} Certified organic.`,
     };
     expect(
-      buildSubstantiationRegister(l, sourceWithOrganic, pack.compliancePack)!.find(
+      buildSubstantiationRegister(l, sourceWithOrganic, pack)!.find(
         (r) => r.claim === 'Organic',
       )?.status,
     ).toBe('HELD');
@@ -1758,7 +1758,7 @@ describe('substantiation register (R33/R38)', () => {
   it('is PACK-DRIVEN: no token list, no register', () => {
     const bare = clonePack();
     delete bare.compliancePack!.substantiationTokens;
-    expect(buildSubstantiationRegister(clean, snapshot, bare.compliancePack)).toEqual([]);
+    expect(buildSubstantiationRegister(clean, snapshot, bare)).toEqual([]);
   });
 });
 

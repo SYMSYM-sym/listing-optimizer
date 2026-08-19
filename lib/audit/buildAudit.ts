@@ -115,7 +115,7 @@ export function buildAudit(
   const benchmark = buildBenchmark(current, listing, inputs.competitors);
   // R33/R38 — the substantiation register is built BEFORE the diff, because
   // the diff turns its unevidenced HEADER claims into a P1 gap.
-  const substantiationRegister = buildSubstantiationRegister(listing, current, pack.compliancePack);
+  const substantiationRegister = buildSubstantiationRegister(listing, current, pack);
   /**
    * N3 — SNAPSHOT FIDELITY FOR BRAND IDENTITY. Advisory; never enters
    * `verified`, which stays exactly `gateResult.pass`.

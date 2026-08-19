@@ -1096,6 +1096,17 @@ export interface CompliancePack {
    */
   substantiationTokens?: string[][];
   /**
+   * M1 — the PREVENTION half of the study-endorsement ban: ONE sentence saying
+   * what verifiable trust framing IS available, rendered into the COMPLIANCE
+   * block of the shared system preamble.
+   *
+   * The register above and gate C19/A8 both react to trust claims; only this
+   * key tells the generator what it may write INSTEAD. It names no banned
+   * phrase (see `tests/promptHygiene.test.ts`). Absent/blank ⇒ no line, and the
+   * assembled prompt is byte-for-byte what it was.
+   */
+  trustFramingNote?: string;
+  /**
    * brain/02 — the CANDIDATE-NOUN proposer (advisory). Heuristics for spotting
    * condition-like terms in the SOURCE listing that this pack's lexicon does
    * not yet know about (the dental blind spot). Never a failure.

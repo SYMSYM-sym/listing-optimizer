@@ -125,6 +125,28 @@ ${(cp.allergenRules ?? [])
 - The same declaration must also appear in at least one bullet and in the description, phrased with "${af.declarationVerb}" plus the allergen class or source.
 - Never write ${(cp.noAllergenPhrases ?? []).map((x) => `"${x}"`).join(' / ')} when a declarable allergen is present.`
       : '';
+  /**
+   * M1 — THE PREVENTION HALF of the study-endorsement ban, rendered FROM PACK
+   * DATA (`compliancePack.trustFramingNote`).
+   *
+   * C19/A8 fail the study-endorsement row on EVERY surface, and the only thing
+   * the assembled prompt said about that class was its LABEL, one of twenty in
+   * the prohibited-marketing list. A label is a category name, not a substitute:
+   * a live run of B00EEEITVA — whose SOURCE listing leads on exactly that
+   * framing — came back with the same row failing three A+ fields under C19 and
+   * the same three bodies under A8, and never converged, because every repair
+   * round regenerated the A+ block from that same source with nothing else to
+   * reach for in a brand-story module or a comparison column.
+   *
+   * This is the mirror of `approvedClaimBlock` (the prevention half for C22):
+   * the ban stays exactly where it is, and the model is told what it MAY write.
+   * The sentence is PACK DATA and names no banned phrase — the round-4 record in
+   * `tests/promptHygiene.test.ts` is what happens when an instruction spells out
+   * the form it forbids. Empty key ⇒ empty string ⇒ the prompt is byte-for-byte
+   * what it was.
+   */
+  const trustNote = cp?.trustFramingNote?.trim();
+  const trustLine = trustNote ? `\n- ${trustNote}` : '';
   // The SEMANTIC claim shapes (C21). A claim needs no disease word to be
   // illegal, so the noun list above is not sufficient prevention on its own.
   const semanticBlock = semanticClaimBlock(cp?.semanticDrugClaims);
@@ -136,7 +158,7 @@ ${(cp.allergenRules ?? [])
   const compliance = cp
     ? `
 COMPLIANCE (structure/function claims ONLY — this is load-bearing):
-${complianceLines}
+${complianceLines}${trustLine}
 - Banned verbs as product claims: ${cp.diseaseVerbs.join(', ')}.
 - Write every benefit as a structure/function state ("supports healthy [system] function", "[parameter] balance"). The deterministic gate scans EVERY surface against this full enforced list, and against any other condition name — keep all of it out of your copy: ${activeNouns.join(', ')}.
 - Banned marketing phrases: ${cp.superlativeBans.join(', ')}.
