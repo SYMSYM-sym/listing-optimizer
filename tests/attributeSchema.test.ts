@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { attributeSchemaStaleness } from '@/lib/audit/staleness';
 import { buildAudit } from '@/lib/audit/buildAudit';
 import { optimize } from '@/lib/engine/optimize';
-import { buildGroupPrompts } from '@/lib/engine/prompts';
+import { buildGroupPrompts, buildSystemPrompt } from '@/lib/engine/prompts';
 import { c23AttributeCompleteness, type GateContext } from '@/lib/gate/checks';
 import { runGate } from '@/lib/gate/runGate';
 import { loadPack, type PackId } from '@/lib/knowledge/loadPack';
@@ -316,6 +316,73 @@ describe('R4 — the none-style allergen declaration (AM-4a)', () => {
     expect(c23(l, p).filter((f) => f.field === `attributes.${key}`)).toEqual([]);
     // …which is exactly why it is a manifest piece.
     expect(runGate(l, p, ctx).failures.some((f) => f.checkId === 'PACK')).toBe(true);
+  });
+});
+
+/**
+ * ---------------------------------------------------------------------------
+ * AM-4a PREVENTION — the live `C23 | attributes.allergen_information | none`.
+ * ---------------------------------------------------------------------------
+ *
+ * A live run of B00EEEITVA came back with that one failure. It is NOT an
+ * over-block and it is not a schema mismatch: the field carries no enum, R4
+ * owns it, and the pack's own `_noAllergenCanonical_doc` names `'none'`
+ * explicitly as one of the unverifiable free-text variants the rule exists to
+ * refuse ("an empty field reads as 'not answered', and free-text variants
+ * ('none', 'N/A', 'no allergens') are unverifiable"). The DIRECTION 2 case
+ * above already pins that.
+ *
+ * What WAS wrong sat one step upstream. `compliancePack.noAllergenCanonical`
+ * was rendered into NO prompt anywhere in this engine — the allergen block
+ * stated only the allergen-PRESENT rules, and the schema example for the field
+ * documents only the `Contains: …` case — so the generator was asked for an
+ * exact string it had never been shown. That is the condition
+ * `tests/redteam3.gate.test.ts` and `tests/redteam4.gate.test.ts` exist to
+ * prevent for the disease lexicon, one field over.
+ *
+ * The repair loop was NOT at fault and is untouched: `attributes.*` routes to
+ * the `attributes` group (`lib/engine/fieldRouting.ts`), and R4's fix line
+ * quotes the required string in full, so the round-2 prompt can act on it. Only
+ * the FIRST attempt was a coin flip. These tests pin the statement, in both
+ * directions, so it cannot silently go away again.
+ */
+describe('AM-4a — the none-style rule is STATED to the generator', () => {
+  const PACKS: PackId[] = ['supplements', 'cosmetics'];
+
+  it.each(PACKS)('%s: the system preamble names the canonical string and its field', (id) => {
+    const p = loadPack(id);
+    const cpp = p.compliancePack!;
+    const system = buildSystemPrompt(p, {}, []);
+    expect(system).toContain(cpp.noAllergenCanonical!);
+    expect(system).toContain(`attributes.${cpp.allergenFields.declaration}`);
+    // …and it is stated as the NO-allergen branch, not as one more Contains: row.
+    expect(system).toContain(`declare none of them, then attributes.${cpp.allergenFields.declaration}`);
+  });
+
+  it('the value the live run wrote is the one the stated rule replaces', () => {
+    const cpp = pack.compliancePack!;
+    const k = cpp.allergenFields.declaration;
+    const live = mut((x) => {
+      x.attributes[k] = 'none';
+    });
+    const f = c23(live).filter((y) => y.field === `attributes.${k}`);
+    expect(f.length, 'the live value must still fail — this is not an over-block').toBe(1);
+    expect(f[0]!.context).toBe('none');
+    expect(f[0]!.fix, 'the fix line names the exact string, so a repair round can act').toContain(
+      cpp.noAllergenCanonical!,
+    );
+    // …and the string the fix line names is the string the prompt now states.
+    expect(buildSystemPrompt(pack, {}, [])).toContain(cpp.noAllergenCanonical!);
+  });
+
+  it('a pack with no canonical string states no rule, and the Contains: half is untouched', () => {
+    const p = JSON.parse(JSON.stringify(loadPack('supplements'))) as KnowledgePack;
+    const canonical = p.compliancePack!.noAllergenCanonical!;
+    p.compliancePack!.noAllergenCanonical = '';
+    const system = buildSystemPrompt(p, {}, []);
+    expect(system).not.toContain(canonical);
+    expect(system).not.toContain('declare none of them');
+    expect(system).toContain('must be EXACTLY "Contains: Milk"');
   });
 });
 

@@ -299,10 +299,22 @@ export function prohibitedMarketingBlock(rules: ProhibitedMarketingRules | undef
  * was.
  *
  * RENDERED AHEAD OF `TASK:`, for the documented reason `styleRulesBlock` is:
- * it is an ENUMERATION OF DATA the gate enforces, not a sentence of the form
- * "avoid <banned word>" inside the instruction a brief gets paraphrased from.
- * Its PROSE is scanned by `tests/promptHygiene.test.ts` all the same (corpus
- * C), which is what stopped the pre-`TASK:` blocks being an unguarded region.
+ * it is a standing constraint on the surface, not a sentence inside the
+ * instruction a brief gets paraphrased from. Its PROSE is scanned by
+ * `tests/promptHygiene.test.ts` all the same (corpus C), which is what stopped
+ * the pre-`TASK:` blocks being an unguarded region.
+ *
+ * ROUND 4 — IT NAMES NO PER-DOSE PHRASING, AND THAT IS THE POINT. This block
+ * used to end "…NEVER attach it to a single dose — never write it as
+ * <the pack's phrasings>", which is an instruction forbidding a term BY NAMING
+ * IT. A live run of B00EEEITVA echoed the contrast back into `imagePlan[1].spec`
+ * ("15 billion CFU as a property of the whole blend (not per serving") and C10
+ * — which reacts to exactly that phrase beside a potency figure — failed the
+ * listing on its own instruction. Third instance of the class; the remedy is the
+ * one rounds 1 and 2 used, a POSITIVE constraint. Nothing actionable is lost:
+ * C10 objects to the ATTACHMENT, and the attachment is what this now states.
+ * The block is still rendered only when the pack declares the rule, so a
+ * category that ships no per-dose phrasing still renders nothing at all.
  */
 export function heroSpecBlock(units: UnitRules | undefined): string {
   const phrases = (units?.perServingPhrases ?? []).map((p) => p.trim()).filter(Boolean);
@@ -311,13 +323,11 @@ export function heroSpecBlock(units: UnitRules | undefined): string {
   const verbLine = verbs.length
     ? ` The same holds when the figure is introduced by ${verbs
         .map((v) => `"${v}"`)
-        .join(' / ')}: what is described is the formula, not one unit of use.`
+        .join(' / ')}: what those verbs describe is the formula.`
     : '';
   return [
     'HEADLINE SPEC (deterministically checked on this surface):',
-    `- Attach the headline potency figure to the blend or formula as a whole. NEVER attach it to a single dose — never write it as ${phrases
-      .map((p) => `"${p}"`)
-      .join(' / ')}.${verbLine}`,
+    `- The headline potency figure describes the blend or formula AS A WHOLE. Write the figure together with the whole it belongs to, so the sentence says what the number is a property of.${verbLine}`,
     '- The figure itself is unchanged: state it, and state what it belongs to.',
   ].join('\n');
 }

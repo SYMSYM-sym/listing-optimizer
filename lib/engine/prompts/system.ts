@@ -93,13 +93,35 @@ export function buildSystemPrompt(
   // this block is the only place the generator is ever told what those strings
   // are; without it the model was failed on a rule it had never been shown.
   const af = cp?.allergenFields;
+  /**
+   * THE OTHER HALF OF THE DECLARATION, which the model was never shown.
+   *
+   * AM-4a (C23 R4, `noneStyleAllergenDeclaration` in
+   * `lib/gate/checks/c-attributes.ts`) requires the declaration attribute to
+   * equal `compliancePack.noAllergenCanonical` EXACTLY when the label declares
+   * no allergen — and that string was rendered into no prompt anywhere in this
+   * engine. A live run of B00EEEITVA came back
+   * `C23 | attributes.allergen_information | none`: the model answered the field
+   * sensibly and was failed on an exact string it had never been given. Same
+   * condition `redteam3`/`redteam4` exist to prevent for the disease lexicon —
+   * a generator not shown the rule is failed on a rule it was never told. The
+   * repair loop's routing and fix line were both correct and are untouched;
+   * what was missing was PREVENTION on the first attempt.
+   *
+   * Pack data, like every line around it: empty key ⇒ empty string.
+   */
+  const noAllergenCanonical = cp?.noAllergenCanonical?.trim();
+  const noAllergenLine =
+    noAllergenCanonical && af
+      ? `\n- If the ${af.labelList} declare none of them, then attributes.${af.declaration} must be EXACTLY "${noAllergenCanonical}". The field is answered either way — a blank reads as unanswered, and a wording of your own cannot be verified.`
+      : '';
   const allergenLines =
     cp && af && (cp.allergenRules ?? []).length > 0
       ? `
 ALLERGEN DECLARATIONS (exact strings — the gate compares them character for character):
 ${(cp.allergenRules ?? [])
   .map((r) => `- If the ${af.labelList} contain any of (${r.source}), then attributes.${af.declaration} must be EXACTLY "${r.canonicalString}".`)
-  .join('\n')}
+  .join('\n')}${noAllergenLine}
 - The same declaration must also appear in at least one bullet and in the description, phrased with "${af.declarationVerb}" plus the allergen class or source.
 - Never write ${(cp.noAllergenPhrases ?? []).map((x) => `"${x}"`).join(' / ')} when a declarable allergen is present.`
       : '';
@@ -168,8 +190,19 @@ No category compliance module is active. Write factual, everyday copy about what
     ? ` ONE exception: ${tails.map((t) => `"${t}"`).join(' / ')} does not count when each occurrence follows a DIFFERENT preceding word, i.e. a distinct compound each time ("A ${tails[0]}, B ${tails[0]}, C ${tails[0]}"). A bare one, a compound written twice, or one that follows another such qualifier all still count — and the preceding word itself always counts.`
     : '';
 
+  // ROUND 4 — POSITIVE, and it names no phrasing.
+  //
+  // This line used to read "NEVER phrased <the pack's per-dose phrasings>", and
+  // `heroSpecBlock` said the same thing at the image and A+ surfaces. A live run
+  // of B00EEEITVA echoed our own contrast straight into `imagePlan[1].spec`
+  // ("…as a property of the whole blend (not per serving") and C10 — which
+  // reacts to exactly that phrase beside a potency figure — failed the listing
+  // on its own instruction. Third occurrence of the class; see the header of
+  // `tests/promptHygiene.test.ts`. The rule is stated as the constraint it is,
+  // and the forbidden surface form is no longer written down anywhere the model
+  // can read it. Still rendered only when the pack ships the rule at all.
   const dosePhrasing = (r.units?.perServingPhrases ?? []).length > 0
-    ? `\n- Potency figures attach to the blend/formula, NEVER phrased ${(r.units.perServingPhrases).map((x) => `"${x}"`).join(' / ')}.`
+    ? '\n- A potency figure describes the blend/formula as a whole: write the figure together with the whole it belongs to.'
     : '';
 
   return `You are an Amazon listing copy engine. You write ONE JSON object per request, matching the requested schema exactly. No prose outside JSON.

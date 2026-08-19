@@ -3326,3 +3326,129 @@ TWO proposals" (2 proposed) - and section (d) of the new file re-states that pai
 as the single property the two rounds have to agree on, because it is the one
 that would break silently if either round moved. No production file changed for
 19.2.
+
+
+## 20. ROUND L - the THIRD prompt-echo incident, closed at the guard rather than at the instance; and the AM-4a string the generator was never shown.
+
+### 20.1 RESOLVED, NOT DEVIATED - the prompt-hygiene forbidden set is now MEASURED, and enrolment is the default.
+
+**THE LIVE FAILURE.** B00EEEITVA:
+
+    C10 | imagePlan[1].spec | "15 billion CFU as a property of the whole blend (not per serving"
+
+traced to `heroSpecBlock` (`lib/engine/prompts/shared.ts`), rendered into the
+images and A+ prompts as *"...NEVER attach it to a single dose - never write it
+as <the pack's per-dose phrasings>"*, and to the same sentence in the shared
+system preamble (`dosePhrasing`, `lib/engine/prompts/system.ts`). The model
+merged our own contrast with the product's own headline figure, and C10 - which
+reacts to `rules.units.perServingPhrases` beside a potency figure - failed the
+listing on its own instruction. **Third instance of the class** (1: prompts named
+disease nouns -> C6; 2: `"avoid any disease or symptom wording"` -> C6 on
+`imagePlan[].notes` / `videoBrief.notes`; 3: this).
+
+**WHY `tests/promptHygiene.test.ts` WAS GREEN.** Not scope - rounds 2 and 3 fixed
+that, and corpus B really did see the string. The **forbidden set** was a list of
+ELEVEN PACK KEYS WRITTEN BY HAND in `baseSurfaceTerms`, every one of them a
+COMPLIANCE lexicon. `rules.units.perServingPhrases`, `rules.units.potencyVerbs`
+and every other list a non-compliance check compiles a matcher from were absent,
+so a prompt could name, verbatim, a phrase a shipped check punishes and no corpus
+could react. A second mechanism hid it even if the set had been right: corpus B's
+exemption *"the string IS a term the scan reacts to"* granted a pass to ANY
+lexicon entry the moment a prompt rendered it, whatever sentence it was rendered
+inside.
+
+**WHAT CHANGED - both mechanisms, the same discipline the field-closure and
+reader-enrolment oracles use.**
+
+1. **MEMBERSHIP IS MEASURED** (`discoverMatchedLexicons`, promptHygiene section G).
+   Every array of strings in the pack is replaced, one at a time and at EVERY path
+   that aliases it, with a unique sentinel; the REAL gate runs over a real
+   generated listing with `RegExp` and the `String` search intrinsics
+   instrumented; the array is enrolled when the sentinel comes back as a needle a
+   matcher was built from or searched with. Fail-closed: a probe pack that makes
+   the gate throw counts as matched. 30+ lexicons on the shipped packs, including
+   `rules.units.perServingPhrases`, which nothing had ever measured.
+   **Enrolment is the DEFAULT** - a discovered list is forbidden in an instruction
+   unless `EXCLUDED_LEXICONS` states why it cannot be.
+2. **THE ENUMERATION EXEMPTION IS FAIL-CLOSED** (`INJECTED_LEXICONS`). A lexicon
+   the prompt is allowed to hand over AS DATA must be named, with the reason the
+   generator cannot obey the rule without the vocabulary (the redteam3/redteam4
+   superset principle), and every row is asserted to still be rendered in full.
+
+**WHAT THE PROBE DOES NOT SEE, stated rather than claimed away.** A list the gate
+turns into a SET that the copy's own tokens are looked up in
+(`style.descriptionAllowedHtml`, `keywordRules.statuses`,
+`candidateTermHeuristics.stopwords`) is not enrolled: there the entry is never
+the needle. On the shipped packs every such list is an ALLOW-list or a
+classification - a check fails a token for being ABSENT from it - so naming one
+in an instruction cannot create a hit.
+
+**THE PROMPT TEXT THAT WAS REWORDED** (positive constraints, as rounds 1 and 2
+did). `lib/engine/prompts/shared.ts` `heroSpecBlock`, and the `dosePhrasing` line
+in `lib/engine/prompts/system.ts`. Both still render only when the pack declares
+the rule, so a category shipping no per-dose phrasing still renders nothing.
+No forbidden surface form is written anywhere the model can read it.
+
+**THE EXCLUSIONS**, each a row with a stated reason and each asserted to still
+name a list the probe finds. Five reason classes and nothing else: PROXIMITY (the
+check fails this list only NEXT TO a second list, and the second list is
+enrolled) - `units.potencyVerbs`, `semanticDrugClaims.{pathologicalActionVerbs,
+functionRestorationVerbs, replacementCues}`, `anatomicalTargets[].requiresContext`,
+`naturalStates`, `lawfulQualifiers`; SUPPRESSOR (a match makes the gate more
+permissive) - `negationMetaPhrases`, `benignContextPhrases`,
+`naturalStateSafePhrases`, `semanticDrugClaims.safeContextPhrases`,
+`determinerScopedTargets[].benignContext`, `allergenCompoundExclusions`, the
+three J1 advisory lists; INVERTED (the check fails their ABSENCE) -
+`rules.whoItsForCues`, `imageArchitecture.slots`, `style.bulletTrailingAllowed`;
+MEASUREMENT (how a check READS a number) - `units.dimensions`,
+`attributeGuard.spelledOutNumbers.connectors`; NOT A PHRASE LIST -
+the three `patterns` tables (regex/label pairs, applied as regexes) and
+`style.bannedChars` (single glyphs of punctuation every prompt necessarily
+carries). `outputHygiene.instructionFragments` keeps its round-2 SCAFFOLDING
+reason. The three round-2 exclusions that were prose are now rows like the rest.
+
+**Status: CLOSED AT THE GUARD.** 14 new tests in promptHygiene sections G/H, both
+directions throughout: the live spec and the shipped instruction are rejected by
+the widened scan and were invisible to the round-3 set; the instruction put back
+through the REAL prompt builders is named at its path; dropping one INJECTION row
+re-exposes its enumeration, so a row is a decision and not a default; a list
+nothing reads is NOT discovered; every exclusion is asserted non-stale; and the
+live `imagePlan[1].spec` is re-run through the real gate and still fails C10.
+
+**A future change to this must also change:** `EXCLUDED_LEXICONS` /
+`INJECTED_LEXICONS` / `discoverMatchedLexicons` / `captureMatcherNeedles` /
+`derivedSurfaceTerms` / `injectedTerms` in `tests/promptHygiene.test.ts`,
+`heroSpecBlock` in `lib/engine/prompts/shared.ts`, `dosePhrasing` in
+`lib/engine/prompts/system.ts`, and `tests/heroSpec.prompt.test.ts`.
+
+### 20.2 THE FINDING ON `C23 | attributes.allergen_information | none` - a PREVENTION gap, not an over-block and not a routing defect.
+
+**WHAT HAPPENED.** The model wrote the literal string `none`. The context column
+of the failure IS the value (`isBlank(value) ? '(empty)' : String(value)` -
+`lib/gate/checks/c-attributes.ts:143`), so the field was neither missing nor
+empty, and the field carries no enum: this is C23 R4, `noneStyleAllergenDeclaration`
+(`lib/gate/checks/c-attributes.ts:129-147`), which requires the declaration
+attribute to equal `compliancePack.noAllergenCanonical` EXACTLY when no
+declarable allergen is present.
+
+**IT IS NOT AN OVER-BLOCK.** The pack's own `_noAllergenCanonical_doc` names
+`'none'` explicitly as one of the unverifiable free-text variants the rule exists
+to refuse. **AND IT IS NOT A ROUTING OR FIX-MESSAGE DEFECT**, i.e. not the C4
+precedent: `attributes.*` routes to the `attributes` group
+(`lib/engine/fieldRouting.ts:47`), and R4's fix line quotes the required string in
+full, so a repair round can act on it. Both are untouched.
+
+**WHAT WAS ACTUALLY WRONG, one step upstream: `noAllergenCanonical` was rendered
+into NO prompt anywhere in this engine.** `buildSystemPrompt`'s allergen block
+stated only the allergen-PRESENT rules, and the schema example for the field
+(`attribute-schema.supplements.json`) documents only the `Contains: ...` case. The
+generator was asked for an exact string it had never been shown - the condition
+redteam3/redteam4 exist to prevent for the disease lexicon, one field over. Only
+the FIRST attempt was affected; the repair round was always able to converge.
+
+**Status: FIXED IN PREVENTION.** One pack-driven line added to the allergen block
+in `lib/engine/prompts/system.ts` (empty key => empty string, as with every line
+around it). Four tests in `tests/attributeSchema.test.ts`: both packs state the
+canonical string and its field; the live value `none` still fails and its fix line
+names the string the prompt now states; and a pack with no canonical string states
+no rule while the `Contains:` half is untouched.

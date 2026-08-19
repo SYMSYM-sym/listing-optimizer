@@ -28,6 +28,30 @@ import { rainforestSample } from './fixtures/rainforest.sample';
  * C10/A5 compile their regexes from) and a pack that ships no per-dose
  * phrasing must render NOTHING, leaving the prompts byte-for-byte what they
  * were.
+ *
+ * ---------------------------------------------------------------------------
+ * ROUND 4 — THE BLOCK NO LONGER QUOTES THE FORBIDDEN PHRASING.
+ *
+ * As first shipped this block read "…NEVER attach it to a single dose — never
+ * write it as \"per serving\"", i.e. it forbade a term BY NAMING IT. A live run
+ * of B00EEEITVA echoed our own contrast straight back:
+ *
+ *   C10 | imagePlan[1].spec | "15 billion CFU as a property of the whole blend
+ *                              (not per serving"
+ *
+ * — the third instance of the prompt-echo class in this project, and the first
+ * one outside the compliance lexicon. The remedy is the same one rounds 1 and 2
+ * used: state the rule as a POSITIVE constraint. The generator loses nothing it
+ * can act on — C10 objects to the ATTACHMENT, and "write the figure together
+ * with the whole it belongs to" is that rule, fully stated — and there is no
+ * longer a forbidden surface form written anywhere the model can read it.
+ *
+ * The assertions below therefore run in the OPPOSITE direction on the phrasing:
+ * the block must NOT contain a per-dose phrasing, and `tests/promptHygiene.test.ts`
+ * §G holds the general form of that rule for every phrase list any wired check
+ * reacts to. What is unchanged is everything else: the block is still rendered
+ * from pack data, still reaches both surfaces, and still disappears entirely for
+ * a pack that ships no rule.
  */
 
 const snapshot = toSnapshot(mapProduct('B0TESTASIN', rainforestSample.product, rainforestSample));
@@ -48,7 +72,7 @@ describe('the hero-spec block is rendered from pack data, in both directions', (
     expect(heroSpecBlock({ dimensions: {}, families: [], perServingPhrases: ['  '], potencyVerbs: [], dosageForms: [] })).toBe('');
   });
 
-  it('quotes the pack phrasings verbatim, and nothing the pack does not ship', () => {
+  it('states the rule POSITIVELY and never names the per-dose phrasing (round 4)', () => {
     const block = heroSpecBlock({
       dimensions: {},
       families: [],
@@ -56,10 +80,16 @@ describe('the hero-spec block is rendered from pack data, in both directions', (
       potencyVerbs: ['emits'],
       dosageForms: [],
     });
-    expect(block).toContain('"per widget"');
+    // The rule is stated as the constraint it is …
+    expect(block).toContain('HEADLINE SPEC');
+    expect(block).toContain('AS A WHOLE');
+    // … the potency VERBS are still quoted (C10 needs the per-dose phrasing to
+    // fire at all, and the verb half is ordinary English the prompt may name —
+    // see the `rules.units.potencyVerbs` exclusion row in promptHygiene §G) …
     expect(block).toContain('"emits"');
-    // No phrasing the pack did not declare — the block authors no vocabulary.
-    expect(block).not.toMatch(/per\s+(?!widget)\w+"/);
+    // … and the forbidden phrasing appears nowhere, in any casing.
+    expect(block.toLowerCase()).not.toContain('per widget');
+    expect(block).not.toMatch(/\bper\s+\w+"/);
   });
 
   it('a pack with phrasings but NO verbs still renders the rule, without a verb clause', () => {
@@ -70,7 +100,8 @@ describe('the hero-spec block is rendered from pack data, in both directions', (
       potencyVerbs: [],
       dosageForms: [],
     });
-    expect(block).toContain('"per widget"');
+    expect(block).toContain('HEADLINE SPEC');
+    expect(block.toLowerCase()).not.toContain('per widget');
     expect(block).not.toContain('introduced by');
   });
 });
@@ -92,10 +123,14 @@ describe.each(PACK_IDS)('%s — the hero-spec guidance reaches the surfaces that
     expect(prompts.aplus(snapshot, 'BrandX Probiotic')).toContain(expected);
   });
 
-  it('the system preamble still carries it too — this ADDS a statement, it removes none', () => {
+  it('the system preamble still carries the rule too — and names no phrasing', () => {
     const system = buildSystemPrompt(pack, buildFacts(snapshot, pack), ['probiotic']);
+    // The rule is STATED (this block ADDS a statement at the two breaking
+    // surfaces; it never removed the shared one) …
+    expect(system).toContain('A potency figure describes the blend/formula as a whole');
+    // … and, round 4, it is stated without quoting the phrasing it forbids.
     for (const phrase of pack.rules.units.perServingPhrases) {
-      expect(system).toContain(`"${phrase}"`);
+      expect(system.toLowerCase()).not.toContain(phrase.toLowerCase());
     }
   });
 });
