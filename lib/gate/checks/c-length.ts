@@ -1,4 +1,9 @@
-import type { Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
+import type {
+  Failure,
+  KnowledgePack,
+  OptimizedListing,
+  TitleWordRepetitionRules,
+} from '@/lib/types';
 import { arr, normalize, tokenSet, utf8Bytes } from '../util';
 import { fail } from './shared';
 
@@ -19,11 +24,92 @@ export function titleContentTokens(title: string, stopwords: string[]): string[]
 }
 
 /**
+ * THE REPETITION COUNT C1 MEASURES, with the pack's COMPOUND-TAIL exemption.
+ *
+ * ---------------------------------------------------------------------------
+ * THE LIVE OVER-BLOCK (ASIN B00EEEITVA, one failure, loop never converged):
+ *
+ *   C1 | title | 'free' x3
+ *       FIX: No word may appear more than 2x in the title — replace the
+ *            repeats of 'free' with distinct keywords
+ *
+ * The copy was LAWFUL. `titleContentTokens` keeps a hyphen INSIDE a token
+ * (`[^a-z0-9\s'-]` -> space, split on whitespace), so two spellings of one
+ * diet-claim list get opposite verdicts:
+ *
+ *   `Gluten Free, Dairy Free, Soy Free`  -> gluten|free|dairy|free|soy|free
+ *                                          -> 'free' x3 -> C1 FAILS
+ *   `Gluten-Free, Dairy-Free, Soy-Free`  -> gluten-free|dairy-free|soy-free
+ *                                          -> PASSES
+ *
+ * Same meaning, same three claims, same customer — and the verdict turned on a
+ * hyphen the marketplace does not care about. The stated fix is unactionable on
+ * that shape (there is no synonym for the tail of each claim), which is why the
+ * repair loop spent every round and the run shipped `verified:false`.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THIS IS NOT A CAP RAISE. `max: 3` would license a THIRD occurrence of
+ * EVERY word in the title, and three is exactly the canonical keyword-stuffing
+ * shape this sub-rule exists to catch. (That is what separates this from the
+ * R4/C31 precedent, where the number itself was measured to be wrong.) So the
+ * cap does not move and the TRIGGER does not move: what changes is that a
+ * qualifier tail attached to a DISTINCT head is counted as part of that
+ * compound rather than as a bare repeat.
+ *
+ * THE EXEMPTION IS NARROW, and every one of these still counts:
+ *   1. the HEAD word itself — `Gluten Free Gluten Free Gluten Free` fails on
+ *      'gluten', because only the tail is ever exempt;
+ *   2. a repeat of an ALREADY-WRITTEN compound — the second `Gluten Free` is a
+ *      genuine repeat, so its tail is counted;
+ *   3. a BARE tail with no head in front of it (`Free Free Free`);
+ *   4. a tail whose head is ITSELF a tail (`... Free Free`), which is stuffing
+ *      wearing a compound's clothes.
+ *
+ * `compoundTails` is PACK DATA and is a pure WIDENER: empty it and this
+ * function counts exactly what it counted before the exemption existed.
+ */
+export function titleRepetitionCounts(
+  title: string,
+  repetition: TitleWordRepetitionRules,
+): Map<string, number> {
+  const tokens = titleContentTokens(title, repetition.stopwords ?? []);
+  const tails = new Set(
+    (repetition.compoundTails ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean),
+  );
+  const counts = new Map<string, number>();
+  const writtenCompounds = new Set<string>();
+  const bump = (token: string): void => {
+    counts.set(token, (counts.get(token) ?? 0) + 1);
+  };
+  tokens.forEach((token, i) => {
+    if (!tails.has(token)) {
+      bump(token);
+      return;
+    }
+    const head = i > 0 ? tokens[i - 1] : undefined;
+    // (3) no head at all, and (4) a head that is itself a tail: not a compound.
+    if (head === undefined || tails.has(head)) {
+      bump(token);
+      return;
+    }
+    const compound = `${head} ${token}`;
+    // (2) the same compound a second time is a repeat, not a new claim.
+    if (writtenCompounds.has(compound)) {
+      bump(token);
+      return;
+    }
+    writtenCompounds.add(compound);
+    // The tail is exempt; the HEAD was counted on its own iteration (1).
+  });
+  return counts;
+}
+
+/**
  * C1 — title length PLUS the pack's title word-repetition rule.
  *
  * `rules.titleWordRepetition` documents "no word appears more than 2x in the
  * title" but nothing enforced it, so a keyword-stuffed title passed the gate.
- * Limit and stopwords are PACK DATA.
+ * Limit, stopwords and compound tails are PACK DATA.
  */
 export function c1TitleLength(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const out: Failure[] = [];
@@ -35,10 +121,7 @@ export function c1TitleLength(l: OptimizedListing, pack: KnowledgePack): Failure
   }
   const repetition = pack.rules.titleWordRepetition;
   if (repetition && repetition.max > 0) {
-    const counts = new Map<string, number>();
-    for (const token of titleContentTokens(l.title, repetition.stopwords ?? [])) {
-      counts.set(token, (counts.get(token) ?? 0) + 1);
-    }
+    const counts = titleRepetitionCounts(l.title, repetition);
     const over = [...counts.entries()].filter(([, n]) => n > repetition.max);
     for (const [word, n] of over) {
       out.push(

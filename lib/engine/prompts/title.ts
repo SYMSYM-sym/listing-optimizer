@@ -50,7 +50,12 @@ ${styleBlock}
 
 ${pinnedBlock(pinnedProductName)}
 TASK: Generate the title group.
-- "productName": the customer-facing product name (not the backend brand string if it differs).
+- "productName": the customer-facing product name — and THIS choice decides where the brand may appear.
+  The brand / manufacturer strings in the attributes above may enter customer copy ONLY as part of this
+  name. Pick a name that CONTAINS the brand string and the brand may then appear throughout the copy;
+  pick one that does not and deterministic code then bars that brand string from EVERY customer surface
+  (title, bullets, description, A+ modules, image and video text) and from every other attribute. Both
+  are allowed — but only the first keeps the brand visible, so lead with it unless you have a reason.
   CRITICAL: "title" AND "title75" must both START with this EXACT string, character for character.
   Because title75 is capped at \u226475 chars, choose a productName SHORT enough to lead it and still
   leave room for the keyword cluster (roughly \u226445 chars). Do NOT invent a longer name and then

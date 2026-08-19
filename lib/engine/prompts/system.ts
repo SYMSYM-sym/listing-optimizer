@@ -147,6 +147,27 @@ No category compliance module is active. Write factual, everyday copy about what
     ? `- Description: write ≤${db.target} chars. The system then appends the verbatim compliance disclaimer (${db.reserve} chars) and the finished field must be ≤${db.max} chars, so ${db.target} is your whole budget.`
     : `- Description ≤${db.target} chars.`;
 
+  /**
+   * THE COMPOUND-TAIL EXEMPTION, RENDERED FROM PACK DATA.
+   *
+   * C1 counts stemmed title words, and a qualifier tail attached to a distinct
+   * head is now exempt (`rules.titleWordRepetition.compoundTails` — see
+   * `titleRepetitionCounts` in `lib/gate/checks/c-length.ts`, and the live
+   * B00EEEITVA over-block recorded there). The rule STATED to the model has to
+   * be the rule ENFORCED by the gate, or the generator writes to a limit that
+   * is not the one it is measured against — so the exemption and its four
+   * carve-outs are rendered here, from the pack, with no list of our own.
+   *
+   * Empty list ⇒ empty string, so a pack without the key produces the exact
+   * prompt it produced before this existed.
+   */
+  const tails = (r.titleWordRepetition?.compoundTails ?? [])
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const tailNote = tails.length > 0
+    ? ` ONE exception: ${tails.map((t) => `"${t}"`).join(' / ')} does not count when each occurrence follows a DIFFERENT preceding word, i.e. a distinct compound each time ("A ${tails[0]}, B ${tails[0]}, C ${tails[0]}"). A bare one, a compound written twice, or one that follows another such qualifier all still count — and the preceding word itself always counts.`
+    : '';
+
   const dosePhrasing = (r.units?.perServingPhrases ?? []).length > 0
     ? `\n- Potency figures attach to the blend/formula, NEVER phrased ${(r.units.perServingPhrases).map((x) => `"${x}"`).join(' / ')}.`
     : '';
@@ -158,7 +179,7 @@ HARD LIMITS (checked by deterministic code — leave headroom):
 - Exactly ${r.bulletCount} bullets, each ≤${r.bulletMax} chars.
 ${disclaimerHeadroom}
 - Backend search terms ≤${r.backendMaxBytes} UTF-8 BYTES, lowercase, space-separated, no punctuation.
-- No word more than ${r.titleWordRepetition.max}× in the title. Banned title chars: ${r.style.bannedChars.join(' ')} (use hyphen/comma/&/parentheses).
+- No word more than ${r.titleWordRepetition.max}× in the title.${tailNote} Banned title chars: ${r.style.bannedChars.join(' ')} (use hyphen/comma/&/parentheses).
 
 OPTIMIZATION PRINCIPLES (ground copy in these):
 ${principleLines}
@@ -173,6 +194,7 @@ ${prohibitedMarketingBlock(r.prohibitedMarketing)}
 
 STRUCTURE:
 - Product name comes FIRST in both titles; the primary keyword immediately after it (never displace the name).
+- A backend brand / manufacturer string may enter customer copy ONLY as part of the product name. If the product name you choose does not contain that string, then deterministic code bars that string from EVERY customer surface and from every other attribute — so leading the product name with it is the one choice that keeps the brand in the copy at all.
 - Write for buyer situations; one distinct, quotable situational anchor per major use-case.
 - Include comparative framing (vs typical alternatives) and who-it's-for, phrased compliantly.
 - Backend terms: only synonyms/misspellings/other-language variants that appear NOWHERE in visible copy; never repeat title words; no brand names, no ASINs.`;

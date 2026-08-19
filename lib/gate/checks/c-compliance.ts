@@ -48,9 +48,43 @@ export function c6BannedTerms(l: OptimizedListing, pack: KnowledgePack): Failure
   );
 }
 
+/**
+ * C7 — a backend-only brand/manufacturer string in customer copy.
+ *
+ * THE TRIGGER, THE SURFACES AND THE EXEMPTION ARE UNCHANGED, and deliberately
+ * so. C7 skips entirely when `productName` contains the brand, which is the
+ * whole rule: the brand enters copy ONLY as part of the canonical product name.
+ * That is satisfiable in both directions and it does not fight C8/C15 — those
+ * require the title to lead with the PRODUCT NAME, not with the brand, so a
+ * brand-led product name satisfies C7, C8 and C15 at once.
+ *
+ * WHAT CHANGED IS THE MESSAGES, and the live run says why (ASIN B00IO89MYA):
+ *
+ *   C7 | description | contains backend-only 'Instant Immunity'
+ *       FIX: Remove the backend-only brand_name string from customer copy
+ *
+ * That fix line names the ATTRIBUTE KEY, not the offending string, and offers
+ * no replacement — while the failure routes to the `description` group, which
+ * cannot take the other exit at all (`productName` is pinned by
+ * `runRepairLoop` and owned by the title group). So the one group that could
+ * act was told which key was upset rather than which characters to take out and
+ * what to write instead. Each message now names the exact offending string, why
+ * it is barred (the customer product name does not contain it) and the
+ * canonical product name to use in its place.
+ */
 export function c7BrandLeakage(l: OptimizedListing): Failure[] {
   const out: Failure[] = [];
-  const productName = normalize(l.productName ?? '').toLowerCase();
+  const canonicalName = normalize(l.productName ?? '');
+  const productName = canonicalName.toLowerCase();
+  // The REASON half of every message, stated once: it is the product name that
+  // decides whether this string is backend-only, so the product name is what
+  // the message quotes.
+  const because = canonicalName
+    ? `the customer product name is '${canonicalName}', which does not contain it`
+    : 'no customer product name is set, so no copy may carry it';
+  const instead = canonicalName
+    ? `write '${canonicalName}' wherever the product needs naming`
+    : 'name the product with its canonical customer product name instead';
   for (const key of ['brand_name', 'manufacturer'] as const) {
     const value = (l.attributes ?? {})[key];
     if (!value) continue;
@@ -58,13 +92,27 @@ export function c7BrandLeakage(l: OptimizedListing): Failure[] {
     if (!brand || productName.includes(brand)) continue;
     for (const [field, text] of customerSurfaces(l)) {
       if (normalize(text).toLowerCase().includes(brand)) {
-        out.push(fail('C7', field, `contains backend-only '${value}'`, `Remove the backend-only ${key} string from customer copy`));
+        out.push(
+          fail(
+            'C7',
+            field,
+            `contains backend-only '${value}'`,
+            `Take the exact string '${value}' (attributes.${key}) out of ${field} — ${because}, so it is a backend-only string that may not reach customer copy; ${instead}`,
+          ),
+        );
       }
     }
     for (const [attr, av] of Object.entries(l.attributes ?? {})) {
       if (attr === 'brand_name' || attr === 'manufacturer') continue;
       if (normalize(av).toLowerCase().includes(brand)) {
-        out.push(fail('C7', `attributes.${attr}`, `contains backend-only '${value}'`, `Remove the backend-only ${key} string from this attribute`));
+        out.push(
+          fail(
+            'C7',
+            `attributes.${attr}`,
+            `contains backend-only '${value}'`,
+            `Take the exact string '${value}' (attributes.${key}) out of attributes.${attr} — ${because}, so it is a backend-only string that may not be echoed into another attribute; ${instead}`,
+          ),
+        );
       }
     }
   }

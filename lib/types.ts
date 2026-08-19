@@ -180,6 +180,26 @@ export interface TitleWordRepetitionRules {
   max: number;
   /** Short function words exempt from the count. */
   stopwords: string[];
+  /**
+   * COMPOUND TAILS — qualifier words that are the second half of a compound
+   * (`<head> <tail>`), listed in their STEMMED, lower-case form.
+   *
+   * WHY THIS EXISTS. `titleContentTokens` keeps a hyphen INSIDE a token, so
+   * `X-Tail, Y-Tail, Z-Tail` tokenizes to three distinct compounds and passes,
+   * while the space-written `X Tail, Y Tail, Z Tail` tokenizes to
+   * `x|tail|y|tail|z|tail` and failed C1 on the tail. Identical meaning, verdict
+   * decided by a hyphen the marketplace does not care about — and the fix line
+   * ("replace the repeats") is unactionable on that shape, so the repair loop
+   * burned its rounds on lawful copy. See `titleRepetitionCounts`.
+   *
+   * IT IS A WIDENER AND ONLY A WIDENER. A listed tail is exempt from the count
+   * ONLY when it follows a DISTINCT content head that is not itself a tail and
+   * the resulting compound has not been written before. Emptying this list
+   * restores the exact pre-fix counting, so it can never disarm C1 and is
+   * deliberately NOT a `REQUIRED_PACK_PIECES` row — the same reasoning that
+   * excludes `benignContextPhrases` and `style.allCapsExemptSurfaces`.
+   */
+  compoundTails?: string[];
 }
 
 /**
