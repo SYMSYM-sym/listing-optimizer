@@ -14,6 +14,7 @@ import {
   doubleCollapsedVariants,
   hasNegationContext,
   normalize,
+  phraseSource,
   scanConcatenated,
   scanTerms,
   subtractDisclaimers,
@@ -366,13 +367,16 @@ export function scanSurfacesForBanned(
 // comes off the pack, so the gate carries no category lexicon.
 // ---------------------------------------------------------------------------
 
-const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-/** Longest-first alternation source for pack tokens (inner whitespace flexible). */
+/**
+ * Longest-first alternation source for pack tokens. The words of a multi-word
+ * token are joined by the shared separator class (`util.phraseSource`), so
+ * `fl oz` and `fl-oz` are the same unit — the same class the pack's own
+ * `[\s-]+` number-word runs below already use.
+ */
 function alternationSource(tokens: string[]): string {
   return [...new Set(tokens.map((t) => t.trim()).filter(Boolean))]
     .sort((a, b) => b.length - a.length)
-    .map((t) => escapeRe(t).replace(/\s+/g, '\\s+'))
+    .map((t) => phraseSource(t))
     .join('|');
 }
 

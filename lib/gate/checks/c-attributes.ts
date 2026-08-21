@@ -1,6 +1,7 @@
 import type { AttributeField, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
 import { presentAllergens } from './c-quality';
 import { fail, heroUnitSource, heroUnitTokens, spelledOutRunSource } from './shared';
+import { phraseSource } from '../util';
 
 /**
  * C23 — ATTRIBUTE DISCIPLINE (pack-driven; the schema is
@@ -150,13 +151,11 @@ function noneStyleAllergenDeclaration(l: OptimizedListing, pack: KnowledgePack):
 // C24 — the DOSAGE-ATTRIBUTE guard (AM-1)
 // ---------------------------------------------------------------------------
 
-const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-/** Longest-first alternation over pack tokens, inner whitespace flexible. */
+/** Longest-first alternation over pack tokens, words joined by the separator class. */
 function alternation(tokens: string[]): string {
   return [...new Set(tokens.map((t) => t.trim()).filter(Boolean))]
     .sort((a, b) => b.length - a.length)
-    .map((t) => escapeRe(t).replace(/\s+/g, '\\s+'))
+    .map((t) => phraseSource(t))
     .join('|');
 }
 

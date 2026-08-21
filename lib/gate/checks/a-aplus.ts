@@ -1,5 +1,5 @@
 import type { Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
-import { hasNegationContext, normalize } from '../util';
+import { hasNegationContext, normalize, packPattern } from '../util';
 import { crossPackActionPairedNouns, crossPackDiseaseNouns } from './pack';
 import { allergenMentioned, presentAllergens } from './c-quality';
 import {
@@ -117,17 +117,13 @@ export function a7AplusAllergen(l: OptimizedListing, pack: KnowledgePack): Failu
  * through `prohibitedMarketingPatterns` so the word-form macro is expanded
  * once, identically, for both checks.
  */
-/** Compiled pack patterns cached by source string (see C18/C19 for the rationale). */
-const APLUS_PATTERN_CACHE = new Map<string, RegExp>();
-function aplusPatternRe(source: string): RegExp {
-  let re = APLUS_PATTERN_CACHE.get(source);
-  if (!re) {
-    re = new RegExp(source, 'gi');
-    APLUS_PATTERN_CACHE.set(source, re);
-  }
-  re.lastIndex = 0;
-  return re;
-}
+/**
+ * Compiled pack patterns cached by source string (see C18/C19 for the
+ * rationale), through the ONE compiler that applies the word-join separator
+ * class — A8 and C19 enforce the identical lexicon, so they must also spell the
+ * separator identically. See `util.packPatternSource`.
+ */
+const aplusPatternRe = (source: string): RegExp => packPattern(source, 'gi');
 
 export function a8AplusProhibitedMarketing(l: OptimizedListing, pack: KnowledgePack): Failure[] {
   const patterns = prohibitedMarketingPatterns(pack);

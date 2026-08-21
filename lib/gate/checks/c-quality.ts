@@ -1,5 +1,5 @@
 import type { AllergenRule, CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@/lib/types';
-import { arr, normalize } from '../util';
+import { arr, normalize, packPatternSource, phraseSource } from '../util';
 import {
   aplusFactSurfaces,
   attributeComplianceSurfaces,
@@ -11,7 +11,6 @@ import {
   spelledOutFigureReader,
 } from './shared';
 
-const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Which attribute holds the label/ingredient list, which one holds the canonical
@@ -99,16 +98,22 @@ export function presentAllergens(l: OptimizedListing, cp: CompliancePack) {
     const c = compound.trim().toLowerCase();
     if (!c) continue;
     labelText = labelText.replace(
-      new RegExp(escapeRe(c).replace(/\s+/g, '\\s+'), 'gi'),
+      new RegExp(phraseSource(c), 'gi'),
       (m) => ' '.repeat(m.length),
     );
   }
   // "free from milk and soy" excludes BOTH, so an allergen NAME is an allowed
   // gap word between the cue and the source it negates.
-  const sourceRes = (cp.allergenRules ?? []).map((r) => new RegExp(`^(?:${r.source})$`, 'i'));
+  // BOTH SIDES read the separator class (`util.packPatternSource` /
+  // `phraseSource`): a source spelled `tree-nut` must be detected AND excludable
+  // as `tree-nut`, or widening one side alone would manufacture a false
+  // declaration failure.
+  const sourceRes = (cp.allergenRules ?? []).map(
+    (r) => new RegExp(`^(?:${packPatternSource(r.source)})$`, 'i'),
+  );
   const isSource = (word: string): boolean => sourceRes.some((re) => re.test(word));
   return (cp.allergenRules ?? []).filter((r) => {
-    const re = new RegExp(`\\b(?:${r.source})\\b`, 'gi');
+    const re = new RegExp(`\\b(?:${packPatternSource(r.source)})\\b`, 'gi');
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(labelText)) !== null) {
@@ -125,9 +130,9 @@ export function presentAllergens(l: OptimizedListing, cp: CompliancePack) {
 /** Order-independent matcher: the pack's declaration verb + class-or-source tokens co-occur. */
 export function allergenMentioned(text: string, rule: AllergenRule, cp: CompliancePack): boolean {
   const t = normalize(text).toLowerCase();
-  const classRe = new RegExp(`\\b${escapeRe(rule.class.toLowerCase())}\\b`, 'i');
-  const sourceRe = new RegExp(`\\b(?:${rule.source})\\b`, 'i');
-  const verbRe = new RegExp(escapeRe(allergenFields(cp).declarationVerb.toLowerCase()), 'i');
+  const classRe = new RegExp(`\\b${phraseSource(rule.class.toLowerCase())}\\b`, 'i');
+  const sourceRe = new RegExp(`\\b(?:${packPatternSource(rule.source)})\\b`, 'i');
+  const verbRe = new RegExp(phraseSource(allergenFields(cp).declarationVerb.toLowerCase()), 'i');
   return verbRe.test(t) && (classRe.test(t) || sourceRe.test(t));
 }
 

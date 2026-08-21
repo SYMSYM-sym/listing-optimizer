@@ -4,7 +4,7 @@ import {
   crossPackDiseaseNouns,
   reachableCompliancePacks,
 } from '@/lib/gate/checks';
-import { normalize } from '@/lib/gate/util';
+import { normalize, phraseSource } from '@/lib/gate/util';
 
 /**
  * brain/02 — THE CANDIDATE-NOUN PROPOSER (advisory, never a failure).
@@ -109,7 +109,7 @@ export function candidateTerms(current: ListingSnapshot, pack: KnowledgePack): s
   // gut flora" produced 'flora' as a candidate CONDITION. A proposer that
   // cries wolf is one a lexicon owner stops reading.
   for (const cue of cues) {
-    const re = new RegExp(`\\b${cue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')}\\b`, 'gi');
+    const re = new RegExp(`\\b${phraseSource(cue)}\\b`, 'gi');
     let m: RegExpExecArray | null;
     while ((m = re.exec(lower)) !== null) {
       const from = m.index + m[0].length;

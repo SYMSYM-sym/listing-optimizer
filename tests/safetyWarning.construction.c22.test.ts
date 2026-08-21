@@ -185,8 +185,17 @@ describe('C22 — ordinary paraphrases no list contains are clean (the structura
  * GENUINE ABNORMALITY CLAIMS. The first group is bare copy — no advisory
  * anywhere, so the construction never applies. The second group is the
  * LAUNDERING direction: the same claim wrapped in a real safety-warning
- * sentence. A marker that MODIFIES its neighbour shares its enumeration item,
- * which is what the exemption is denied on, so every one of them still fails.
+ * sentence.
+ *
+ * TWO things deny the exemption, and the table exercises both:
+ *  (a) POSITION — the exemption reaches only the READER-CONDITION span, from the
+ *      sentence's first condition cue to the end of that sentence. A claim
+ *      AHEAD of the cue is the sentence's product-subject part and is judged as
+ *      if it stood alone. The first version of this rule exempted the WHOLE
+ *      sentence and was laundered end-to-end through the real gate by one comma
+ *      (the first two rows below, both proven against `runGate`);
+ *  (b) MODIFICATION — inside the span, a marker that MODIFIES its neighbour
+ *      shares its enumeration item and R1 still fires however it is dressed.
  */
 const MUST_FAIL_BARE: [string, string][] = [
   ['Treats abnormal menstrual cycles', 'abnormality marker beside a natural state'],
@@ -200,6 +209,32 @@ const MUST_FAIL_BARE: [string, string][] = [
 ];
 
 const MUST_FAIL_DRESSED: [string, string][] = [
+  // --- (a) POSITION: the claim sits AHEAD of the condition cue -------------
+  [
+    'Supports menopause and chronic disorders, so consult your doctor if pregnant.',
+    'PROVEN laundering: marker and state in different coordinate items, ahead of the clause',
+  ],
+  [
+    'Formulated for chronic and diagnosed hormonal imbalance, so consult your doctor if unsure.',
+    'PROVEN laundering: TWO markers ahead of the clause',
+  ],
+  [
+    'Our blend targets menopause and clinical hot flashes, so anyone who is nursing should talk with a physician.',
+    'cross-item marker and state ahead of the clause, relative-head cue',
+  ],
+  [
+    'Our chronic and diagnosed formula, so ask your doctor if pregnant.',
+    'two markers in the product-subject noun phrase, ahead of the clause',
+  ],
+  [
+    'Supports menopause, ask your doctor if you have a chronic condition.',
+    'the state is product-subject: the comma form must behave like the full-stop form',
+  ],
+  [
+    'Consult your doctor if pregnant, and our formula targets severe menopause symptoms.',
+    'a claim AFTER the clause still has its marker inside the state\'s own item',
+  ],
+  // --- (b) MODIFICATION: the marker modifies the state ---------------------
   [
     'Consult your doctor if you want relief from severe menopause symptoms.',
     'the marker modifies the state inside its own enumeration item',
@@ -246,6 +281,84 @@ describe('C22 — genuine abnormality claims still FAIL', () => {
       expect(runGate(l, pack, ctx).pass).toBe(false);
     },
   );
+});
+
+/**
+ * THE COMMA CANNOT BUY WHAT A FULL STOP NEVER DID.
+ *
+ * This is the argument for scoping the exemption to the reader-condition span,
+ * asserted rather than asserted-about. A product claim in a PRECEDING SENTENCE
+ * never had the exemption — the construction has always been scoped to one
+ * sentence — so the identical claim in a preceding CLAUSE must not gain one by
+ * being spliced onto the warning with a comma. Both spellings of each pair fail,
+ * and each pair's second member is one character away from the first.
+ */
+const SPLICE_PAIRS: [string, string][] = [
+  [
+    'Supports menopause and chronic disorders. Consult your doctor if pregnant.',
+    'Supports menopause and chronic disorders, so consult your doctor if pregnant.',
+  ],
+  [
+    'Supports menopause. Ask your doctor if you have a chronic condition.',
+    'Supports menopause, ask your doctor if you have a chronic condition.',
+  ],
+  [
+    'Our blend targets menopause and clinical hot flashes. Anyone who is nursing should talk with a physician.',
+    'Our blend targets menopause and clinical hot flashes, so anyone who is nursing should talk with a physician.',
+  ],
+];
+
+describe('C22 — the full-stop form and the comma form behave identically', () => {
+  for (const [sentences, spliced] of SPLICE_PAIRS) {
+    it(`"${sentences.slice(0, 40)}…" fails as two sentences AND as one spliced sentence`, () => {
+      const asSentences = mut((x) => { x.attributes.safety_warning = sentences; });
+      const asSplice = mut((x) => { x.attributes.safety_warning = spliced; });
+      expect(c22On(asSentences, 'attributes.safety_warning').length).toBeGreaterThan(0);
+      expect(c22On(asSplice, 'attributes.safety_warning').length).toBeGreaterThan(0);
+      expect(runGate(asSentences, pack, ctx).pass).toBe(false);
+      expect(runGate(asSplice, pack, ctx).pass).toBe(false);
+    });
+  }
+});
+
+/**
+ * THE RESIDUE, PINNED RATHER THAN HIDDEN.
+ *
+ * A product claim coordinated AFTER the condition cue, inside the same sentence,
+ * whose two markers do not touch a natural state, is inside the reader-condition
+ * span and is still exempt from R2. It is NOT distinguishable from the mandated
+ * enumeration by function words alone: the live B00IO89MYA warning contains
+ * "or managing a medical condition" and the laundering contains "and our blend
+ * treats chronic disorders" — coordinator, verb, marker, in both. Only the
+ * SUBJECT differs, and a proximity check cannot read a subject. Closing it needs
+ * subject vocabulary in the pack, not a wider window here.
+ *
+ * These two cases pin the line exactly, so the residue cannot silently widen and
+ * cannot silently be forgotten a second time (J1's record stated only the
+ * over-block direction; see CONFORMANCE-DEVIATIONS.md).
+ */
+describe('C22 — the stated residue, and the line it stops at', () => {
+  const RESIDUE = 'Consult your doctor if pregnant, and our blend treats chronic disorders.';
+
+  it('KNOWN RESIDUE: two markers in a clause coordinated after the cue are still exempt from R2', () => {
+    expect(c22On(mut((x) => { x.attributes.safety_warning = RESIDUE; }), 'attributes.safety_warning')).toEqual([]);
+  });
+
+  it('the moment the marker touches a natural state, the same shape FAILS', () => {
+    const l = mut((x) => {
+      x.attributes.safety_warning =
+        'Consult your doctor if pregnant, and our blend treats chronic menopause.';
+    });
+    expect(c22On(l, 'attributes.safety_warning').length).toBeGreaterThan(0);
+  });
+
+  it('the same claim as its own SENTENCE fails, so the residue is one comma wide', () => {
+    const l = mut((x) => {
+      x.attributes.safety_warning =
+        'Consult your doctor if pregnant. Our blend treats chronic disorders.';
+    });
+    expect(c22On(l, 'attributes.safety_warning').length).toBeGreaterThan(0);
+  });
 });
 
 /**

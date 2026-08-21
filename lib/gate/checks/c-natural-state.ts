@@ -2,6 +2,7 @@ import type { CompliancePack, Failure, KnowledgePack, OptimizedListing } from '@
 import {
   deobfuscatedVariants,
   normalize,
+  phraseSource,
   scanTerms,
   subtractDisclaimers,
   type NegationOptions,
@@ -77,16 +78,17 @@ import {
  *
  * THE ONE PLACE THE SUBJECT IS INFERRED STRUCTURALLY is the mandated
  * consult-a-professional SAFETY WARNING, which the attribute template REQUIRES
- * the listing to carry: see `safetyWarningRanges`. It scopes R1/R2 by
+ * the listing to carry: see `readerConditionRanges`. It scopes R1/R2 by
  * recognising the warning's grammatical shape from pack cues, which is what
- * replaced three rounds of enumerating one more wording of the same warning.
+ * replaced three rounds of enumerating one more wording of the same warning —
+ * and it reaches only the READER-CONDITION span the condition cue governs, never
+ * the product-subject clause a comma can splice onto the front of it.
  */
 
 const CHECK_ID = 'C22';
 
 const DEFAULT_WINDOW = 40;
 
-const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 interface NaturalStateConfig {
   /**
@@ -134,7 +136,7 @@ function alternation(tokens: string[]): RegExp | null {
     (a, b) => b.length - a.length,
   );
   if (cleaned.length === 0) return null;
-  return new RegExp(cleaned.map((t) => escapeRe(t).replace(/\s+/g, '\\s+')).join('|'), 'gi');
+  return new RegExp(cleaned.map((t) => phraseSource(t)).join('|'), 'gi');
 }
 
 const CONFIG_CACHE = new WeakMap<KnowledgePack, NaturalStateConfig | null>();
@@ -375,22 +377,64 @@ function advisoryEscapes(text: string, state: TermMatch, cfg: NaturalStateConfig
  *         relative head, which is what marks the enumeration that follows as the
  *         READER'S states rather than the product's targets.
  *
- * Inside such a sentence the markers describe the reader, so:
- *   - R2 (two markers) does not fire at all — "have been diagnosed with a
- *     medical condition", "living with a chronic medical condition" are what a
- *     warning is FOR;
- *   - R1 does not fire when the marker and the state sit in DIFFERENT items of
- *     the enumeration (`sameEnumerationItem`), because a marker in a coordinate
- *     item is a separate condition, not a modifier of the state.
+ * WHAT THE EXEMPTION IS A CLAIM ABOUT, and therefore HOW FAR IT REACHES.
+ *
+ * The exemption says one thing: THESE WORDS DESCRIBE THE READER, NOT THE
+ * PRODUCT. Only the text the CONDITION CUE GOVERNS can carry that claim, so the
+ * exempt region is the READER-CONDITION SPAN — from the sentence's first
+ * condition cue to the end of that sentence — and never the whole sentence.
+ *
+ * The first version of this rule exempted the whole sentence and was laundered
+ * end-to-end through the real gate by one comma:
+ *
+ *     "Supports menopause and chronic disorders."                 3 x C22
+ *     "Supports menopause and chronic disorders, so consult your
+ *      doctor if pregnant."                                       ZERO failures
+ *     "Formulated for chronic and diagnosed hormonal imbalance"    fails
+ *     "… , so consult your doctor if unsure."                     ZERO failures
+ *
+ * The product-claim half sits AHEAD of the consult construction — it is the
+ * sentence's product-subject part, the enumeration is the product's TARGET
+ * list, and the earlier reasoning ("a marker in a coordinate item is a separate
+ * reader condition") is simply false there. Scoping to the span the cue governs
+ * also makes the same-sentence case CONSISTENT with the cross-sentence one: a
+ * state in a preceding SENTENCE never had the exemption, so a state in the
+ * preceding CLAUSE must not gain one by being glued on with a comma.
+ *
+ * Inside the reader-condition span the markers describe the reader, so:
+ *   - R2 (two markers) does not fire when BOTH sit in the span — "have been
+ *     diagnosed with a medical condition", "living with a chronic medical
+ *     condition" are what a warning is FOR;
+ *   - R1 does not fire when BOTH the state and the marker sit in the span AND
+ *     in DIFFERENT items of the enumeration (`sameEnumerationItem`), because a
+ *     marker in a coordinate READER item is a separate reader condition, not a
+ *     modifier of the state.
+ * Any match outside the span is judged exactly as it would be in its own
+ * sentence.
  *
  * ANTI-LAUNDERING, stated exactly. A marker that MODIFIES its neighbour shares
  * its enumeration item and R1 still fires however the sentence is dressed:
  * "Consult your doctor if you want relief from severe menopause symptoms" and
  * "Anyone who has chronic menopause should talk with a physician" both fail.
- * A sentence with no condition cue is not a construction at all, so
+ * A claim placed BEFORE the condition cue is outside the span and fails whatever
+ * follows it. A sentence with no condition cue is not a construction at all, so
  * "Ask your doctor about our formula for severe menopause symptoms" fails on
  * both counts. R3, the C6 disease-noun scan and the C6 action-paired tier never
  * consult this rule, so a named disease inside a warning still fails.
+ *
+ * THE RESIDUE, stated rather than implied. A product claim coordinated AFTER the
+ * condition cue inside the SAME sentence ("Consult your doctor if pregnant, and
+ * our blend treats chronic disorders") is inside the span and is still exempt
+ * from R1's different-item leg and from R2. That shape is not distinguishable
+ * from the mandated enumeration by function words alone: "or managing a medical
+ * condition" and "and our blend treats chronic disorders" have the SAME
+ * grammatical skeleton — coordinator, verb, marker — and the only difference is
+ * the subject, which this proximity check cannot read. Every other leg still
+ * covers it: R1 fires whenever the marker shares the state's item, R3 fires on a
+ * therapeutic verb sharing the state's clause, and C6 fires on any named
+ * disease. The tests name this shape (`KNOWN_RESIDUE` in
+ * `tests/safetyWarning.construction.c22.test.ts`) so it cannot be forgotten
+ * again; closing it needs a subject reading, not a wider window.
  */
 const SENTENCE_BOUNDARY_RE = /[.!?;\n]/;
 
@@ -412,8 +456,19 @@ function sameEnumerationItem(text: string, a: TermMatch, b: TermMatch): boolean 
   return !ENUM_ITEM_BREAK_RE.test(text.slice(from, to));
 }
 
-/** Character ranges of every sentence in `text` that is a safety warning. */
-function safetyWarningRanges(text: string, cfg: NaturalStateConfig): [number, number][] {
+/**
+ * Character ranges of every READER-CONDITION SPAN in `text`: for each sentence
+ * that is a safety warning, the region from its FIRST condition cue to the end
+ * of that sentence.
+ *
+ * The span STARTS at the cue because that is what the exemption is a claim
+ * about — see the header. It runs to the end of the sentence because a warning
+ * routinely continues past its recommendation ("… should ask a healthcare
+ * professional before use, especially if they are also managing a diagnosed
+ * medical condition") and because the sentence boundary is the outer edge the
+ * construction was always scoped to.
+ */
+function readerConditionRanges(text: string, cfg: NaturalStateConfig): [number, number][] {
   const out: [number, number][] = [];
   if (
     cfg.advisoryCues.length === 0 ||
@@ -426,19 +481,30 @@ function safetyWarningRanges(text: string, cfg: NaturalStateConfig): [number, nu
   for (let i = 0; i <= text.length; i += 1) {
     if (i < text.length && !SENTENCE_BOUNDARY_RE.test(text[i]!)) continue;
     const sentence = text.slice(start, i);
-    if (sentence.trim() && isSafetyWarningSentence(sentence, cfg)) out.push([start, i]);
+    if (sentence.trim()) {
+      const cue = conditionCueIndex(sentence, cfg);
+      if (cue >= 0) out.push([start + cue, i]);
+    }
     start = i + 1;
   }
   return out;
 }
 
-function isSafetyWarningSentence(sentence: string, cfg: NaturalStateConfig): boolean {
+/**
+ * The index within `sentence` of the FIRST condition cue, when the sentence also
+ * carries the RECOMMENDATION leg (an advisory cue verb followed within
+ * `ADVISORY_PAIR_GAP` characters by a professional noun). `-1` when either leg
+ * is missing — a sentence with only one leg is not the construction.
+ */
+function conditionCueIndex(sentence: string, cfg: NaturalStateConfig): number {
   const cues = scanTerms(sentence, cfg.advisoryCues);
-  if (cues.length === 0) return false;
+  if (cues.length === 0) return -1;
   const pros = scanTerms(sentence, cfg.advisoryProfessionals);
   const paired = cues.some((c) => pros.some((p) => p.index >= c.index && p.index - endOf(c) <= ADVISORY_PAIR_GAP));
-  if (!paired) return false;
-  return scanTerms(sentence, cfg.conditionCues).length > 0;
+  if (!paired) return -1;
+  const conditions = scanTerms(sentence, cfg.conditionCues);
+  if (conditions.length === 0) return -1;
+  return Math.min(...conditions.map((c) => c.index));
 }
 
 function scanVariant(text: string, cfg: NaturalStateConfig, seen: Set<string>, out: Hit[]): void {
@@ -447,12 +513,13 @@ function scanVariant(text: string, cfg: NaturalStateConfig, seen: Set<string>, o
   const markers = scanTerms(scanned, cfg.markers, cfg.neg);
   if (marked.length === 0 && markers.length < 2) return;
 
-  // SAFETY-WARNING CONSTRUCTION spans, read from the UNBLANKED variant (blanking
-  // is length-preserving, so indices line up) because the recommendation phrase
-  // may itself be a blanked safe span. See `safetyWarningRanges`.
-  const safetyRanges = safetyWarningRanges(text, cfg);
-  const inSafetyWarning = (i: number): boolean =>
-    safetyRanges.some(([lo, hi]) => i >= lo && i < hi);
+  // READER-CONDITION spans of the SAFETY-WARNING CONSTRUCTION, read from the
+  // UNBLANKED variant (blanking is length-preserving, so indices line up)
+  // because the recommendation phrase may itself be a blanked safe span. See
+  // `readerConditionRanges`.
+  const conditionRanges = readerConditionRanges(text, cfg);
+  const inReaderCondition = (i: number): boolean =>
+    conditionRanges.some(([lo, hi]) => i >= lo && i < hi);
 
   // R1 — abnormality marker beside a natural state / normal symptom.
   // Evaluated FIRST and never subject to the qualifier escape: an abnormality
@@ -460,12 +527,14 @@ function scanVariant(text: string, cfg: NaturalStateConfig, seen: Set<string>, o
   for (const s of marked) {
     for (const m of markers) {
       if (gapBetween(s, m) > cfg.window) continue;
-      // Inside a safety warning a marker in a DIFFERENT enumeration item is a
-      // separate reader condition, not the abnormal form of the state. A marker
-      // that shares the state's item modifies it and still fails.
+      // Inside the READER-CONDITION span a marker in a DIFFERENT enumeration
+      // item is a separate reader condition, not the abnormal form of the
+      // state. A marker that shares the state's item modifies it and still
+      // fails — and so does a pair with either half OUTSIDE the span, which is
+      // the sentence's product-subject part (see the header's laundering table).
       if (
-        inSafetyWarning(s.index) &&
-        inSafetyWarning(m.index) &&
+        inReaderCondition(s.index) &&
+        inReaderCondition(m.index) &&
         !sameEnumerationItem(text, s, m)
       ) {
         continue;
@@ -489,10 +558,13 @@ function scanVariant(text: string, cfg: NaturalStateConfig, seen: Set<string>, o
       if (a.term === b.term) continue;
       const gap = gapBetween(a, b);
       if (gap < 0 || gap > cfg.window) continue;
-      // Inside a safety warning both markers describe the READER'S condition,
-      // which is what the warning exists to ask about ("if you have been
-      // diagnosed with a medical condition").
-      if (inSafetyWarning(a.index) && inSafetyWarning(b.index)) continue;
+      // Inside the READER-CONDITION span both markers describe the READER'S
+      // condition, which is what the warning exists to ask about ("if you have
+      // been diagnosed with a medical condition"). Two markers sitting in the
+      // product-subject part of the same sentence are a claim, not a question:
+      // "Formulated for chronic and diagnosed hormonal imbalance, so consult
+      // your doctor if unsure" fails on the first clause.
+      if (inReaderCondition(a.index) && inReaderCondition(b.index)) continue;
       const key = `2|${[a.term, b.term].sort().join('|')}`;
       if (seen.has(key)) continue;
       seen.add(key);

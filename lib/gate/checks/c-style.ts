@@ -1,5 +1,5 @@
 import type { Failure, KnowledgePack, OptimizedListing, StyleRules } from '@/lib/types';
-import { arr, compatibilityVariant, decodeEntities, normalize, subtractDisclaimers, utf8Bytes } from '../util';
+import { arr, compatibilityVariant, decodeEntities, normalize, phraseSource, subtractDisclaimers, utf8Bytes } from '../util';
 import { aplusSurfaces, disclaimerVariantsOf, fail } from './shared';
 
 /**
@@ -101,7 +101,6 @@ interface StyleSurface {
   text: string;
 }
 
-const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
 
 /** Word tokens: start with a letter, then letters/digits (hyphens split tokens). */
 const WORD_RE = /[A-Za-z][A-Za-z0-9]*/g;
@@ -466,7 +465,10 @@ export function c17Style(l: OptimizedListing, pack: KnowledgePack): Failure[] {
     if (titleBanGroups.has(surface.group)) {
       for (const term of style.titleTermBans) {
         if (!term.trim()) continue;
-        const re = new RegExp(`(?<![a-z0-9])${escapeRe(term).replace(/\s+/g, '\\s+')}(?![a-z0-9])`, 'i');
+        // The words of a banned title term are joined by the shared separator
+        // class, so a hyphenated spelling of a pack term is the same ban as its
+        // spaced spelling. This module still names no term of its own.
+        const re = new RegExp(`(?<![a-z0-9])${phraseSource(term)}(?![a-z0-9])`, 'i');
         if (charVariants.some((v) => re.test(v))) {
           out.push(fail(CHECK_ID, surface.field, term, `Remove the promotional term '${term}' — prohibited in title surfaces`));
         }

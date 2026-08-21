@@ -2,6 +2,7 @@ import type { ListingSnapshot } from '@/lib/types';
 import routingSupplementsJson from '@/knowledge/routing.supplements.json';
 import routingCosmeticsJson from '@/knowledge/routing.cosmetics.json';
 import { loadPack, type PackId } from './loadPack';
+import { phraseSource } from '@/lib/gate/util';
 
 export interface CategoryDetection {
   packId: PackId;
@@ -40,8 +41,6 @@ function matchMarkers(routing: Routing, category: string, title: string, attrTex
   return categoryHit(routing, category, attrText) || titleHit(routing.titleMarkers, title);
 }
 
-const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 const KEYWORD_RE_CACHE = new Map<string, RegExp>();
 
 /**
@@ -59,7 +58,9 @@ const KEYWORD_RE_CACHE = new Map<string, RegExp>();
 function keywordRe(term: string): RegExp {
   let re = KEYWORD_RE_CACHE.get(term);
   if (!re) {
-    re = new RegExp(`(?<![a-z0-9])${escapeRe(term).replace(/\s+/g, '\\s+')}(?![a-z0-9])`, 'i');
+    // The words of a multi-word keyword are joined by the shared separator class
+    // (`gate/util.phraseSource`), so a hyphenated spelling routes the same way.
+    re = new RegExp(`(?<![a-z0-9])${phraseSource(term)}(?![a-z0-9])`, 'i');
     KEYWORD_RE_CACHE.set(term, re);
   }
   return re;

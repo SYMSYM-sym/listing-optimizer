@@ -3104,15 +3104,15 @@ in the Â§P2 field-closure oracle.
 
 ---
 
-## 18. ROUND J — a mandated warning the gate could not read as one, and a floor nobody was told about.
+## 18. ROUND J ï¿½ a mandated warning the gate could not read as one, and a floor nobody was told about.
 
-### 18.1 ARCHITECTURE CHANGE — the consult-a-professional SAFETY WARNING is recognised as a CONSTRUCTION, not as a list of wordings.
+### 18.1 ARCHITECTURE CHANGE ï¿½ the consult-a-professional SAFETY WARNING is recognised as a CONSTRUCTION, not as a list of wordings.
 
 **THE LIVE DEFECT, FOR THE THIRD TIME.** Production, ASIN B00IO89MYA:
 
 ```
 C22 | description | "before use if pregnant, nursing, taking medication, or managing a medical condition, and keep out of reach"
-fix: Abnormality marker 'medical condition' next to the natural state 'nursing' — …
+fix: Abnormality marker 'medical condition' next to the natural state 'nursing' ï¿½ ï¿½
 ```
 
 `safety_warning` is a **REQUIRED** field of the supplements attribute template, so
@@ -3122,11 +3122,11 @@ round can clear it without deleting text the template requires.
 
 **WHY THE TWO EARLIER FIXES DID NOT HOLD.** Both were enumerative. The original
 forensic round added an R3 ADVISORY escape for
-`"Women who are pregnant or nursing … managing a health concern, should talk with
+`"Women who are pregnant or nursing ï¿½ managing a health concern, should talk with
 a physician"`; ROUND M added the literal `"have a known medical condition"` to
 `compliancePack.naturalStateSafePhrases` beside `"have a diagnosed medical
 condition"`. Each covered one wording of the same warning, and the next ordinary
-paraphrase — `"managing a medical condition"` — walked straight past both. An
+paraphrase ï¿½ `"managing a medical condition"` ï¿½ walked straight past both. An
 enumeration of phrasings always loses to paraphrase; the pack comment on that
 list said the qualifier slot was "ENUMERATED, NEVER WILDCARDED", which is exactly
 the property that kept costing.
@@ -3136,9 +3136,9 @@ of strings: a **CONDITION clause enumerating states the READER may be in**,
 governed by a **RECOMMENDATION to consult a professional**. Both legs are pack
 data:
 
-* the RECOMMENDATION — `advisoryCueVerbs` followed within the adjacency gap by
+* the RECOMMENDATION ï¿½ `advisoryCueVerbs` followed within the adjacency gap by
   `advisoryProfessionalNouns`, the same pairing test R3's escape already used;
-* the CONDITION — `advisoryConditionCues`, **new**, a CLOSED GRAMMATICAL CLASS of
+* the CONDITION ï¿½ `advisoryConditionCues`, **new**, a CLOSED GRAMMATICAL CLASS of
   conditional subordinators (`if`, `when`, `unless`, `in the event`) and
   generic-addressee relative heads (`anyone who`, `those who`, `women who`).
 
@@ -3146,13 +3146,13 @@ Inside a sentence carrying both legs the abnormality markers describe the
 READER'S condition rather than the product's target, so **R2** (two markers) does
 not fire, and **R1** (marker beside a natural state) does not fire when the
 marker and the state sit in **different items of the enumeration**
-(`sameEnumerationItem` — clause punctuation or a coordinating conjunction).
+(`sameEnumerationItem` ï¿½ clause punctuation or a coordinating conjunction).
 `lib/gate/checks/c-natural-state.ts` holds the sentence arithmetic and not one
 word of vocabulary; `tests/category.literals.test.ts` is green.
 
 **THE ANTI-LAUNDERING HALF, STATED EXACTLY.** A marker that MODIFIES its
 neighbour shares its enumeration item and R1 still fires however the sentence is
-dressed — `"Consult your doctor if you want relief from severe menopause
+dressed ï¿½ `"Consult your doctor if you want relief from severe menopause
 symptoms"` and `"Anyone who has chronic menopause should talk with a physician"`
 both still FAIL. A sentence with no condition cue is not the construction at all,
 so `"Ask your doctor about our formula for severe menopause symptoms"` fails on
@@ -3163,8 +3163,8 @@ never consult the rule: a named disease inside a perfectly-formed warning is
 still failed by C6.
 
 **THE RESIDUE, STATED RATHER THAN HIDDEN.** The condition class is closed, so a
-warning that uses a REDUCED relative clause with no relative pronoun — "…and
-those managing any medical condition, should seek the advice of a physician" —
+warning that uses a REDUCED relative clause with no relative pronoun ï¿½ "ï¿½and
+those managing any medical condition, should seek the advice of a physician" ï¿½
 is not recognised and still fails R1. Widening the class to the bare pronoun was
 rejected because it exempts `"Anyone can ask their doctor about our chronic
 disorder formula"`, which is a claim. `compliance.cosmetics.json` still ships no
@@ -3180,32 +3180,42 @@ no pack list contains** are clean on three surfaces each and green through the
 whole gate; every one of those paraphrases FAILS AGAIN with
 `advisoryConditionCues` emptied and every other list untouched, which is the
 proof that the construction and not the enumerated safe-phrase list is doing the
-work; fifteen genuine abnormality claims — bare and dressed in a warning — still
+work; fifteen genuine abnormality claims ï¿½ bare and dressed in a warning ï¿½ still
 fail; C6 and R3 are asserted unreachable from the rule.
 
-### 18.2 CORRECTED RECORD — the `minNegatives` floor was enforced by a number the writer was never shown, drawn from a source it could not honestly have.
+> **CORRECTED BY ROUND P (section 22.1). The residue above states only the OVER-BLOCK
+> direction.** There was also a BYPASS direction and it was not stated: because
+> the exemption was scoped to the WHOLE SENTENCE, a product claim comma-spliced
+> onto the front of a warning ("Supports menopause and chronic disorders, so
+> consult your doctor if pregnant") produced ZERO failures from the entire gate,
+> and `MUST_FAIL_DRESSED` exercised only same-item modifiers, own-item rides and
+> separate sentences - never a cross-item or two-marker claim AHEAD of the
+> clause. Adversarial review proved both strings end to end. Fixed and re-stated
+> in section 22.1; the table has been extended with six rows covering that shape.
+
+### 18.2 CORRECTED RECORD ï¿½ the `minNegatives` floor was enforced by a number the writer was never shown, drawn from a source it could not honestly have.
 
 **THE LIVE DEFECT.** Same run: `C28 | keywords | 0 negative term(s)`. The ROUND H
 change had already re-aimed the floor at PROPOSALS, so this was **not** the
-reclassification defect — the model wrote no negative rows at all.
+reclassification defect ï¿½ the model wrote no negative rows at all.
 
 **THE FINDING, both halves.** `rules.keywordRules.minNegatives` was pack data
 **only the gate read**. `maxTerms` and `whyMaxChars` were both rendered into the
 keyword prompt; the floor was not, so the one number a keyword artifact can FAIL
 on was the one number its writer was never given. And the only SOURCE the
-instructions led with was "every rival brand name" — with no operator competitor
+instructions led with was "every rival brand name" ï¿½ with no operator competitor
 ASINs supplied the model has no rival-brand knowledge, so that instruction asks
 it to **invent companies**, which cannot converge honestly.
 
 **THE FLOOR IS NOT MIS-SPECIFIED AND IS NOT LOWERED.** A source exists on every
 run: the vocabulary the compliance rules rule out, printed in the same prompt,
 which C28 already credits toward the floor (a compliance-owned negative row is
-DEFERRED to the check that owns it and still counts, §14). What was missing was
+DEFERRED to the check that owns it and still counts, ï¿½14). What was missing was
 that anybody said so.
 
 **Status: FIXED.** `lib/engine/prompts/keywords.ts` renders the floor from the
 same pack number the gate enforces and renders
-`rules.keywordRules.negativeSourceNote` (**new** pack data) beside it — naming
+`rules.keywordRules.negativeSourceNote` (**new** pack data) beside it ï¿½ naming
 the always-available source and refusing the invention of a rival outright.
 `lib/gate/checks/c-keywords.ts` states the same source in the failure text at
 repair time. `lib/types.ts` documents the field.
@@ -3583,3 +3593,168 @@ ends UNVERIFIED, the trigger is unmoved and clean copy still passes; Â§6 deletin
 the row that owns a surface makes the live failure `unroutable` - the table is
 not vacuous. `tests/repairRouting.oracle.test.ts` now carries `surface` through
 the oracle, so every surface the gate actually emits is asserted to resolve.
+
+
+## 22. ROUND P - two PROVEN compliance bypasses, both introduced or missed by earlier rounds of this same project, and three record errors.
+
+Both defects in this round were found by ADVERSARIAL REVIEW of work this project
+had already recorded as finished. One was created by ROUND J's own fix; the
+other was left behind by ROUND M1 and then written down as covered. Neither was
+a wrong rule: in both cases the rule was right and its SCOPE was wrong.
+
+### 22.1 THE J1 SAFETY-WARNING EXEMPTION LAUNDERED A CLAIM THROUGH A COMMA-SPLICED CONSULT CLAUSE.
+
+**PROVEN END TO END** through the real `runGate` on the golden listing, with the
+string planted in the required `attributes.safety_warning` field:
+
+| copy | result |
+|---|---|
+| `Supports menopause and chronic disorders.` | 3 x C22 (correct) |
+| `Supports menopause and chronic disorders, so consult your doctor if pregnant.` | **ZERO failures from the entire gate** |
+| `Formulated for chronic and diagnosed hormonal imbalance` | fails (correct) |
+| `Formulated for chronic and diagnosed hormonal imbalance, so consult your doctor if unsure.` | **passes** |
+
+**THE MECHANISM.** J1's `safetyWarningRanges` treated the WHOLE SENTENCE as a
+safety warning once it carried a recommendation pair (cue verb + professional
+noun) and a condition cue - INCLUDING product-claim text sitting AHEAD of the
+condition cue. `sameEnumerationItem` then splits on `and`/`,`, so a marker and a
+state in different coordinate items never fired R1, and R2 did not fire at all.
+J1's own stated reasoning - "a marker in a coordinate item is a separate reader
+condition" - is FALSE when the enumeration is the PRODUCT'S TARGET LIST.
+
+**THE FIX - the exemption reaches only the clause the condition cue governs.**
+The exemption makes exactly one claim: THESE WORDS DESCRIBE THE READER, NOT THE
+PRODUCT. Only text the condition cue governs can carry that claim, so the exempt
+region is now the READER-CONDITION SPAN - from the sentence's FIRST condition cue
+to the end of that sentence (`readerConditionRanges`, was `safetyWarningRanges`).
+R1 is suppressed only when the state AND the marker both sit in that span and in
+different enumeration items; R2 only when both markers do. Anything outside the
+span is judged exactly as it would be in its own sentence. No pack data changed;
+no vocabulary entered the gate; `tests/category.literals.test.ts` is green.
+
+**WHY THAT SCOPE IS THE RIGHT ONE, not merely a smaller one.** The construction
+has always been bounded by the SENTENCE, so a product claim in a PRECEDING
+SENTENCE never had the exemption. Scoping to the cue makes the same-sentence case
+consistent with that: a comma cannot buy what a full stop never did. Both members
+of three splice pairs are asserted to fail
+(`tests/safetyWarning.construction.c22.test.ts`, "the full-stop form and the
+comma form behave identically") - including `Supports menopause. Ask your doctor
+if you have a chronic condition.` / `Supports menopause, ask your doctor if you
+have a chronic condition.`, whose first member failed before this round and whose
+second member passed.
+
+**J1'S REAL WIN IS NOT REGRESSED.** All seven of J1's NOVEL_PARAPHRASES, the live
+B00IO89MYA string, both historical wordings and the cosmetics-pack leg are still
+clean on three surfaces each and green through the whole gate. **Not one existing
+case in that file had to change**; the file went from 103 to 133 cases, all
+additions. The condition cue sits at or before the reader states in every
+mandated wording of the warning, which is why scoping to it costs nothing: a
+warning names the reader's conditions AFTER saying "if"/"anyone who".
+
+**THE RESIDUE, STATED THIS TIME.** A product claim coordinated AFTER the
+condition cue in the SAME sentence, whose two markers do not touch a natural
+state (`Consult your doctor if pregnant, and our blend treats chronic
+disorders`), is inside the span and is still exempt from R2. It is not
+distinguishable from the mandated enumeration by function words alone: the live
+warning contains `or managing a medical condition` and the laundering contains
+`and our blend treats chronic disorders` - coordinator, verb, marker, in both -
+and only the SUBJECT differs, which a proximity check cannot read. Closing it
+needs subject vocabulary in the pack, not a wider window in the gate; that was
+declined this round as a design change, not skipped. The line is PINNED by three
+cases ("the stated residue, and the line it stops at"): the residue itself, the
+same shape with the marker touching a state (FAILS), and the same claim as its
+own sentence (FAILS). R1's same-item leg, R3 and C6 all still cover that region.
+
+**Status: FIXED.** `lib/gate/checks/c-natural-state.ts` only.
+`tests/safetyWarning.construction.c22.test.ts` (133) holds both directions;
+`tests/naturalStates.gate.test.ts` (164), `tests/falsePositives.gate.test.ts`
+(206, unedited) and the golden fixture are green.
+
+### 22.2 CORRECTED RECORD - "every sibling row already spells the separator as a class" was FALSE, and four standard spellings walked past C19.
+
+**THE FALSE CLAIM.** ROUND M1's commit body, justifying
+`\bclinically[\s-]+studied\b`, stated: *"Every sibling row already spells the
+separator this way (`money[- ]back`, `award[- ]winning`, `risk[- ]free`)."* Three
+rows do. The list was NOT swept, and the rows that were not remembered were live
+bypasses. What was actually true: SOME sibling rows spelled it as a class, the
+row M1 was looking at did not, and M1 fixed that one row.
+
+**PROVEN** - the spaced form fails, the hyphenated form produced ZERO failures
+from the entire gate:
+
+| spaced (fails) | hyphenated (passed) |
+|---|---|
+| `number one rated` | `number-one rated` |
+| `As Seen On TV` | `As-Seen-On-TV` |
+| `limited time offer` | `limited-time offer` |
+| `Doctor recommended blend` | `Doctor-recommended blend` |
+
+`Doctor-recommended` and `limited-time` are the STANDARD spellings in real Amazon
+listing copy, so this was live exposure. `maximum-strength`, `clinically-proven`
+and `Today-only` were caught only because they ALSO sit in `superlativeBans`,
+whose separator-STRIPPED variant covers hyphens - an accident of which leg a
+phrase happened to be filed under, mistaken for coverage.
+
+**THE CAUSE, and why it is a CLASS defect.** Both legs joined the words of a
+phrase with whitespace alone: `util.termRegex`/`compileTerms` (`\s+`) and the
+pack-authored REGEX SOURCES (`\s+` or a literal space). Fixing rows one at a time
+is what produced the mixed list.
+
+**THE FIX IS THE CLASS, in one place.** `util.PHRASE_JOIN` (`[\s-]+`),
+`util.phraseSource` (a literal phrase -> regex source) and
+`util.packPatternSource` (a pack-authored regex source, rewritten structurally:
+`\s` with any quantifier becomes `[\s-]`, a literal space becomes `[\s-]`,
+CHARACTER CLASSES and escaped literals are left exactly as written, so `[^\s]`
+in the bare-domain row and `[\s.-]` in the phone rows keep their meaning). Every
+site that turns a phrase or a pack pattern into a regex now goes through them:
+C18/C19 (`c-prohibited`), A8 (`a-aplus`), C21's literal patterns (`c-semantic`),
+the substantiation register's two compilers,
+and the local ban-lexicon alternations in `c-natural-state`, `c-semantic`, `c-quality`
+(allergen sources AND compound exclusions, widened together so one side cannot
+manufacture a false declaration failure), `c-attributes`, `c-style`,
+`checks/shared` and `knowledge/detectCategory`. It is a pure NARROWING: a
+single-word term has no join to widen, and a widened join still has to match
+every other character the phrase already required.
+
+**THE OVER-BLOCK DIRECTION.** A hyphen is meaningful in a compound, so a lawful
+battery is asserted clean through the WHOLE gate in both spellings: `sugar-free`,
+`non-GMO`, `third-party`, `time-release`, `doctor formulated`,
+`doctor-formulated` and `high-potency`. `doctor-formulated` is the sharpest of
+them - one hyphen from the banned `doctor-recommended` - and stays clean.
+
+**THE ONE LEG DELIBERATELY LEFT ALONE, and why it is a DIRECTION and not an
+oversight.** The generic term compiler (`util.termRegex` / `compileTerms`) still
+joins with `\s+`. It answers BOTH kinds of question: "is this BANNED phrase
+present?" - where a wider join is stricter - and "is this DECLARED keyword really
+on the surface it claims?" (C28's placement leg) - where a wider join is more
+PERMISSIVE. Widening it was tried in this round and it silently turned a true
+C28 placement failure into a pass, which is a check weakened, so it was reverted
+and the reason written onto the function. The ban side of that leg needs no
+widening: it is what the separator-STRIPPED variant scan already covers, which is
+exactly why `maximum-strength` was caught all along.
+
+**DELIBERATELY NOT DONE.** `lib/engine/facts.ts` numeric parsing is untouched:
+its unit gap is a number-to-unit join, not a word-to-word one, and its sibling
+regex already writes `[\s-]*`. No pattern was added, removed or reworded; no
+check was weakened; the scope of every row is otherwise exactly what it was.
+
+**Status: FIXED.** `tests/separatorClass.hyphen.gate.test.ts` (219) holds it:
+the four proven bypasses and the three already-caught phrases fail in BOTH
+spellings and take the whole gate down; the lawful battery leaves the gate green;
+emptying `rules.prohibitedMarketing.patterns` disarms exactly those four rows in
+both spellings and leaves the superlative leg armed in both; the rewrite's
+behaviour is unit-tested including the character-class and escaped-literal cases;
+and a SWEEP asserts that EVERY row of every pack regex list in both shipped packs
+(`prohibitedMarketing.patterns`, `prohibitedContent.patterns`,
+`semanticDrugClaims.patterns`, `substantiationTokens`, `allergenRules[].source`)
+comes out of the compiler with no bare `\s` and no literal space outside a
+character class. That sweep is the assertion the M1 record should have had to
+make before claiming it.
+
+### 22.3 CORRECTED RECORD - `KEEP_FLOOR_FRACTION` is 0.6, and the comment said "a third".
+
+`lib/engine/descriptionClamp.ts` documented the floor as "more than a third of
+the writable budget"; the constant is `0.6`, i.e. the clamp declines when a
+boundary would throw away more than TWO FIFTHS. The CONSTANT was always the
+shipped behaviour and is unchanged; only the sentence was wrong, and it is now
+corrected in place with a note that it was.

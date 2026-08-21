@@ -13,6 +13,9 @@ import {
   doubleCollapsedVariants,
   normalize,
   obfuscationVariants,
+  packPattern,
+  PHRASE_JOIN,
+  phraseSource,
   subtractDisclaimers,
 } from '../util';
 import {
@@ -73,8 +76,6 @@ import {
 
 const CHECK_ID = 'C21';
 
-const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 /**
  * Determiners that turn an ordinary noun into ONE named instance ("the growth"
  * vs "healthy hair growth"). Structural English, not a category lexicon — the
@@ -95,7 +96,13 @@ const DETERMINERS = [
  */
 type Mode = 'spaced' | 'concat';
 
-const gapOf = (mode: Mode): string => (mode === 'concat' ? '\\s*' : '\\s+');
+/**
+ * The join between the words of a pack phrase. Both modes use the SEPARATOR
+ * CLASS (`util.PHRASE_JOIN`), because a hyphen is how English writes a compound:
+ * `time-release` and `time release` are one phrase. `concat` additionally allows
+ * an EMPTY join, since that variant has already had its separators stripped out.
+ */
+const gapOf = (mode: Mode): string => (mode === 'concat' ? '[\\s-]*' : PHRASE_JOIN);
 
 /** Longest-first alternation over pack tokens; inner whitespace stays flexible. */
 function alternation(tokens: string[], mode: Mode): string | null {
@@ -104,7 +111,7 @@ function alternation(tokens: string[], mode: Mode): string | null {
   );
   if (cleaned.length === 0) return null;
   const gap = gapOf(mode);
-  return cleaned.map((t) => escapeRe(t).replace(/\s+/g, gap)).join('|');
+  return cleaned.map((t) => phraseSource(t, gap)).join('|');
 }
 
 /** Word-boundary wrapper — a no-op in a string that has no boundaries left. */
@@ -274,12 +281,15 @@ function compile(sdc: SemanticDrugClaims, mode: Mode): Compiled {
   // The literal patterns are authored with `\s`/`\b` against ordinary prose, so
   // they are compiled for the SPACED classes only: run against a fully
   // concatenated string they can only misfire or (far more often) never match.
+  // They go through the shared pack compiler, so the word join is the separator
+  // CLASS here too — "stop taking your medication" and "stop-taking-your-
+  // medication" are the same claim (see `util.packPatternSource`).
   const patterns =
     mode === 'concat'
       ? []
       : (sdc.patterns ?? [])
           .filter((row) => Array.isArray(row) && typeof row[0] === 'string' && row[0].trim())
-          .map((row) => ({ re: new RegExp(row[0]!, 'gi'), label: row[1] ?? 'prohibited claim' }));
+          .map((row) => ({ re: packPattern(row[0]!, 'gi'), label: row[1] ?? 'prohibited claim' }));
 
   // ONE alternation, not one regex per phrase: blanking runs on every variant
   // that contains a head token, and 25 separate passes over the text was the

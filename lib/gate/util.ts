@@ -1034,9 +1034,136 @@ export function hasNegationContext(
 const TERM_LEAD = '(?<![a-z])';
 const TERM_TRAIL = '(?![a-z])';
 
+/**
+ * THE SEPARATOR BETWEEN THE WORDS OF A MULTI-WORD PHRASE — one class, one place.
+ *
+ * A hyphen is how English WRITES a compound, not a trick for hiding one.
+ * `limited-time offer`, `Doctor-recommended`, `As-Seen-On-TV` and `number-one
+ * rated` are the STANDARD spellings of phrases the packs ban, and every one of
+ * them produced ZERO failures while its spaced twin failed, because BOTH legs of
+ * the matcher joined the words of a phrase with whitespace alone: this file's
+ * term compilers (`\s+`) and the pack-authored REGEX SOURCES (`\s+` or a literal
+ * space). `maximum-strength`, `clinically-proven` and `Today-only` were caught
+ * only by the accident that they ALSO sit in a term list whose separator-
+ * STRIPPED variant covers hyphens — an accident that was mistaken for coverage
+ * and written down as one.
+ *
+ * The fix is a CLASS, applied wherever a BAN phrase becomes a regex: the words
+ * of a phrase are joined by whitespace OR a hyphen. It is a pure narrowing of
+ * the evasion surface — a single-word term has no join to widen, and a widened
+ * join still has to match every other character the phrase already required, so
+ * it cannot reach copy the spaced form would not have reached.
+ *
+ * THE ONE PLACE IT IS DELIBERATELY NOT APPLIED is the generic term compiler
+ * (`termRegex` / `compileTerms`), which also answers PRESENCE questions where a
+ * wider join is more permissive rather than stricter. That direction argument is
+ * written out on `termRegex`, and the ban side of that leg is already covered by
+ * the separator-STRIPPED variant scan.
+ */
+export const PHRASE_JOIN = '[\\s-]+';
+
+const REGEX_META_RE = /[.*+?^${}()|[\]\\]/g;
+
+/**
+ * A LITERAL phrase as a regex source: regex metacharacters escaped, every inner
+ * run of whitespace compiled to the separator class.
+ *
+ * `join` exists for the callers that deliberately allow an EMPTY separator (the
+ * concatenated-variant scans, which have already stripped separators out of the
+ * text); it must always be a class that contains whitespace.
+ */
+export function phraseSource(phrase: string, join: string = PHRASE_JOIN): string {
+  return phrase.trim().replace(REGEX_META_RE, '\\$&').replace(/\s+/g, join);
+}
+
+/**
+ * A pack-authored REGEX SOURCE made separator-agnostic between words.
+ *
+ * Pack patterns are hand-written regex, so the join between two words appears as
+ * `\s`, `\s+`, `\s*` or a literal space, and several rows already spell it as a
+ * class (`money[- ]back`, `top[- ]?rated`, `clinically[\s-]+studied`). Rewriting
+ * the class row-by-row is what produced the mixed list this fixes: the rows that
+ * were remembered are hyphen-proof and the rows that were not are bypasses.
+ *
+ * The rewrite is deliberately CONSERVATIVE and structural:
+ *   - `\s` (with any quantifier that follows it) becomes `[\s-]`, so `\s+` →
+ *     `[\s-]+`, `\s*` → `[\s-]*` and `\s{2,}` → `[\s-]{2,}` — the quantifier is
+ *     never touched, only the atom;
+ *   - a LITERAL space likewise becomes `[\s-]`;
+ *   - anything inside a CHARACTER CLASS is left exactly as written, so `[^\s]`
+ *     (bare-URL row) and `[\s.-]` (phone rows) keep their meaning;
+ *   - an escaped character (`\\`, `\[`, `\$`) is copied with its backslash, so
+ *     an escaped literal is never re-read as a metacharacter.
+ * A row that already writes the class is therefore left alone, and no row can
+ * gain a match that did not already require the same words in the same order.
+ */
+export function packPatternSource(source: string): string {
+  let out = '';
+  let inClass = false;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i]!;
+    if (ch === '\\') {
+      const next = source[i + 1];
+      if (next === undefined) {
+        out += ch;
+        break;
+      }
+      // `\s` OUTSIDE a class is the word join this fix is about. Only the ATOM
+      // is replaced; a quantifier after it is copied by the next iterations.
+      out += !inClass && next === 's' ? PHRASE_JOIN.slice(0, -1) : ch + next;
+      i += 1;
+      continue;
+    }
+    if (!inClass && ch === '[') inClass = true;
+    else if (inClass && ch === ']') inClass = false;
+    else if (!inClass && ch === ' ') {
+      out += PHRASE_JOIN.slice(0, -1);
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+const PACK_PATTERN_CACHE = new Map<string, RegExp>();
+
+/**
+ * THE ONE COMPILER for a pack-authored regex source, so the separator class is
+ * applied to every pattern list rather than to the lists someone remembered.
+ * Cached by source+flags; `lastIndex` is reset because `g` makes it stateful.
+ * A malformed pack row throws here exactly as it did when each check compiled
+ * its own — callers that must survive one (the substantiation register) keep
+ * their `try`.
+ */
+export function packPattern(source: string, flags: string): RegExp {
+  const key = `${flags} ${source}`;
+  let re = PACK_PATTERN_CACHE.get(key);
+  if (!re) {
+    re = new RegExp(packPatternSource(source), flags);
+    if (PACK_PATTERN_CACHE.size >= MEMO_LIMIT) PACK_PATTERN_CACHE.clear();
+    PACK_PATTERN_CACHE.set(key, re);
+  }
+  re.lastIndex = 0;
+  return re;
+}
+
 const TERM_RE_CACHE = new Map<string, RegExp>();
 
-/** Word-boundary regex for a term, tolerating simple plural s/es and flexible inner whitespace. */
+/**
+ * Word-boundary regex for a term, tolerating simple plural s/es and flexible
+ * inner whitespace.
+ *
+ * THIS LEG DELIBERATELY DOES NOT USE `PHRASE_JOIN`, and the reason is a
+ * DIRECTION, not an oversight. `termRegex`/`compileTerms` serve BOTH kinds of
+ * question: "is this BANNED phrase present?" (where a wider join is stricter)
+ * and "is this DECLARED keyword really on the surface it claims?" (C28's
+ * placement leg, where a wider join is more PERMISSIVE — it would accept a
+ * declaration the copy spells differently). One helper cannot widen in both
+ * directions at once, so the ban side is covered where it is unambiguous: the
+ * pack PATTERN leg (`packPatternSource`), the ban-lexicon alternations in the
+ * individual checks, and the separator-STRIPPED variant scan, which is what
+ * already caught the hyphenated spelling of a `superlativeBans` phrase.
+ */
 export function termRegex(term: string): RegExp {
   const cached = TERM_RE_CACHE.get(term);
   if (cached) {
@@ -1045,7 +1172,7 @@ export function termRegex(term: string): RegExp {
   }
   const escaped = term
     .trim()
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(REGEX_META_RE, '\\$&')
     .replace(/\s+/g, '\\s+');
   const re = new RegExp(`${TERM_LEAD}${escaped}(?:e?s)?${TERM_TRAIL}`, 'gi');
   TERM_RE_CACHE.set(term, re);
@@ -1113,11 +1240,13 @@ function compileTerms(terms: string[]): CompiledTerms {
     (a, b) => b.length - a.length,
   );
   for (const term of cleaned) {
-    const key = term.toLowerCase().replace(/\s+/g, ' ');
+    const key = canonicalKey(term);
     if (!canonical.has(key)) canonical.set(key, term);
   }
+  // Whitespace only, NOT `PHRASE_JOIN` — see the direction argument on
+  // `termRegex`: this compiler also answers PRESENCE questions.
   const source = cleaned
-    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'))
+    .map((t) => t.replace(REGEX_META_RE, '\\$&').replace(/\s+/g, '\\s+'))
     .join('|');
   const compiled: CompiledTerms = {
     re: new RegExp(`${TERM_LEAD}(?:${source})(?:e?s)?${TERM_TRAIL}`, 'gi'),
@@ -1127,9 +1256,12 @@ function compileTerms(terms: string[]): CompiledTerms {
   return compiled;
 }
 
+/** The lookup key a phrase is filed under: lowercased, whitespace collapsed. */
+const canonicalKey = (phrase: string): string => phrase.toLowerCase().replace(/\s+/g, ' ');
+
 /** Map a matched string back onto the pack term that produced it. */
 function canonicalTerm(match: string, canonical: Map<string, string>): string {
-  const key = match.toLowerCase().replace(/\s+/g, ' ');
+  const key = canonicalKey(match);
   return (
     canonical.get(key) ??
     canonical.get(key.replace(/es$/, '')) ??

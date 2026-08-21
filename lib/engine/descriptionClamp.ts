@@ -117,9 +117,11 @@ export interface DescriptionClampResult {
 /**
  * The shallowest cut point that is still a description.
  *
- * A boundary further back than this throws away more than a third of the
- * writable budget, which trades a length failure for a thin-content one — the
- * same defect facing the other way. Below it the clamp declines to act.
+ * A boundary further back than this keeps less than 60% of the writable budget
+ * — it throws away more than two fifths of it, which trades a length failure for
+ * a thin-content one, the same defect facing the other way. Below it the clamp
+ * declines to act. (This comment read "more than a third" while the constant was
+ * and is 0.6; the constant was always the shipped behaviour.)
  */
 export const KEEP_FLOOR_FRACTION = 0.6;
 

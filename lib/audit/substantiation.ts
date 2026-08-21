@@ -9,7 +9,7 @@ import {
   customerSurfaces,
   prohibitedMarketingPatterns,
 } from '@/lib/gate/checks/shared';
-import { normalize, termRegex } from '@/lib/gate/util';
+import { normalize, packPattern, termRegex } from '@/lib/gate/util';
 
 /**
  * R33/R38 — THE SUBSTANTIATION REGISTER.
@@ -99,7 +99,10 @@ function gateBannedSpan(pack: KnowledgePack | null | undefined): (span: string) 
     for (const source of patterns) {
       let re: RegExp;
       try {
-        re = new RegExp(source, 'i');
+        // The SAME compiler C19/A8 use, so the register's idea of "the gate
+        // already bans this span" cannot drift from the gate's — including the
+        // word-join separator class (see `util.packPatternSource`).
+        re = packPattern(source, 'i');
       } catch {
         continue; // a malformed pack row must not break the audit
       }
@@ -141,7 +144,9 @@ export function buildSubstantiationRegister(
     const [pattern, display] = [String(row[0]), String(row[1] ?? row[0])];
     let re: RegExp;
     try {
-      re = new RegExp(pattern, 'i');
+      // `third-party tested` and `third party tested` are one token to claim
+      // and one token to substantiate: same compiler, same separator class.
+      re = packPattern(pattern, 'i');
     } catch {
       continue; // a malformed pack row must not break the audit
     }

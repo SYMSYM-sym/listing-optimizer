@@ -3,6 +3,7 @@ import { CONCAT_MIN_TERM_LEN, disclaimerVariantsOf, prohibitedMarketingPatterns 
 import {
   normalize,
   obfuscationVariants,
+  packPattern,
   scanConcatenated,
   subtractDisclaimers,
   termRegex,
@@ -245,23 +246,14 @@ function scanVariants(clean: string): string[] {
 }
 
 /**
- * Compiled pack patterns, cached by SOURCE STRING.
- *
- * C18/C19 now run every pattern over several de-obfuscated variants of every
- * surface, so re-compiling the same source thousands of times per gate run was
- * the dominant cost. Each cached regex is reset before use (the `g` flag makes
- * `lastIndex` stateful).
+ * Compiled pack patterns, cached by SOURCE STRING — delegated to
+ * `util.packPattern` so the WORD-JOIN SEPARATOR CLASS (`util.PHRASE_JOIN`) is
+ * applied to every pattern list rather than to the rows someone remembered to
+ * spell as a class. `limited-time offer`, `Doctor-recommended blend`,
+ * `number-one rated` and `As-Seen-On-TV` are the standard spellings of rows this
+ * list bans and each produced ZERO failures before that fix.
  */
-const PATTERN_CACHE = new Map<string, RegExp>();
-function patternRe(source: string): RegExp {
-  let re = PATTERN_CACHE.get(source);
-  if (!re) {
-    re = new RegExp(source, 'gi');
-    PATTERN_CACHE.set(source, re);
-  }
-  re.lastIndex = 0;
-  return re;
-}
+const patternRe = (source: string): RegExp => packPattern(source, 'gi');
 
 /**
  * Required legal text is never scanned as copy. Delegates to the ONE documented
