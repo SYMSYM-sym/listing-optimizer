@@ -3751,6 +3751,90 @@ comes out of the compiler with no bare `\s` and no literal space outside a
 character class. That sweep is the assertion the M1 record should have had to
 make before claiming it.
 
+### 22.2.1 FOLLOW-UP TO 22.2 (later round) - the class round P widened was only as wide as the DASH FOLD underneath it, and that fold was spelled twice, differently.
+
+**WHAT WAS UNDISCLOSED IN 22.2.** `PHRASE_JOIN` is `[\s-]+`, an ASCII hyphen.
+Every C18/C19 scan runs on `normalize()`d text, so the set of characters that leg
+can READ as a hyphen is exactly the set `normalize` folds - and that set was
+hand-written in `lib/gate/util.ts` as `U+2011 U+2013 U+2014 U+2015 U+2212`, while
+`lib/engine/typography.ts` hand-wrote a DIFFERENT one (`U+2010`-`U+2015`,
+`U+2212`) for the emit-time fold, neither derived from the other. **U+2010
+HYPHEN, U+2012 FIGURE DASH and U+2043 HYPHEN BULLET were folded by neither the
+gate nor any separator class**, so a banned phrase joined by one of them reached
+C18/C19 as an unbroken foreign string and matched no row. Section 22.2 says the
+class fix means `limited-time offer` fails like `limited time offer`; that was
+true of five dash spellings and not of three, and the record did not say so.
+
+**WHERE THE COVERAGE ACTUALLY RESTED, and where it ran out.** Measured through
+`runGate` before this round:
+
+| join | `description` (customer-visible) | `backendSearchTerms` |
+|---|---|---|
+| U+2011 / U+2013 / U+2014 / U+2015 / U+2212 | C19 + C27, gate FAILS | C19, gate FAILS |
+| U+2010 / U+2012 / U+2043 | **C27 only** (`non-ASCII U+xxxx`), gate FAILS | **gate PASSES, zero failures** |
+
+So on every CUSTOMER-VISIBLE surface those three were caught - but by **C27's
+pure-ASCII rule** (`rules.outputHygiene.asciiOnly`, judged on the RAW string),
+**not by `PHRASE_JOIN`**. That is a different check, a different failure message
+and a different repair instruction ("replace this character") from the one the
+copy actually needs ("remove this banned phrase"), and the record implied the
+phrase leg was doing the work.
+
+**AND IT WAS ONE SURFACE SHORT OF SAFE, which makes this a BYPASS and not only a
+record gap.** C27's ASCII rule is lifted for exactly two surface groups -
+`rules.outputHygiene.asciiExemptSurfaces` = **`backendSearchTerms` and `facts`**
+(and `facts.price` / the pack price attribute are exempted by key from the phrase
+legs for their own reasons). `backendSearchTerms` is ALSO declared by
+`rules.prohibitedMarketing.surfaces` and `rules.prohibitedContent.surfaces`, so a
+prohibited marketing phrase there is a failure this project has always claimed to
+catch. Joined by one of those three dashes it shipped clean:
+`limited⁃time offer` in `backendSearchTerms` produced **zero failures from the
+whole gate**. U+2043 was live end to end - the engine's emit-time fold does not
+touch it either, so nothing in the pipeline turned it back into a hyphen.
+
+**THE FIX IS THE CLASS, one level down from 22.2's.** `DASH_FOLD_RE` in
+`lib/gate/util.ts` now covers every hyphen-like dash the ENGINE folds
+(`U+2010`-`U+2015`, `U+2212`) **plus `U+2043`**, which the engine does not fold at
+all. The CHECKER folding at least as much as the WORKER is the safe direction: a
+character the engine would have turned into `-` must never be readable as
+something else by the gate. It is a pure narrowing - the folded form matches
+exactly what the plain ASCII `-` spelling already matched - and nothing else
+moved: `typography.ts` is untouched, no pattern was added or reworded, and C27
+still reads the RAW string, so every non-ASCII character it reported before it
+still reports.
+
+**DELIBERATELY NOT INCLUDED:** `U+2E3A`/`U+2E3B` (two/three-em dashes) and the CJK
+fullwidth/wavy dashes. They are not how Latin copy writes an intra-word hyphen,
+and `compatibilityVariant` already gives the pattern scans an NFKC pass for the
+fullwidth family. `normalize('a⸺b')` is asserted to stay non-ASCII, so C27
+reports it on every visible surface and a human decides.
+
+**WHAT WOULD CHANGE IF THE EXEMPTION LIST WIDENED - tied to a test, not asserted
+as an absolute.** The two-group exemption is not a law of the system; it is one
+pack array. If a group is ever added to `asciiExemptSurfaces`, C27's ASCII rule
+stops covering that group and whatever C18/C19 can read becomes the only cover
+there - which is precisely the state `backendSearchTerms` was in above. That is
+why §4 of the new test asserts `asciiExemptSurfaces` is EXACTLY
+`['backendSearchTerms', 'facts']` and that C19 declares `backendSearchTerms`:
+widening the list breaks that assertion and forces this paragraph to be re-read
+rather than silently outgrown.
+
+**Status: FIXED.** `lib/gate/util.ts` only.
+`tests/unicodeDashClass.gate.test.ts` (77) holds both directions and the coverage
+story: §1 pins the fold class and asserts by SWEEP over U+2000-U+30FF that the
+gate fold is a superset of the engine fold; §2 fails `limited<dash>time offer`
+through C19 on `description` for all eight dashes, separately asserts C27's
+single `non-ASCII U+xxxx` finding there, and fails it through C19 on the
+ASCII-EXEMPT `backendSearchTerms` where C27 raises nothing; §3 requires the whole
+gate GREEN for `sugar<dash>free`, `third<dash>party`, `doctor<dash>formulated` and
+`time<dash>release` in all nine spellings on `backendSearchTerms` (the exempt
+surface is used on purpose - it is the only one on which a non-ASCII character can
+be left in the text and the gate still required to pass, so the over-block
+direction is actually tested), plus `doctor<dash>formulated` clean against
+`doctor<dash>recommended` failing in every spelling; §4 pins the exemption list
+and the `facts` leg. Reverting `DASH_FOLD_RE` to its previous five characters
+fails 16 of those 77.
+
 ### 22.3 CORRECTED RECORD - `KEEP_FLOOR_FRACTION` is 0.6, and the comment said "a third".
 
 `lib/engine/descriptionClamp.ts` documented the floor as "more than a third of

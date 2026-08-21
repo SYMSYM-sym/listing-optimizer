@@ -193,6 +193,42 @@ export const INVISIBLE_CHARS: string[] = (() => {
   return out;
 })();
 
+/**
+ * THE HYPHEN/DASH CLASS — a superset of the one the ENGINE folds at emit.
+ *
+ * Round P made the word JOIN of a banned phrase a class (`PHRASE_JOIN`,
+ * `[\s-]+`), so `limited-time offer` fails exactly like `limited time offer`.
+ * That leg reads text this file has already normalized, which means the set of
+ * characters it can see as a hyphen is exactly the set the fold below defines —
+ * and that set was spelled out by hand here, differently from the way
+ * `lib/engine/typography.ts` spells it, with neither derived from the other. It
+ * is the SAME defect round P fixed one level up: a class written twice.
+ *
+ * WHAT THAT COST. `normalize` folded U+2011/U+2013/U+2014/U+2015/U+2212 and NOT
+ * U+2010 HYPHEN, U+2012 FIGURE DASH or U+2043 HYPHEN BULLET, and none of the
+ * three is in any separator class either — so a phrase joined by one of them
+ * reached C18/C19 as an unbroken foreign string and matched no ban row. On a
+ * customer-visible surface that was covered anyway (C27's pure-ASCII rule fails
+ * the raw character), but `backendSearchTerms` and `facts` are ASCII-EXEMPT
+ * while C18/C19 still declare `backendSearchTerms` — so a hyphen-bullet-joined
+ * `limited⁃time offer` parked there produced ZERO failures from the whole gate.
+ * See §22.2.1 of CONFORMANCE-DEVIATIONS.md.
+ *
+ * The class below covers every hyphen-like dash the engine folds (U+2010-U+2015,
+ * U+2212) PLUS U+2043, which the engine does not fold at all. The CHECKER
+ * folding at least as much as the worker is the safe direction: a character the
+ * engine would have turned into `-` must never be readable as something else
+ * here. It cannot over-block, because the folded form matches exactly what the
+ * plain ASCII `-` spelling already matched — which is why the lawful hyphenated
+ * battery is asserted clean in every one of these spellings.
+ *
+ * DELIBERATELY NOT INCLUDED: U+2E3A/U+2E3B (two/three-em dashes) and the CJK
+ * fullwidth/wavy dashes. They are not how Latin copy writes an intra-word
+ * hyphen, and `compatibilityVariant` already gives the pattern scans an NFKC
+ * pass for the fullwidth family.
+ */
+const DASH_FOLD_RE = /[‐‑‒–—―⁃−]/g;
+
 /** Combining diacritics — `cańcer` is `cancer` plus U+0301 and must fold to it. */
 const COMBINING_RE = /[\u0300-\u036F\u1AB0-\u1AFF\u20D0-\u20F0\uFE20-\uFE2F]/g;
 
@@ -238,7 +274,7 @@ function foldCompatibility(text: string): string {
 }
 
 /**
- * Curly→straight quotes, en/em dash→hyphen, entity decode, INVISIBLE-character
+ * Curly→straight quotes, the whole `DASH_FOLD_RE` class→hyphen, entity decode, INVISIBLE-character
  * strip, COMBINING-MARK strip, compatibility/confusable fold, collapse whitespace.
  *
  * The fold is what makes the scans homoglyph-proof: without it a Cyrillic
@@ -289,7 +325,7 @@ function normalizeUncached(text: string): string {
   return t
     .replace(/[\u2018\u2019\u201A\u2032]/g, "'")
     .replace(/[\u201C\u201D\u201E\u2033]/g, '"')
-    .replace(/[\u2013\u2014\u2015\u2212\u2011]/g, '-')
+    .replace(DASH_FOLD_RE, '-')
     .replace(/\u00a0/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
