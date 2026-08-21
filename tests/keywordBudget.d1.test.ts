@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { LlmClient } from '@/lib/engine/llm';
 import {
   KEYWORD_MIN_TERMS,
+  KEYWORD_SCHEMA_TOLERANCE,
+  keywordSchemaMaxTerms,
+  keywordSchemaWhyMaxChars,
   keywordsGroupSchemaFor,
   keywordsMaxTokens,
 } from '@/lib/engine/schemas';
@@ -38,13 +41,20 @@ const pack = loadPack('supplements');
 const kr = pack.rules.keywordRules!;
 const snapshot = toSnapshot(mapProduct('B0TESTASIN', rainforestSample.product, rainforestSample));
 
-/** One row at its worst permitted size, pretty-printed as a model emits it. */
+/**
+ * One row at its worst permitted size, pretty-printed as a model emits it.
+ *
+ * `why` is filled to the length THE SCHEMA WILL ACCEPT rather than the shorter
+ * length the prompt states, because that is the bound the budget must pay for:
+ * anything longer is rejected on shape, and anything the parser accepts must
+ * have been receivable. Derived from `keywordSchemaWhyMaxChars`, never restated.
+ */
 const worstRow = () => ({
   term: 'x'.repeat(30),
   tier: 'backend',
   status: 'captured-via',
   surfaces: kr.visibleSurfaces.slice(0, 6),
-  why: 'w'.repeat(kr.whyMaxChars),
+  why: 'w'.repeat(keywordSchemaWhyMaxChars(kr)!),
   via: 'the compliant everyday cluster the copy writes out in full',
   home: 'paid exact match plus off-site articles',
 });
@@ -56,8 +66,10 @@ describe('D1a/D1b — the artifact is bounded and the budget pays for the bound'
   });
 
   it('the budget covers the LARGEST artifact the schema will accept', () => {
+    // THE SCHEMA'S bound, not the prompt's — see the note on `worstRow`. Both
+    // numbers are read off the derivation, so this cannot drift from it.
     const worst = JSON.stringify(
-      { keywords: Array.from({ length: kr.maxTerms }, worstRow) },
+      { keywords: Array.from({ length: keywordSchemaMaxTerms(kr)! }, worstRow) },
       null,
       2,
     );
@@ -66,6 +78,9 @@ describe('D1a/D1b — the artifact is bounded and the budget pays for the bound'
     expect(keywordsMaxTokens(kr)).toBeGreaterThan(needed);
     // and it is well above what the live run was given, which truncated
     expect(keywordsMaxTokens(kr)).toBeGreaterThan(3000);
+    // the very artifact just measured is one the parser accepts, so the two
+    // halves of the sentence above are about the same object
+    expect(keywordsGroupSchemaFor(kr).safeParse(JSON.parse(worst)).success).toBe(true);
   });
 
   it('the budget is DERIVED, so raising a cap cannot leave the cliff behind', () => {
@@ -73,6 +88,13 @@ describe('D1a/D1b — the artifact is bounded and the budget pays for the bound'
     expect(keywordsMaxTokens(bigger)).toBeGreaterThan(keywordsMaxTokens(kr));
     const wordier: KeywordRules = { ...kr, whyMaxChars: kr.whyMaxChars * 2 };
     expect(keywordsMaxTokens(wordier)).toBeGreaterThan(keywordsMaxTokens(kr));
+    // ...and it is derived from the SCHEMA's numbers, so widening the tolerance
+    // alone — with both pack caps unmoved — moves the budget too. This is the
+    // property that failed before: the budget read the prompt's numbers while
+    // the schema enforced the tolerated ones.
+    expect(keywordsMaxTokens(kr)).toBeGreaterThan(
+      keywordsMaxTokens({ ...kr, whyMaxChars: Math.ceil(kr.whyMaxChars / KEYWORD_SCHEMA_TOLERANCE) }),
+    );
   });
 
   it('the prompt states both caps, from the same pack numbers', () => {
@@ -93,8 +115,15 @@ describe('D1a/D1b — the artifact is bounded and the budget pays for the bound'
   it('the schema enforces the cap in both directions', () => {
     const schema = keywordsGroupSchemaFor(kr);
     const rows = (n: number) => ({ keywords: Array.from({ length: n }, worstRow) });
+    const schemaMax = keywordSchemaMaxTerms(kr)!;
+    // THE STATED CAP IS ACCEPTED, and so is the ordinary overshoot above it —
+    // the tolerance the row count gained when D1 recurred at the large-input
+    // end. It is still BOUNDED: one row past the tolerated bound is refused.
+    expect(schemaMax).toBeGreaterThan(kr.maxTerms);
     expect(schema.safeParse(rows(kr.maxTerms)).success).toBe(true);
-    expect(schema.safeParse(rows(kr.maxTerms + 1)).success).toBe(false);
+    expect(schema.safeParse(rows(kr.maxTerms + 1)).success).toBe(true);
+    expect(schema.safeParse(rows(schemaMax)).success).toBe(true);
+    expect(schema.safeParse(rows(schemaMax + 1)).success).toBe(false);
     expect(schema.safeParse(rows(KEYWORD_MIN_TERMS - 1)).success).toBe(false);
     // a `why` far past the stated limit is refused rather than silently kept
     const wordy = rows(KEYWORD_MIN_TERMS);

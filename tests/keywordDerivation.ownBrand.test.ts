@@ -351,20 +351,35 @@ describe('(d) manufacturer-only and productName-only matches are exempted too', 
     expect(runGate(l, pack, ctx).pass).toBe(true);
   });
 
-  it('PRODUCTNAME with NOTHING to corroborate it (no title, no brand fields) is NOT admitted', () => {
+  it('PRODUCTNAME with NOTHING to corroborate it (no title, no brand fields) is NOT admitted TO THE BRAND IDENTITY', () => {
     // G2 — `productName` is written by the MODEL. With a snapshot that declares
     // no brand and carries no title there is nothing it can agree with, so the
-    // identity narrows to EMPTY rather than to whatever the model chose. The
-    // direction matters: narrowing KEEPS the negative and fails the run
-    // visibly; widening ships a rival brand.
+    // BRAND identity narrows to EMPTY rather than to whatever the model chose.
+    // The direction matters: this is the set `lib/audit/rivalBrands.ts`
+    // subtracts, so widening it would disarm the operator's own signal.
     const bare: ListingSnapshot = { ...snapshot, title: '', attributes: {} };
     expect(clean.productName).toBe(PRODUCT_NAME);
     expect([...ownBrandIdentity(clean, bare)]).toEqual([]);
 
+    // THE DERIVATION'S ANSWER IS NO LONGER THIS FUNCTION'S ALONE, and that is a
+    // SEPARATE, narrower rule rather than a widening of this one. A `negative`
+    // row on the run's own canonical `productName` is incoherent whatever the
+    // name's provenance, because C8/C15 FORCE that exact string into the title,
+    // `title75` and the description — so it is reclassified by
+    // `canonicalNameIdentity`, which is not in `ownBrandIdentity` and is not
+    // subtracted by `rivalBrandNames`. The laundering path that opens is
+    // enumerated and closed in `tests/keywordDerivation.canonicalName.test.ts`.
     const l = clone();
     const derived = deriveKeywordPlacement([negativeRow(PRODUCT_NAME, 'Brand term')], l, pack, bare);
-    expect(derived[0]!.status).toBe('negative');
-    expect(derived[0]!.note).toBeUndefined();
+    expect(derived[0]!.status).not.toBe('negative');
+    expect(derived[0]!.note).toContain('CANONICAL PRODUCT NAME');
+    expect(derived[0]!.note).not.toContain('OWN brand identity');
+
+    // ...and a term that is NEITHER the brand nor the canonical name is still
+    // kept, which is what "narrows to empty" has to keep meaning here.
+    const other = deriveKeywordPlacement([negativeRow('Northwind Apothecary', 'Brand term')], l, pack, bare);
+    expect(other[0]!.status).toBe('negative');
+    expect(other[0]!.note).toBeUndefined();
   });
 
   it('punctuation and case are normalised the same way the rest of the keyword code does', () => {
@@ -478,7 +493,7 @@ describe('the keywords prompt carries the own-brand line, from pack data', () =>
 describe('(f) a model-authored productName cannot invent an identity', () => {
   const RIVAL = 'GreenLuxe';
 
-  it('THE EXPLOIT: productName set to the rival no longer exempts its negative row', () => {
+  it('THE EXPLOIT: productName set to the rival no longer widens the BRAND identity', () => {
     const l = clone();
     l.productName = RIVAL;
     const identity = ownBrandIdentity(l, snapshot);
@@ -487,13 +502,37 @@ describe('(f) a model-authored productName cannot invent an identity', () => {
     // did not empty for the wrong reason
     expect(identity.has(BRAND.toLowerCase())).toBe(true);
 
+    // AND THE RUN STILL FAILS. What answers the rename is no longer C28: a
+    // `negative` row on the run's own canonical name is reclassified by the
+    // separate `canonicalNameIdentity` rule, because C8/C15 compel that string
+    // into the copy whatever wrote it. The checks that compel it are what fire
+    // — the rival is dragged to the FIRST WORDS of the title and of `title75`
+    // and into the description, or the run fails for their absence. Every
+    // mechanism is enumerated in `tests/keywordDerivation.canonicalName.test.ts`.
     l.title = `${RIVAL} ${l.title}`;
     l.keywords = deriveKeywordPlacement(l.keywords ?? [], l, pack, snapshot);
-    const row = rowFor(l.keywords, 'greenluxe');
-    expect(row.status).toBe('negative');
-    expect(row.note).toBeUndefined();
+    const ids = runGate(l, pack, ctx).failures.map((f) => `${f.checkId}|${f.field}`);
+    expect(ids, JSON.stringify(ids)).toContain('C8|description');
+    expect(ids, JSON.stringify(ids)).toContain('C15|title75');
+    expect(runGate(l, pack, ctx).pass).toBe(false);
+  });
+
+  it('...and a rival that is NOT the canonical name is still failed by C28, with the same tampering in place', () => {
+    const l = clone();
+    l.productName = RIVAL;
+    const OTHER_RIVAL = 'Northwind Apothecary';
+    l.description = `${OTHER_RIVAL} alternative. ${l.description}`;
+    l.keywords = [
+      ...deriveKeywordPlacement([negativeRow(OTHER_RIVAL, 'Rival brand')], l, pack, snapshot),
+      ...NEGATIVE_FLOOR,
+    ];
+    expect(rowFor(l.keywords, OTHER_RIVAL).status).toBe('negative');
     expect(
-      c28(l).some((f) => f.context.toLowerCase().includes('negative term') && f.context.includes('greenluxe')),
+      c28(l).some(
+        (f) =>
+          f.context.toLowerCase().includes('negative term') &&
+          f.context.toLowerCase().includes(OTHER_RIVAL.toLowerCase()),
+      ),
       JSON.stringify(c28(l).map((f) => f.context)),
     ).toBe(true);
     expect(runGate(l, pack, ctx).pass).toBe(false);

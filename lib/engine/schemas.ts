@@ -302,11 +302,96 @@ const keywordTierField = z.preprocess((v) => {
  * whatever the ceiling is, an unbounded list eventually reaches it. So the
  * ARTIFACT is bounded (`maxTerms`, `whyMaxChars`), the same two numbers are
  * stated in the prompt, and the budget below is DERIVED from them.
+ *
+ * ===========================================================================
+ * D1 RECURRED AT THE LARGE-INPUT END, AND THE ROW COUNT WAS THE BOUND THAT HAD
+ * NO TOLERANCE. (Live, 24-run batch: `GEN | generation.keywords | (no valid
+ * output)`, three occurrences, ALL on the same ASIN — the largest of the three
+ * test listings, a twenty-ingredient formula. The other two ASINs went 8/8.)
+ *
+ * WHAT WAS MEASURED FIRST, because two plausible causes had to be ruled out
+ * before anything was changed (numbers in `tests/keywordBudget.d1.test.ts`,
+ * computed from these very functions rather than restated):
+ *
+ *   - THE BUDGET ARITHMETIC WAS NOT THE DEFECT. The schema's `why` tolerance is
+ *     INSIDE the budget, not outside it: the budget's per-row prose allowance is
+ *     the same `whyMaxChars x tolerance` figure the schema enforces, so a model
+ *     writing to the STATED limit, and one writing to the tolerated limit, both
+ *     fit. The largest artifact the old schema would accept came to ~4,982
+ *     tokens against a ~5,500-token budget.
+ *   - THE INPUT WAS NOT SQUEEZING THE OUTPUT. `max_tokens` is an OUTPUT bound;
+ *     it is not shared with the prompt. Phase 3 carries the finished listing, so
+ *     the keywords prompt does grow with the listing — ~13.1k input tokens on
+ *     the small fixture against ~18.7k on a twenty-ingredient one — but both sit
+ *     an order of magnitude inside the context window, and neither figure enters
+ *     the output budget at all.
+ *
+ * WHAT DOES SCALE WITH THE INPUT IS THE ARTIFACT THE PROMPT ASKS FOR. Tier 2 is
+ * defined in the pack vocabulary as "named entities — each component by its full
+ * name", so a twenty-component formula owes twenty rows before a single head
+ * term, qualifier, buyer phrase or `minNegatives` exclusion is written. The pack
+ * calibrated `maxTerms: 28` against a listing with a fraction of that ("the
+ * recorded golden reference uses 19"), and the cap does not move with the input.
+ * The prompt therefore asks, on that ASIN, for an artifact the schema will not
+ * accept — and `z.array().max()` rejects the WHOLE payload for the surplus, so
+ * ~38 good rows are thrown away, the reparse re-asks the identical impossible
+ * thing, and the group degrades. Nothing downstream even enforces `maxTerms`
+ * (the gate reads `visibleSurfaces`, `statuses` and `minNegatives`, never the
+ * cap), so the hard cliff bought nothing and cost the group.
+ *
+ * THE FIX IS THE ONE THIS FILE ALREADY USES FOR THE OTHER OVERSHOOTING FIELD.
+ * `why` has stated a SHORTER limit in the prompt than the schema enforces since
+ * D1, precisely "so an ordinary overshoot never costs a reparse round while the
+ * hard bound the budget is computed from still holds". The row count overshoots
+ * for exactly the same reason and gets exactly the same treatment: ONE tolerance
+ * constant, applied to both, with the prompt still stating the pack's numbers and
+ * the budget still derived from what the schema will actually accept.
+ *
+ * WHAT IS NOT DONE, deliberately. `maxTerms` is NOT lowered (`minNegatives` and
+ * the four tiers need every row it allows) and it is NOT raised in the pack (the
+ * model would then write to the larger number on every listing, large or small).
+ * The tolerance is invisible to the prompt for the same reason the `why`
+ * tolerance is: a limit the model is told about is a limit it writes to.
+ * The artifact stays BOUNDED — the cliff moved, it did not disappear — and a
+ * group that still cannot produce valid output still degrades and still blocks
+ * at `GEN`, unchanged.
  */
-export function keywordsGroupSchemaFor(kr: KeywordRules | undefined) {
-  const max = typeof kr?.maxTerms === 'number' && kr.maxTerms > 0 ? kr.maxTerms : undefined;
-  const whyMax =
+
+/**
+ * The slack the SCHEMA allows over the limit the PROMPT states, for the two
+ * fields a model demonstrably overshoots: the row count and the `why` prose.
+ *
+ * ONE constant for both, because it is one policy — "state the target, accept an
+ * ordinary overshoot, keep a hard bound the budget can be computed from". Two
+ * numbers here would be two policies that drift.
+ */
+export const KEYWORD_SCHEMA_TOLERANCE = 1.5;
+
+/**
+ * The row count the SCHEMA accepts, as opposed to the `maxTerms` the prompt
+ * states. `undefined` when the pack states no cap, which leaves the array
+ * unbounded exactly as it was.
+ *
+ * Floored at `KEYWORD_MIN_TERMS` so a pack with a tiny `maxTerms` can never
+ * produce the impossible `.min(8).max(6)` pair.
+ */
+export function keywordSchemaMaxTerms(kr: KeywordRules | undefined): number | undefined {
+  const stated = typeof kr?.maxTerms === 'number' && kr.maxTerms > 0 ? kr.maxTerms : undefined;
+  if (stated === undefined) return undefined;
+  return Math.max(KEYWORD_MIN_TERMS, Math.ceil(stated * KEYWORD_SCHEMA_TOLERANCE));
+}
+
+/** The `why` length the SCHEMA accepts, as opposed to the stated `whyMaxChars`. */
+export function keywordSchemaWhyMaxChars(kr: KeywordRules | undefined): number | undefined {
+  const stated =
     typeof kr?.whyMaxChars === 'number' && kr.whyMaxChars > 0 ? kr.whyMaxChars : undefined;
+  if (stated === undefined) return undefined;
+  return Math.ceil(stated * KEYWORD_SCHEMA_TOLERANCE);
+}
+
+export function keywordsGroupSchemaFor(kr: KeywordRules | undefined) {
+  const max = keywordSchemaMaxTerms(kr);
+  const whyMax = keywordSchemaWhyMaxChars(kr);
   const row = z.preprocess((raw) => {
     if (!raw || typeof raw !== 'object') return raw;
     const o = raw as Record<string, unknown>;
@@ -321,11 +406,12 @@ export function keywordsGroupSchemaFor(kr: KeywordRules | undefined) {
     term: z.string().min(2),
     tier: keywordTierField,
     status: z.string().min(3),
-    // `why` is the row's only free prose and therefore the only field that can
-    // make a row unboundedly large. The prompt states a SHORTER limit than
-    // this one, so an ordinary overshoot never costs a reparse round while the
-    // hard bound the budget is computed from still holds.
-    why: whyMax ? z.string().min(3).max(Math.ceil(whyMax * 1.5)) : z.string().min(3),
+    // `why` is the row's only REQUIRED free prose. The prompt states a SHORTER
+    // limit than this one, so an ordinary overshoot never costs a reparse round
+    // while the hard bound the budget is computed from still holds. (`via` and
+    // `home` are prose too, and are deliberately left unbounded — see the
+    // headroom note on `keywordsMaxTokens`, which is what pays for them.)
+    why: whyMax ? z.string().min(3).max(whyMax) : z.string().min(3),
     via: z.string().optional(),
     home: z.string().optional(),
   }));
@@ -337,28 +423,58 @@ export function keywordsGroupSchemaFor(kr: KeywordRules | undefined) {
 export const KEYWORD_MIN_TERMS = 8;
 
 /**
- * D1 — the keywords group's OUTPUT BUDGET, derived from the same caps.
+ * D1 — the keywords group's OUTPUT BUDGET, derived from what the SCHEMA WILL
+ * ACCEPT rather than from a parallel restatement of the pack numbers.
  *
  * Worst case for one row, measured against a pretty-printed row carrying every
  * optional field and the longest surface list the pack vocabulary allows:
  * ~400 characters of keys, punctuation, indentation, tier, status, surfaces,
- * `via` and `home`, plus `whyMaxChars` of prose. JSON of this shape tokenizes
- * at roughly 3 characters per token, and the budget is the ceiling of that —
- * so the model can always finish the largest artifact the schema will accept.
- * It is a CEILING, not a target: the prompt's cap is what the model actually
- * writes to, and unused budget costs nothing. The row no longer carries
- * `surfaces` at all (it is derived), which only makes the real row SMALLER
- * than this ceiling — the budget stays deliberately above the bound.
+ * `via` and `home`, plus the schema's `why` bound of prose. JSON of this shape
+ * tokenizes at roughly 3 characters per token. It is a CEILING, not a target:
+ * the prompt's caps are what the model actually writes to, and unused budget
+ * costs nothing. The row no longer carries `surfaces` at all (it is derived),
+ * which only makes the real row SMALLER than this ceiling.
+ *
+ * BOTH INPUTS ARE THE SCHEMA'S, NOT THE PROMPT'S, and that is the D1 property
+ * restated correctly: the budget must pay for the largest artifact THE PARSER
+ * WILL ACCEPT, because anything larger is rejected on shape and anything the
+ * parser accepts must have been receivable. Reading the prompt's numbers here
+ * while the schema enforced the tolerated ones is how a payload could be
+ * schema-valid and still arrive truncated.
+ *
+ * WHY THERE IS EXPLICIT HEADROOM ON TOP OF THAT WORST CASE, and it is not
+ * padding. `KEYWORD_ROW_FIXED_CHARS` is an ESTIMATE, not a bound: `via` and
+ * `home` are free prose and the schema bounds NEITHER of them, so a row CAN
+ * exceed the 400-character allowance and the sentence "the budget covers the
+ * largest artifact the schema will accept" is only true up to that estimate.
+ * Bounding those two fields instead was considered and rejected — the prompt
+ * states no limit for them, so a schema limit would fail lawful output, and
+ * over-blocking is treated here as exactly as severe as a bypass. The headroom
+ * is the cheaper side of the same trade: it costs nothing when unused (billing
+ * and latency follow tokens actually generated), and it buys the reparse retry a
+ * COMPLETE payload to be rejected on — a precise `too_big` the second attempt
+ * can act on, instead of a mid-row truncation it cannot.
+ *
+ * IT IS STILL A CLIFF, JUST FURTHER OUT. A model that ignores every stated cap
+ * eventually exhausts this too; it then degrades, `GEN` blocks, and the run
+ * comes back `verified:false`. That path is unchanged and is the fail-closed
+ * direction.
  */
 const KEYWORD_ROW_FIXED_CHARS = 400;
 const KEYWORD_WRAPPER_CHARS = 64;
 const CHARS_PER_TOKEN = 3;
+/** See the note above: it pays for the two prose fields the schema cannot bound. */
+export const KEYWORD_BUDGET_HEADROOM = 1.25;
+/** The `why` bound assumed when a pack states none, before tolerance. */
+const KEYWORD_DEFAULT_WHY_CHARS = 200;
 
 export function keywordsMaxTokens(kr: KeywordRules | undefined): number {
-  const max = typeof kr?.maxTerms === 'number' && kr.maxTerms > 0 ? kr.maxTerms : KEYWORD_MIN_TERMS;
-  const whyMax = typeof kr?.whyMaxChars === 'number' && kr.whyMaxChars > 0 ? kr.whyMaxChars : 200;
-  const chars = max * (KEYWORD_ROW_FIXED_CHARS + Math.ceil(whyMax * 1.5)) + KEYWORD_WRAPPER_CHARS;
-  return Math.ceil(chars / CHARS_PER_TOKEN / 100) * 100;
+  const max = keywordSchemaMaxTerms(kr) ?? KEYWORD_MIN_TERMS;
+  const whyMax =
+    keywordSchemaWhyMaxChars(kr) ??
+    Math.ceil(KEYWORD_DEFAULT_WHY_CHARS * KEYWORD_SCHEMA_TOLERANCE);
+  const chars = max * (KEYWORD_ROW_FIXED_CHARS + whyMax) + KEYWORD_WRAPPER_CHARS;
+  return Math.ceil((chars * KEYWORD_BUDGET_HEADROOM) / CHARS_PER_TOKEN / 100) * 100;
 }
 
 export type TitleGroup = z.infer<typeof titleGroupSchema>;

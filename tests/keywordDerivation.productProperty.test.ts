@@ -363,9 +363,17 @@ describe('(c) sharing a word with an ingredient, and appearing only in the snaps
     expect(runGate(l, pack, ctx).pass).toBe(false);
   });
 
-  it('WITH NO SNAPSHOT the property set is empty — it can only ever narrow', () => {
+  it('WITH NO SNAPSHOT the SNAPSHOT-DERIVED sets are empty — they can only ever narrow', () => {
     expect([...productPropertyIdentity(undefined)]).toEqual([]);
-    expect([...productIdentity(clean, undefined)]).toEqual([]);
+    expect([...ownBrandIdentity(clean, undefined)]).toEqual([]);
+    // The one entry left is the run's own canonical `productName`, held by the
+    // separate `canonicalNameIdentity` rule: it is not conditioned on the
+    // snapshot because it does not rest on corroborating who wrote the name — it
+    // rests on C8/C15 compelling that exact string into the copy. See
+    // `tests/keywordDerivation.canonicalName.test.ts`, which closes the
+    // laundering path that opens, mechanism by mechanism.
+    expect([...productIdentity(clean, undefined).keys()]).toEqual(['brandx probiotic']);
+    expect(productIdentity(clean, undefined).get('brandx probiotic')).toBe('canonical-name');
   });
 });
 

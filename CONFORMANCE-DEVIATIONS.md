@@ -3758,3 +3758,173 @@ the writable budget"; the constant is `0.6`, i.e. the clamp declines when a
 boundary would throw away more than TWO FIFTHS. The CONSTANT was always the
 shipped behaviour and is unchanged; only the sentence was wrong, and it is now
 corrected in place with a note that it was.
+
+## 23. ROUND Q - two live defects from a 24-run convergence batch, both on the LARGEST of the three test ASINs, and both a recurrence of a class this project had already closed one source short.
+
+Both were found in production, both on B00IO89MYA (a twenty-ingredient formula,
+~30 KB snapshot). The other two ASINs went 8/8 and 8/8 clean in the same batch.
+
+### 23.1 D1 RECURRED AT THE LARGE-INPUT END - and it was the ROW COUNT, not the budget.
+
+**THE LIVE FAILURE**, three occurrences in twenty-four runs, all on that one ASIN
+and only in the `keywords` group:
+
+```
+GEN | generation.keywords | (no valid output)
+```
+
+`(no valid output)` is the DEGRADE path, so the group had exhausted its reparse
+retry as well: two calls, neither producing a payload the parser would take.
+
+**WHAT WAS MEASURED BEFORE ANYTHING WAS CHANGED.** Two plausible causes were
+ruled out on evidence, using the existing diagnosability taxonomy (`llm.error` vs
+`llm.reparse`, `stopReason`, schema-vs-truncation classification) and direct
+measurement of the shipped functions:
+
+| measured | figure | verdict |
+|---|---|---|
+| output budget, `keywordsMaxTokens(kr)` before this round | 5,500 tokens | - |
+| largest artifact the schema would then accept (28 rows, `why` at the tolerated 180) | 14,946 chars ~ **4,982 tokens** | budget was NOT the defect |
+| the same artifact with `why` at the STATED 120 | 10,774 chars ~ 3,592 tokens | the x1.5 `why` tolerance sits INSIDE the budget |
+| phase-3 prompt + system, small fixture listing | ~13.1k input tokens | - |
+| phase-3 prompt + system, twenty-ingredient listing | ~18.7k input tokens | input grows, but `max_tokens` is an OUTPUT bound and is not shared with the prompt |
+
+So neither the budget arithmetic nor input pressure explains a failure that
+happens only at the large-input end.
+
+**WHAT DOES SCALE WITH THE INPUT IS THE ARTIFACT THE PROMPT ASKS FOR.** Tier 2 is
+defined in the pack vocabulary as "named entities - each component by its full
+name", so a twenty-component formula owes twenty rows before a single head term,
+qualifier, buyer-language phrase or `minNegatives` exclusion is written.
+`maxTerms` is 28, calibrated against a listing with a fraction of that (the
+recorded golden reference uses **19** rows), and it does not move with the input.
+The prompt therefore asked, on that ASIN, for an artifact the schema would not
+accept - and `z.array().max()` rejects the WHOLE payload for the surplus, so
+thirty-odd good rows were thrown away entire, the reparse re-asked the identical
+impossible thing, and the group degraded. Nothing downstream even enforces
+`maxTerms` (the gate reads `visibleSurfaces`, `statuses` and `minNegatives`,
+never the cap), so the hard cliff bought nothing and cost the group.
+
+**THE FIX IS THE TREATMENT THE OTHER OVERSHOOTING FIELD ALREADY HAD.** `why` has
+stated a SHORTER limit in the prompt than the schema enforces since D1, precisely
+"so an ordinary overshoot never costs a reparse round while the hard bound the
+budget is computed from still holds". The row count overshoots for the same
+reason and now gets the same treatment: ONE constant, `KEYWORD_SCHEMA_TOLERANCE
+= 1.5`, applied to both, with the prompt still stating the pack's numbers and the
+budget still derived from what the schema will actually accept
+(`keywordSchemaMaxTerms`, `keywordSchemaWhyMaxChars`). The schema bound moves
+28 -> 42 rows and the budget 5,500 -> 10,200 tokens.
+
+**A SECOND, SMALLER DEFECT WAS FOUND IN THE SAME PLACE AND FIXED WITH IT.** The
+budget read the PROMPT's numbers while the schema enforced the TOLERATED ones, so
+a payload could be schema-valid and still arrive truncated. Both inputs are now
+the schema's, and `KEYWORD_BUDGET_HEADROOM = 1.25` pays for `via` and `home`,
+which are free prose the schema bounds NEITHER of (bounding them was considered
+and rejected: the prompt states no limit for them, so a schema limit would fail
+lawful output).
+
+**WHAT WAS DELIBERATELY NOT DONE.** `maxTerms` is NOT lowered - `minNegatives`
+and the four tiers need every row it allows - and NOT raised in the pack, because
+the model would then write to the larger number on every listing, large or small.
+The tolerance is invisible to the prompt for the same reason the `why` tolerance
+is: a limit the model is told about is a limit it writes to.
+
+**THE CLIFF MOVED; IT DID NOT DISAPPEAR.** An artifact past even the tolerated
+bound is still refused, a response that is not JSON is still unparseable, and
+both still degrade, still block at `GEN | generation.keywords`, and still come
+back `verified:false` with C28 not silently disabled. A degrade never becomes a
+silent pass.
+
+**Status: FIXED.** `lib/engine/schemas.ts` only.
+`tests/keywordBudget.largeInput.test.ts` (9) holds the diagnosis and both
+directions; `tests/keywordBudget.d1.test.ts` (15) now asserts the budget from its
+derivation rather than from a restatement of the pack numbers.
+
+### 23.2 THE RUN'S OWN CANONICAL PRODUCT NAME MARKED `negative` - the third instance of one coherence class, one source further along.
+
+**THE LIVE FAILURE**, same ASIN, two failures, and the run could not converge:
+
+```
+C28 | keywords[22] | negative term 'immunity complete' appears on 'images'
+C28 | keywords[22] | negative term 'immunity complete' appears on 'video'
+```
+
+`Immunity Complete` is the run's OWN canonical `productName`.
+
+**WHY THE TWO EXISTING EXEMPTIONS BOTH MISSED IT.** `ownBrandIdentity` admits a
+model-authored `productName` only when its leading words agree, over
+`MIN_AGREEING_WORDS`, with the scraped title or a snapshot-declared brand - the
+G2 hardening of §8, and a correct one. The snapshot's brand is `Instant Immunity`
+and the model chose `Immunity Complete`; they share no leading word, so the name
+was not admitted. It is not a structured attribute of the ingested page either,
+so `productPropertyIdentity` (§13.1) did not hold it. The row survived and C28
+correctly found the string in the copy.
+
+**WHY THE ROW IS INCOHERENT ANYWAY, WHATEVER THE NAME'S PROVENANCE.** This does
+not rest on believing the model. It rests on what THE GATE ITSELF COMPELS: C8
+requires `productName` to START the title and to APPEAR in the description, and
+C15 requires it to start `title75`. The gate FORCES that exact string into the
+copy; a `negative` row demands it appear nowhere. No repair round can clear an
+unsatisfiable pair - the only move the C28 message asks for is deleting a string
+C8/C15 fail the run for deleting.
+
+**THE RULE.** A `negative` row whose term EQUALS the run's canonical
+`productName` is reclassified at the derivation boundary exactly as the own-brand
+and product-property rows are: never deleted, its real placement read off the
+finished copy, the correction written onto `note`, the proposed status recorded
+on `proposedStatus`. It is a NEW, NARROWER function (`canonicalNameIdentity`),
+kept deliberately OUT of `ownBrandIdentity`, because `lib/audit/rivalBrands.ts`
+subtracts THAT set from the operator's competitor signal - widening it would let
+a model disarm that signal by choosing a name. **The G2 hardening is untouched.**
+
+**THE LAUNDERING PATH, ENUMERATED AND PROVED CLOSED.** Setting `productName` to a
+rival's brand to buy this exemption is the attack. It is stated out loud rather
+than hidden - the exemption DOES fire on such a run - and three INDEPENDENT
+mechanisms answer it, each asserted by name in
+`tests/keywordDerivation.canonicalName.test.ts` §3:
+
+1. **C8/C15 MAKE IT MAXIMALLY VISIBLE.** The very rule the exemption rests on
+   drags the rival's brand to the FIRST WORDS of the title and of `title75` and
+   into the description. Refuse that and `C8|title`, `C8|description` and
+   `C15|title75` fail the run. The exemption cannot buy quiet placement.
+2. **THE AUTOMATIC COMPETITOR-DERIVED RIVAL SET READS NO LABEL AND NO
+   `productName`.** `rivalBrandNames` is built from the brand fields of the
+   competitor ASINs the OPERATOR typed and subtracts only the narrow
+   `ownBrandIdentity`. The test asserts the set is IDENTICAL whether or not the
+   run renamed itself after the rival, and that C28's automatic leg then fails on
+   the very title mechanism 1 forced the rival into.
+3. **`brandParity` STILL DISAGREES WITH THE SCRAPED PAGE** (P1 gap the operator
+   must confirm, §11). And the other half of the fork is asserted too: a rename
+   that does NOT carry into the brand attributes loses C7's exemption - which is
+   keyed on `productName` CONTAINING the brand - so the real brand becomes
+   backend-only and an ordinary mention of it in copy fails C7. Both directions
+   are pinned.
+
+**R50 IS UNWEAKENED.** A rival that is not the canonical name still fails from
+every surface - title, bullet, description, backend, attributes, A+ banner ALT,
+video brief, image ALT - eight plants, each asserted with the canonical-name rule
+ACTIVE. The exemption is equality-only: `harbor row` and `daily` are not exempted
+by `Harbor Row Daily`.
+
+**THE FLOOR CANNOT BE PADDED BY IT.** A run whose only exclusions are
+self-references - the canonical name among them - still fails, on the explicit
+no-surviving-exclusion leg §17.2 added. `tests/minNegativesFloor.h2.test.ts` is
+green and UNEDITED.
+
+**TWO EXISTING TESTS CHANGED, and neither weakened a check.**
+`tests/keywordDerivation.ownBrand.test.ts` (d) and (f) asserted the DERIVATION's
+answer for a term equal to `productName`; that answer is now governed by the new,
+narrower rule. Both still assert the G2 property they were written for -
+`ownBrandIdentity` refuses an uncorroborated model-authored name - and both now
+also assert that the run STILL FAILS, via C8/C15 rather than via C28, plus a new
+case pinning that a rival which is NOT the canonical name is still failed by C28
+with the same tampering in place. `tests/keywordDerivation.productProperty.test.ts`
+narrowed one assertion from "the identity set is empty without a snapshot" to
+"the two SNAPSHOT-DERIVED sets are empty", with the one remaining entry asserted
+by kind.
+
+**Status: FIXED.** `lib/engine/keywordPlacement.ts` only.
+`tests/keywordDerivation.canonicalName.test.ts` (28) holds all five sections;
+`tests/rivalBrands.gate.test.ts`, `tests/brandParity.audit.test.ts`,
+`tests/falsePositives.gate.test.ts` (206, unedited) and the golden fixture are
+green, the golden fixture with ZERO gate failures.

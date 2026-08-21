@@ -117,6 +117,17 @@ import type {
  * invisible ones included — `tests/keywordDerivation.ownBrand.test.ts` plants
  * one in each.
  *
+ * THE SCOPE OF THAT SENTENCE, stated exactly. "Nothing is believed from the
+ * model uncorroborated" is a property of `ownBrandIdentity`, and it stays one —
+ * the G2 hardening is not widened, here or anywhere. A SEPARATE and narrower
+ * rule (`canonicalNameIdentity`, the sixth note below) does admit the run's own
+ * canonical `productName` unconditionally, on a different premise entirely: not
+ * that the name is trustworthy, but that C8/C15 FORCE that exact string into the
+ * title and the description, so requiring it to appear nowhere is unsatisfiable
+ * by construction. It is kept OUT of `ownBrandIdentity` on purpose, because
+ * `lib/audit/rivalBrands.ts` subtracts that set from the operator's competitor
+ * signal and widening it would let a model disarm that signal by choosing a name.
+ *
  * THE FLOOR CANNOT BE GAMED — AND SINCE H2 IT SAYS SO DIRECTLY RATHER THAN BY
  * ARITHMETIC. A reclassified row records the status the model PROPOSED on
  * `proposedStatus`, and C28's `minNegatives` counts proposals; what stops a
@@ -317,8 +328,10 @@ import type {
  * derived away. R50 depends on that row reaching C28 intact.
  *
  * ONE EXCEPTION, and it is a coherence check rather than an override:
- * `negative` on a term that IS this run's own brand identity is not a
- * judgement the model is entitled to make — see the note above.
+ * `negative` on a term that IS THIS PRODUCT — its brand identity, a property the
+ * ingested snapshot's structured attributes declare, or the canonical product
+ * name C8/C15 compel into the copy — is not a judgement the model is entitled to
+ * make, because no listing can satisfy it. See the notes above.
  *
  * THE ONE SOURCE OF TRUTH for the partition: this constant and
  * `ABSENCE_CLAIM_STATUSES` below are read by the derivation AND by the prompt
@@ -525,16 +538,97 @@ export function productPropertyIdentity(snapshot?: ListingSnapshot): Set<string>
   return out;
 }
 
+/**
+ * THE SIXTH LIVE DEFECT — THE RUN'S OWN CANONICAL PRODUCT NAME MARKED
+ * `negative`, WITH A NAME THE SNAPSHOT DOES NOT CORROBORATE.
+ *
+ * Production, ASIN B00IO89MYA, two failures and the run could not converge:
+ *
+ *   C28 | keywords[22] | negative term '<the run's own productName>' appears
+ *       |              | on 'images'
+ *   C28 | keywords[22] | ... appears on 'video'
+ *
+ * WHY THE TWO EXISTING EXEMPTIONS BOTH MISS IT. `ownBrandIdentity` admits
+ * `listing.productName` ONLY when it agrees, over `MIN_AGREEING_WORDS` leading
+ * words, with the scraped title or a snapshot-declared brand — the G2 hardening,
+ * and a correct one: a MODEL-AUTHORED name must not be able to exempt an
+ * arbitrary term. On this run the snapshot's brand and the name the model chose
+ * share no leading word at all, so the name is not admitted. It is not a
+ * structured attribute of the ingested page either, so `productPropertyIdentity`
+ * does not hold it. The row survived, and C28 correctly found the string in the
+ * copy.
+ *
+ * WHY IT IS INCOHERENT ANYWAY — WHATEVER THE NAME'S PROVENANCE. This does not
+ * rest on believing the model. It rests on what THE GATE ITSELF COMPELS: C8
+ * requires `productName` to START the title and to APPEAR in the description,
+ * and C15 requires it to start `title75` (`lib/gate/checks/c-compliance.ts`).
+ * The gate therefore FORCES that exact string into the copy. A `negative` row
+ * means "this term appears nowhere". One check forcing a string in while another
+ * fails the run for its presence is an unsatisfiable pair: no repair round can
+ * clear it, because the only move the C28 message asks for is deleting a string
+ * C8/C15 fail the run for deleting. That is the identical shape as the own-brand
+ * and product-property defects, one source further along.
+ *
+ * SO THE RULE IS KEYED ON WHAT THE GATE ENFORCES, NOT ON WHO WROTE IT. The
+ * exemption is not "the model's name is trustworthy"; it is "a string C8/C15
+ * compel into the copy cannot simultaneously be required to appear nowhere".
+ * That premise is true for a well-behaved run and equally true for a tampered
+ * one — which is exactly why the tampered case has to be answered separately.
+ *
+ * WHAT STOPS A RIVAL BEING LAUNDERED THROUGH IT. Setting `productName` to a
+ * rival's brand to buy this exemption is the attack, and it is closed by three
+ * INDEPENDENT mechanisms, none of which this function participates in
+ * (`tests/keywordDerivation.canonicalName.test.ts` asserts each one by name):
+ *
+ *   1. C8/C15 MAKE IT MAXIMALLY VISIBLE RATHER THAN HIDDEN. The same rule this
+ *      exemption rests on forces the rival's brand to be THE FIRST WORDS OF THE
+ *      TITLE and of `title75`, and into the description. The exemption cannot
+ *      buy quiet placement; it can only buy a listing whose title leads with a
+ *      competitor's name, which is the single most conspicuous failure state an
+ *      operator can be handed.
+ *   2. THE AUTOMATIC COMPETITOR-DERIVED RIVAL SET READS NO LABEL AND NO
+ *      `productName`. `lib/audit/rivalBrands.ts` builds its set from the brand
+ *      fields of the competitor ASINs THE OPERATOR typed, and subtracts only
+ *      `ownBrandIdentity` — which is exactly the function the G2 hardening keeps
+ *      narrow, and which is NOT widened here. So a rival whose ASIN was supplied
+ *      still fails C28's automatic leg from every surface, title included, with
+ *      no keyword row involved at all.
+ *   3. `brandParity` STILL DISAGREES WITH THE SCRAPED PAGE. A rename that
+ *      carries the rival into the brand attributes is reported against the
+ *      scraped `brand_name`/`manufacturer` as a P1 gap the operator must confirm
+ *      (`lib/audit/brandParity.ts`); a rename that does NOT carry it there leaves
+ *      the real brand backend-only and C7 fires on the leak instead.
+ *
+ * AND `ownBrandIdentity` IS NOT WIDENED. This is a distinct, narrower rule with
+ * a different premise, kept in its own function for that reason: widening
+ * `ownBrandIdentity` would also widen the subtraction `rivalBrandNames` performs
+ * (bound 3 over there), which is defence 2 above — the model would be able to
+ * disarm the operator's own signal by choosing a name. It must not be able to.
+ *
+ * Equality only, like every identity source here, and EMPTY when the run has no
+ * canonical name — with no name there is nothing C8/C15 compel and nothing to
+ * exempt.
+ */
+export function canonicalNameIdentity(listing: OptimizedListing | undefined): Set<string> {
+  const out = new Set<string>();
+  const key = identityKey(listing?.productName);
+  if (key) out.add(key);
+  return out;
+}
+
 /** Which KIND of self-reference a term turned out to be. */
-export type ProductIdentityKind = 'brand' | 'property';
+export type ProductIdentityKind = 'brand' | 'property' | 'canonical-name';
 
 /**
  * THE ONE SOURCE OF TRUTH for "this term names the product being optimized".
  *
- * The union of the two identity sets, each keyed by `identityKey` and each
+ * The union of the THREE identity sets, each keyed by `identityKey` and each
  * matched by equality only, with the KIND recorded so the correction written
- * onto the row can say which fact it rests on. `brand` wins a collision because
- * it is the more specific statement.
+ * onto the row can say which fact it rests on. Later sources overwrite earlier
+ * ones on a collision, so the order below is the order of specificity: `brand`
+ * is the most specific statement about a term and wins; `canonical-name` (a
+ * string the gate itself compels into the copy) beats a bare structured
+ * attribute value.
  *
  * DELIBERATELY NOT THE SAME FUNCTION AS `ownBrandIdentity`, and the reason is a
  * bound rather than an oversight. `lib/audit/rivalBrands.ts` subtracts the
@@ -553,6 +647,7 @@ export function productIdentity(
 ): Map<string, ProductIdentityKind> {
   const out = new Map<string, ProductIdentityKind>();
   for (const k of productPropertyIdentity(snapshot)) out.set(k, 'property');
+  for (const k of canonicalNameIdentity(listing)) out.set(k, 'canonical-name');
   for (const k of ownBrandIdentity(listing, snapshot)) out.set(k, 'brand');
   return out;
 }
@@ -564,10 +659,18 @@ export function deriveKeywordPlacement(
   /**
    * The INGESTED snapshot, the only non-model source of the product's own brand
    * identity. Optional so a caller holding a listing but no snapshot (a stored
-   * run re-derived against fresh copy, a stateless audit) still works — and it
-   * fails toward KEEPING the negative: with no snapshot there is nothing to
-   * corroborate the model-authored `productName` against, so the identity is
-   * EMPTY and no row is exempted at all.
+   * run re-derived against fresh copy, a stateless audit) still works — and for
+   * the two SNAPSHOT-DERIVED sources it fails toward KEEPING the negative: with
+   * no snapshot there are no structured attributes to read and nothing to
+   * corroborate the model-authored `productName` against, so `ownBrandIdentity`
+   * and `productPropertyIdentity` are both empty.
+   *
+   * `canonicalNameIdentity` is deliberately NOT conditioned on the snapshot, and
+   * that is not an inconsistency: it does not rest on corroborating who wrote
+   * the name, it rests on C8/C15 compelling that exact string into the title and
+   * the description whatever its provenance. See its own note for the three
+   * independent mechanisms that close the laundering path it would otherwise
+   * open.
    */
   snapshot?: ListingSnapshot,
 ): KeywordTerm[] {
@@ -621,15 +724,17 @@ export function deriveKeywordPlacement(
     const status = str(row.status).trim() as KeywordStatus;
     // THE INCOHERENT CLASSIFICATION, rejected at the boundary. `negative` means
     // "appears nowhere" and exists to keep RIVAL brands out (R50); a term that
-    // is THIS PRODUCT — its brand, or a property the ingested snapshot's own
-    // structured attributes record about it — is not a rival and appears in the
-    // copy because the listing is about it, so the run could never converge on
-    // it. Equality against the resolved identity only: a term that merely shares
-    // a word with the brand, or sits inside an ingredient name, is left exactly
-    // where the model put it.
+    // is THIS PRODUCT — its brand, a property the ingested snapshot's own
+    // structured attributes record about it, or the canonical product name C8/C15
+    // force into the title and the description — is not a rival and appears in
+    // the copy because the listing is about it, so the run could never converge
+    // on it. Equality against the resolved identity only: a term that merely
+    // shares a word with the brand, or sits inside an ingredient name, is left
+    // exactly where the model put it.
     const selfKind = status === 'negative' ? identity.get(identityKey(term)) : undefined;
     const selfBrand = selfKind === 'brand';
     const selfProperty = selfKind === 'property';
+    const selfCanonicalName = selfKind === 'canonical-name';
 
     if (selfKind === undefined && MODEL_OWNED_STATUSES.includes(status)) {
       // The model's judgement stands, and for `negative` it must: a rival brand
@@ -659,6 +764,12 @@ export function deriveKeywordPlacement(
         ` attribute value), so it cannot be a rival-exclusion negative: this listing states its own` +
         ` properties. The row was reclassified from 'negative' and its placement read off the` +
         ` finished copy.`
+      : selfCanonicalName
+      ? `Derived: '${term}' is this run's own CANONICAL PRODUCT NAME. The deterministic checks` +
+        ` REQUIRE that exact string to start the title, to start the short title and to appear in` +
+        ` the description, so "must appear nowhere" is a requirement no copy can satisfy and no` +
+        ` repair round can clear. The row was reclassified from 'negative' and its placement read` +
+        ` off the finished copy.`
       : absenceClaim
         ? `Derived: the row said '${status}', which states this term is NOT in the copy — but the` +
           ` finished copy carries it. The status and the surfaces were read off the copy instead,` +
